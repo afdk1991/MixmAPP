@@ -73,6 +73,7 @@ pnpm dev:h5
 | `pnpm ops:health` | 线上健康巡检（可传 base URL） |
 | `pnpm ops:backup` | PostgreSQL 备份（`pg_dump` + gzip + 14 天清理） |
 | `node scripts/serve-h5.mjs` | 本地预览 H5 产物，并把 `/api/*` 反代到 8080 |
+| `node scripts/build-h5-single.mjs` | 把 H5 压成单文件 HTML（`release/mixmapp-h5-single.html`），用于只支持单文件托管的平台；子路径托管加 `MIXMAPP_H5_BASE=/mixmapp-h5/` |
 
 ---
 
@@ -137,8 +138,9 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 | `ci` | ✅ 1m18s | 规则/类型/22 例单元测试/**4 例真实 PostgreSQL 集成测试**/API 构建/H5 构建/小程序构建/`dist` 启动后 `readyz` 就绪 |
 | `deploy` | ✅ 1m10s | 独立发布包（`pnpm deploy --prod`）+ H5 打包 + 产物上传；静态端与 SSH 端因无凭据显式 SKIP |
 | `Android` | ✅ 3m18s | H5 → `cap sync` → `assembleDebug`，产出 `mixmapp-debug-apk`（3.91 MB） |
+| GitHub Pages | ✅ 已上线 | 静态端真实公网地址 <https://afdk1991.github.io/mixmapp-h5/>（产物仓，源码仍私有） |
 
-**未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、GitHub Pages 公网域名（Pages 对私有仓库需付费，或把仓库转公开）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥）。
+**未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥）、线上 API 部署（需服务器与 SSH 凭据）。
 
 取证细节与每条失败的真实原因见 [`docs/07-free-platform-verification.md`](docs/07-free-platform-verification.md)。
 

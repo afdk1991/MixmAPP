@@ -16,8 +16,8 @@
 | GitHub Actions（ubuntu-latest） | 发布包与静态产物打包 | ✅ 通过 | `deploy` run 43080670325，1m10s |
 | GitHub Actions（ubuntu-latest） | Android debug APK | ✅ 通过 | `Android` run 43080670220，3m18s，产物 3.91 MB |
 | GitHub 提供的 PostgreSQL service 容器 | 真库集成测试 | ✅ 通过 | `postgres:16-alpine`，4 例集成测试全绿 |
+| GitHub Pages | H5 静态托管 | ✅ 通过（产物仓） | <https://afdk1991.github.io/mixmapp-h5/> 返回 200、DOM 有 `data-page` |
 | Cloudflare Pages | H5 静态托管 | ⏸ 未执行 | 缺 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，workflow 显式 SKIP |
-| GitHub Pages | H5 静态托管 | ⏸ 未执行 | 私有仓库开 Pages 需付费；要么转公开仓库，要么换平台 |
 | 远程 API 宿主 | 线上服务 | ⏸ 未执行 | 缺 SSH 凭据与服务器 |
 
 > 免费额度说明：私有仓库的 Actions 在免费账户下有月度分钟额度，本次三个工作流合计约 6 分钟，
@@ -84,11 +84,35 @@ readyz ok (attempt 2)
 
 ---
 
-## 6. 尚未验证的部分（条件清单，不是结论）
+## 6. GitHub Pages：静态端真实上线（只公开产物）
+
+私有仓库不能开免费 Pages，所以没有把 `mixmapp` 转公开，而是另建了一个**只放构建产物**的仓库：
+
+- 产物仓：`https://github.com/afdk1991/mixmapp-h5`（公开，内容只有 `index.html` / `README.md` / `.nojekyll`）
+- 线上地址：<https://afdk1991.github.io/mixmapp-h5/>（HTTP 200，356,739 字节）
+- 复核方式：浏览器打开即可；`/api` 未连，首页顶部会显示「未连上 API（先启动 services/api）」
+
+怎么生成的（源码仓内两条命令）：
+
+```bash
+node scripts/build-h5-single.mjs                       # 打进单文件 HTML
+MIXMAPP_H5_BASE=/mixmapp-h5/ node scripts/build-h5-single.mjs   # 子路径托管时对齐路由 base
+```
+
+产物落在 `release/mixmapp-h5-single.html`（348 KB，JS/CSS 内联、图片转 data URI）。
+
+途中踩到的真问题：uni-app H5 是多文件产物（`index.html` + `assets/*.js|css` + `static/*`），
+而 EdgeOne Makers 只提供「单 HTML 内容 → 公网 URL」，多文件传不上去；单文件化后**第一次仍然白屏**，
+原因是 `manifest.json` 的 `h5.router.base` 为 `/`，托管在 `/mixmapp-h5/` 子路径时路由匹配不到任何页面
+（`<uni-app>` 里是空的）。把 `router.base` 对齐到部署子路径后，`data-page` 正常出现、页面渲染完整。
+
+如果不想保留这个公开产物仓，删除即可（`gh repo delete afdk1991/mixmapp-h5`），不影响源码仓。
+
+## 7. 尚未验证的部分（条件清单，不是结论）
 
 | 项 | 缺什么 | 补齐后怎么验 |
 |---|---|---|
-| GitHub Pages 公网地址 | 仓库转公开（免费账户私有仓库不开 Pages），或升级账户 | 增加 `pages` 发布 job，访问 `https://<owner>.github.io/mixmapp/` 并截图 |
+| GitHub Pages 公网地址 | 已完成：产物仓 `afdk1991/mixmapp-h5` + Pages | 见第 6 节 |
 | Cloudflare Pages | `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID` | 配好 secrets 后 `deploy` 的静态端会自动从 SKIP 转为实际发布 |
 | 免费云 PostgreSQL（Neon/Supabase） | 账号与连接串 | 把 `DATABASE_URL` 指过去，跑 `db:migrate` + 集成测试 |
 | 线上 API | 服务器 + SSH 私钥 + 域名 | 配 `DEPLOY_SSH_KEY`/`DEPLOY_HOST`/`DEPLOY_USER`，`deploy` 的 api job 走原子发布与健康校验 |
