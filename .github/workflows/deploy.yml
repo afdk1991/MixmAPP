@@ -61,6 +61,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # secrets 不能直接出现在 if 表达式里，先在 job 级 env 折算成布尔字符串
+      CF_READY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -70,8 +73,8 @@ jobs:
       - name: 解包 H5
         run: mkdir -p apps/app/dist/build/h5 && tar -xzf h5-${{ github.sha }}.tar.gz -C apps/app/dist/build/h5
 
-      - name: 发布到 Pages
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      - name: 发布到 Cloudflare Pages
+        if: env.CF_READY == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -79,7 +82,7 @@ jobs:
         run: node scripts/deploy-static.mjs
 
       - name: 无凭据时跳过
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' || secrets.CLOUDFLARE_ACCOUNT_ID == '' }}
+        if: env.CF_READY != 'true'
         run: echo "SKIP 未配置 Cloudflare 凭据，静态端产物仅保留在 workflow artifact"
 
   api:
@@ -88,6 +91,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
+    env:
+      SSH_READY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -95,32 +100,41 @@ jobs:
           name: release-bundles
 
       - name: 写入部署私钥
-        if: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+        if: env.SSH_READY == 'true'
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: 上传发布包与脚本
-        if: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+        if: env.SSH_READY == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           scp -i ~/.ssh/deploy_key api-${{ github.sha }}.tar.gz \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/api.tar.gz"
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/api.tar.gz"
           scp -i ~/.ssh/deploy_key -r deploy \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/mixmapp-deploy"
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/mixmapp-deploy"
 
       - name: 远端原子发布
-        if: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+        if: env.SSH_READY == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             'sudo mkdir -p /opt/mixmapp/deploy && sudo cp -r /tmp/mixmapp-deploy/* /opt/mixmapp/deploy/ && \
              sudo ARTIFACT=/tmp/api.tar.gz bash /opt/mixmapp/deploy/atomic-release.sh'
 
       - name: 线上健康校验
-        if: ${{ secrets.DEPLOY_SSH_KEY != '' && vars.HEALTH_BASE_URL != '' }}
+        if: env.SSH_READY == 'true' && vars.HEALTH_BASE_URL != ''
         run: node scripts/healthcheck.mjs ${{ vars.HEALTH_BASE_URL }}
 
       - name: 无 SSH 凭据时跳过
-        if: ${{ secrets.DEPLOY_SSH_KEY == '' }}
+        if: env.SSH_READY != 'true'
         run: echo "SKIP 未配置 DEPLOY_SSH_KEY / DEPLOY_HOST / DEPLOY_USER，API 未发布"
