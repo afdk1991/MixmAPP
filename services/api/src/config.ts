@@ -54,6 +54,8 @@ export type Config = {
   port: number;
   publicBaseUrl: string;
   databaseUrl: string;
+  /** 仅当显式设置 ALLOW_MEMORY_STORE=1 时才允许无 DATABASE_URL 启动，默认拒绝。 */
+  allowMemoryStore: boolean;
   jwt: { secret: string; accessTtlSec: number; refreshTtlDays: number };
   ids: { strategy: IdStrategy; workerId: number };
   corsOrigins: string[];
@@ -121,6 +123,7 @@ export function loadConfig(): Config {
     port: num('PORT', 8080),
     publicBaseUrl: str('PUBLIC_BASE_URL', 'http://localhost:8080'),
     databaseUrl: str('DATABASE_URL'),
+    allowMemoryStore: bool('ALLOW_MEMORY_STORE'),
     jwt: {
       secret: jwtSecret,
       accessTtlSec: num('JWT_ACCESS_TTL_SEC', 900),
