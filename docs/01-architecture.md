@@ -46,12 +46,13 @@ services/api ─┘   └─→ packages/ids（只依赖 node:crypto）
 6. 统一响应形状：成功 `{ data: … }`，失败 `{ error: { code, message, requestId, details? } }`。
 7. 端侧收到 401 时，用刷新令牌换新令牌并**重放原请求**；并发请求共用同一次刷新。
 
-## 4. 存储层：一个接口，两套驱动
+## 4. 存储层：PostgreSQL 是唯一的持久化路径
 
-`db/types.ts` 定义 `Store`，`db/memory.ts` 与 `db/postgres.ts` 各实现一份；`index.ts` 按 `DATABASE_URL` 是否存在选择驱动。
+`db/types.ts` 定义 `Store`，`db/postgres.ts` 是生产实现，`db/memory.ts` 只是单元测试替身。
 
-- 好处：本机没有 PostgreSQL 也能跑全部接口测试与契约测试，CI 不必挂服务容器。
-- 代价：内存模式重启即丢数据，启动时打印警告；生产必须配 `DATABASE_URL`。
+- **运行时不降级**：`index.ts` 在 `DATABASE_URL` 缺失时直接退出（退出码 1，提示去配连接串）。不存在「自动切内存」的隐式行为，避免把演示环境当成真库。只有显式 `ALLOW_MEMORY_STORE=1` 才允许起内存实例，且启动即打印「重启即丢数据」警告。
+- **测试不替代**：`test/postgres.integration.test.ts` 是唯一覆盖 SQL、唯一约束、外键级联与令牌轮换的真实库测试；CI 用 `postgres:16` service 容器跑它，并设 `REQUIRE_DATABASE_URL=1`——缺连接串会直接失败，不会静默跳过。
+- **本地 vs CI 的分工**：本地无库时这 4 例跳过（不假装通过），其余 22 例单元测试在内存驱动上跑；CI 才是「真库 + 全量」的判定点。
 - `PgStore` 用 `pg` 连接池 + 手写 SQL，表的 `snake_case` 在映射层转成 `camelCase`，不引 ORM，避免迁移和类型两套真相。
 
 数据表（`infra/sql/0001_init.sql`）：

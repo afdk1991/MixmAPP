@@ -30,17 +30,22 @@
 # 1. 安装依赖（Node ≥ 20.11，pnpm 9.12）
 pnpm install
 
-# 2. 准备环境变量（无 DATABASE_URL 时自动走内存存储，仅限本地）
+# 2. 准备环境变量：必须给一个真实 PostgreSQL 连接串
 Copy-Item .env.example .env
+#    DATABASE_URL=postgres://user:pass@host:5432/db
+#    免费云端可直接用 Neon / Supabase 的免费实例
 
-# 3. 起后端（默认 http://127.0.0.1:8080）
+# 3. 建表（幂等，可重复执行）
+pnpm db:migrate
+
+# 4. 起后端（默认 http://127.0.0.1:8080）
 pnpm dev:api
 
-# 4. 起 H5（默认 http://127.0.0.1:5173，已把 /api 代理到 8080）
+# 5. 起 H5（默认 http://127.0.0.1:5173，已把 /api 代理到 8080）
 pnpm dev:h5
 ```
 
-内存模式启动时控制台会打印醒目警告：**重启即丢数据，禁止用于生产**。
+**没有 `DATABASE_URL` 时会直接拒绝启动**，这是刻意的：持久化只有 PostgreSQL 一条路径，不存在「看起来在跑真库、其实在跑内存」的隐式降级。确实要做一次性临时联调，才显式设 `ALLOW_MEMORY_STORE=1`，控制台会打印「重启即丢数据」的警告，且该模式不作为任何验证结论的依据。
 
 ---
 
@@ -53,7 +58,6 @@ pnpm dev:h5
 截图来源：`pnpm build:h5` 产物 + `node scripts/serve-h5.mjs` 本地预览 + 系统 Edge 无头截图，页面上的「服务在线 · development 环境」是真实调用 `/api/v1/meta` 的结果。
 
 ---
----
 
 ## 常用命令
 
@@ -62,7 +66,7 @@ pnpm dev:h5
 | `pnpm verify` | 一键门禁：规则检查 → 类型检查 → 全部测试 → API 构建 → H5 构建 |
 | `pnpm lint` | 仓库规则（禁 `console.log`、禁 `.only`、禁硬编码密钥、禁 TODO/FIXME、Vue 单文件标签闭合） |
 | `pnpm typecheck` | 全 workspace 类型检查（含 `vue-tsc`） |
-| `pnpm test` | `packages/ids` 11 例 + `services/api` 22 例（含支付签名往返、鉴权、发号） |
+| `pnpm test` | `packages/ids` 11 例 + `services/api` 22 例单元 + 4 例真实库集成（无 `DATABASE_URL` 时这 4 例跳过，CI 里强制跑） |
 | `pnpm build:api` | tsup 打包 API（含 `dist/db/migrate.js` 迁移入口） |
 | `pnpm build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` | 分端构建 |
 | `pnpm db:migrate` | 执行 `infra/sql/*.sql`（需 `DATABASE_URL`） |
