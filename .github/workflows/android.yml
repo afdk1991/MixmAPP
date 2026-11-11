@@ -61,7 +61,8 @@ jobs:
 
       - name: Assemble debug APK
         working-directory: apps/mobile/android
-        run: ./gradlew assembleDebug --no-daemon
+        # Windows 提交的 gradlew 会丢可执行位，这里显式补回，避免 Permission denied(126)
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
 
       - name: Decode keystore
         if: env.HAS_SIGNING == 'true'
