@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: 门禁（规则/类型/测试/构建）
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 规则检查
+        run: pnpm lint
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: 自动化测试
+        run: pnpm test
+
+      - name: 构建 API
+        run: pnpm build:api
+
+      - name: 构建 H5
+        run: pnpm build:h5
+
+      - name: 构建微信小程序
+        run: pnpm build:mp-weixin
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mixmapp-artifacts
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            services/api/dist
+            apps/app/dist/build/h5
+            apps/app/dist/build/mp-weixin

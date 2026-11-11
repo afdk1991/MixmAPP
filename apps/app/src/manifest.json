@@ -1,0 +1,89 @@
+{
+  "name": "MixmAPP",
+  "appid": "__UNI__MIXMAPP",
+  "description": "MixmAPP 一码多端应用",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "splashscreen": {
+      "alwaysShowBeforeRender": true,
+      "waiting": true,
+      "autoclose": true,
+      "delay": 0
+    },
+    "modules": {
+      "Geolocation": {},
+      "Push": {}
+    },
+    "distribute": {
+      "android": {
+        "permissions": [
+          "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+          "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
+          "<uses-permission android:name=\"android.permission.ACCESS_FINE_LOCATION\"/>",
+          "<uses-permission android:name=\"android.permission.ACCESS_COARSE_LOCATION\"/>"
+        ],
+        "minSdkVersion": 23,
+        "targetSdkVersion": 34,
+        "abiFilters": ["armeabi-v7a", "arm64-v8a"]
+      },
+      "ios": {
+        "dSYMs": false,
+        "privacyDescription": {
+          "NSLocationWhenInUseUsageDescription": "用于展示附近内容与路线规划"
+        }
+      },
+      "sdkConfigs": {
+        "oauth": {
+          "weixin": {}
+        }
+      }
+    }
+  },
+  "quickapp": {},
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "permission": {
+      "scope.userLocation": {
+        "desc": "用于展示附近内容与路线规划"
+      }
+    },
+    "requiredPrivateInfos": ["getLocation"]
+  },
+  "h5": {
+    "title": "MixmAPP",
+    "router": {
+      "mode": "history",
+      "base": "/"
+    },
+    "optimization": {
+      "treeShaking": {
+        "enable": true
+      }
+    }
+  },
+  "app-harmony": {
+    "distribute": {
+      "bundleName": "app.mixm.mixmapp",
+      "permissions": [
+        "ohos.permission.INTERNET",
+        "ohos.permission.ACCESS_NETWORK_STATE",
+        "ohos.permission.LOCATION"
+      ]
+    }
+  },
+  "uniStatistics": {
+    "enable": false
+  },
+  "vueVersion": "3"
+}

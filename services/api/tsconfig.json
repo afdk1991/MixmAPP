@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@mixmapp/ids": ["../../packages/ids/src/index.ts"],
+      "@mixmapp/contracts": ["../../packages/contracts/src/index.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

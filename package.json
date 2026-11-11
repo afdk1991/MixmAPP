@@ -1,0 +1,30 @@
+{
+  "name": "mixmapp",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @mixmapp/api dev",
+    "dev:h5": "pnpm --filter @mixmapp/app dev:h5",
+    "dev:mp-weixin": "pnpm --filter @mixmapp/app dev:mp-weixin",
+    "build:api": "pnpm --filter @mixmapp/api build",
+    "build:h5": "pnpm --filter @mixmapp/app build:h5",
+    "build:mp-weixin": "pnpm --filter @mixmapp/app build:mp-weixin",
+    "build:app": "pnpm --filter @mixmapp/app build:app",
+    "build:harmony": "pnpm --filter @mixmapp/app build:harmony",
+    "build": "pnpm run build:api && pnpm run build:h5",
+    "test": "pnpm -r --no-bail test",
+    "typecheck": "pnpm -r --no-bail typecheck",
+    "lint": "node scripts/repo-lint.mjs",
+    "verify": "node scripts/verify.mjs",
+    "db:migrate": "pnpm --filter @mixmapp/api db:migrate",
+    "ops:health": "node scripts/healthcheck.mjs",
+    "ops:backup": "node scripts/backup.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3"
+  }
+}

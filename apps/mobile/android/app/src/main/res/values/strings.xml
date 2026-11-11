@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MixmAPP</string>
+    <string name="title_activity_main">MixmAPP</string>
+    <string name="package_name">top.mixm.app</string>
+    <string name="custom_url_scheme">top.mixm.app</string>
+</resources>

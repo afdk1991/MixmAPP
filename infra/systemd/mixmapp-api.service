@@ -1,0 +1,30 @@
+[Unit]
+Description=MixmAPP API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mixmapp
+Group=mixmapp
+WorkingDirectory=/opt/mixmapp/current
+EnvironmentFile=/etc/mixmapp/api.env
+ExecStart=/usr/bin/node /opt/mixmapp/current/dist/index.js
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# 基础加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mixmapp /var/log/mixmapp
+LimitNOFILE=65535
+
+StandardOutput=append:/var/log/mixmapp/api.log
+StandardError=append:/var/log/mixmapp/api.err.log
+
+[Install]
+WantedBy=multi-user.target

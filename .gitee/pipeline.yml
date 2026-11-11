@@ -1,0 +1,58 @@
+version: 1.0
+name: mixmapp-pipeline
+displayName: MixmAPP 流水线
+triggers:
+  push:
+    branches:
+      include:
+        - main
+        - develop
+  pull_request:
+    branches:
+      include:
+        - main
+
+stages:
+  - stage:
+      name: gates
+      displayName: 门禁与构建
+      steps:
+        - step: build@nodejs
+          name: verify
+          displayName: 规则/类型/测试/构建
+          nodeVersion: 22
+          commands:
+            - corepack enable
+            - corepack prepare pnpm@9.12.0 --activate
+            - pnpm install --frozen-lockfile
+            - pnpm lint
+            - pnpm typecheck
+            - pnpm test
+            - pnpm build:api
+            - pnpm build:h5
+            - pnpm build:mp-weixin
+          artifacts:
+            - name: h5
+              path:
+                - apps/app/dist/build/h5
+            - name: api
+              path:
+                - services/api/dist
+            - name: mp-weixin
+              path:
+                - apps/app/dist/build/mp-weixin
+
+  - stage:
+      name: publish
+      displayName: 产物发布（需在 Gitee Go 配置变量）
+      steps:
+        - step: build@nodejs
+          name: deploy-h5
+          displayName: 发布 H5 到 Cloudflare Pages
+          nodeVersion: 22
+          commands:
+            - corepack enable
+            - corepack prepare pnpm@9.12.0 --activate
+            - pnpm install --frozen-lockfile
+            - pnpm build:h5
+            - node scripts/deploy-static.mjs

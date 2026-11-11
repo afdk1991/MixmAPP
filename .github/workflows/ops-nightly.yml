@@ -1,0 +1,45 @@
+name: ops-nightly
+
+on:
+  schedule:
+    - cron: '20 18 * * *' # 北京时间每天 02:20
+  workflow_dispatch:
+
+jobs:
+  health:
+    name: 线上健康巡检
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 健康检查
+        if: ${{ vars.HEALTH_BASE_URL != '' }}
+        run: node scripts/healthcheck.mjs ${{ vars.HEALTH_BASE_URL }}
+      - name: 未配置域名时跳过
+        if: ${{ vars.HEALTH_BASE_URL == '' }}
+        run: echo "SKIP 未配置 HEALTH_BASE_URL"
+
+  backup:
+    name: 数据库备份
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 写入部署私钥
+        if: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: 远端备份
+        if: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            'sudo -u mixmapp bash -lc "cd /opt/mixmapp/current && set -a && . /etc/mixmapp/api.env && set +a && node scripts/backup.mjs"'
+      - name: 无凭据时跳过
+        if: ${{ secrets.DEPLOY_SSH_KEY == '' }}
+        run: echo "SKIP 未配置 DEPLOY_SSH_KEY，未执行备份"

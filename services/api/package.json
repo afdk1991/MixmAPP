@@ -1,0 +1,38 @@
+{
+  "name": "@mixmapp/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:migrate": "tsx src/db/migrate.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "10.0.1",
+    "@mixmapp/contracts": "workspace:*",
+    "@mixmapp/ids": "workspace:*",
+    "fastify": "5.12.8",
+    "jose": "5.9.6",
+    "pg": "8.13.1",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/pg": "8.11.10",
+    "tsx": "4.19.2",
+    "tsup": "8.3.5",
+    "typescript": "5.6.3",
+    "vitest": "2.1.9"
+  }
+}

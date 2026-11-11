@@ -1,0 +1,11 @@
+{
+  "appId": "top.mixm.app",
+  "appName": "MixmAPP",
+  "webDir": "../app/dist/build/h5",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

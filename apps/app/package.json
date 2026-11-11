@@ -1,0 +1,33 @@
+{
+  "name": "@mixmapp/app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:h5": "uni",
+    "build:h5": "uni build",
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "dev:app": "uni -p app",
+    "build:app": "uni build -p app",
+    "build:harmony": "uni build -p app-harmony",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-app-harmony": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-app-plus": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-components": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-h5": "3.0.0-alpha-5030620261106001",
+    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5030620261106001",
+    "@mixmapp/contracts": "workspace:*",
+    "vue": "3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.31",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5030620261106001",
+    "sass": "1.77.8",
+    "typescript": "5.6.3",
+    "vite": "5.2.8",
+    "vue-tsc": "2.1.10"
+  }
+}
