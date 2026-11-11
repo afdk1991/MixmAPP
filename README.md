@@ -90,8 +90,8 @@ MixmAPP/
 ├─ infra/                  # SQL 迁移、Nginx、systemd
 ├─ deploy/                 # 原子发布、回滚脚本
 ├─ scripts/                # 门禁、健康检查、备份、静态发布、品牌素材、H5 预览
-├─ docs/                   # 架构、ID 与鉴权、第三方、CI/CD、运维手册、API 参考
-├─ .github/workflows/      # ci.yml / deploy.yml / ops-nightly.yml
+├─ docs/                   # 架构、ID 与鉴权、第三方、CI/CD、运维手册、API 参考、免费平台取证
+├─ .github/workflows/      # ci.yml / deploy.yml / android.yml / ops-nightly.yml
 └─ .gitee/pipeline.yml     # Gitee Go 流水线
 ```
 
@@ -126,10 +126,21 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 ---
 
-## 状态与边界（事实陈述）
+## 状态与边界（事实陈述，2026-11-12）
 
-- 已验证：`pnpm install`、`pnpm lint`、`pnpm typecheck`、全部 33 例测试、`build:api`、`build:h5`、`build:mp-weixin`、`build:app`、`build:harmony`、Android debug APK 构建、注册→分配 MIX 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
-- 未验证：iOS 打包（需 macOS + 签名证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX 账号）、线上部署（本机无 Cloudflare / SSH 部署凭据）。
-- 未推送：仓库尚未 `git init` 之后的远程推送，也尚未创建 GitHub / Gitee 远端。
+**本地已验证**：`pnpm install` / `lint` / `typecheck` / 26 例测试（22 单元 + 4 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MIX 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
+
+**免费平台已验证（GitHub 云端 runner，非本机）**：
+
+| 工作流 | 结果 | 证明的事 |
+|---|---|---|
+| `ci` | ✅ 1m18s | 规则/类型/22 例单元测试/**4 例真实 PostgreSQL 集成测试**/API 构建/H5 构建/小程序构建/`dist` 启动后 `readyz` 就绪 |
+| `deploy` | ✅ 1m10s | 独立发布包（`pnpm deploy --prod`）+ H5 打包 + 产物上传；静态端与 SSH 端因无凭据显式 SKIP |
+| `Android` | ✅ 3m18s | H5 → `cap sync` → `assembleDebug`，产出 `mixmapp-debug-apk`（3.91 MB） |
+
+**未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、GitHub Pages 公网域名（Pages 对私有仓库需付费，或把仓库转公开）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥）。
+
+取证细节与每条失败的真实原因见 [`docs/07-free-platform-verification.md`](docs/07-free-platform-verification.md)。
+
 
 详见 [`docs/05-runbook.md`](docs/05-runbook.md) 的「已知边界」一节。
