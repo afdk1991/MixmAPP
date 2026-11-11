@@ -67,17 +67,18 @@ suite('PostgreSQL 驱动（真实库）', () => {
     });
     expect(res.statusCode).toBe(201);
     const body = res.json().data as {
-      user: { id: string; accountNo: string; snowflake: string; ulid: string; uuidV7: string };
+      user: { id: string; accountNo: string };
       tokens: { accessToken: string; refreshToken: string };
     };
     expect(body.user.accountNo).toMatch(/^MIX-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
-    expect(body.user.uuidV7).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(body.user.ulid).toHaveLength(26);
-    expect(body.user.snowflake).toMatch(/^\d+$/);
 
     const row = await store.users.findByEmail(email);
     expect(row?.id).toBe(body.user.id);
     expect(row?.accountNo).toBe(body.user.accountNo);
+    // DTO 只暴露 id 与 accountNo，三套原始 ID 直接查库校验
+    expect(row?.uuidV7).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(row?.ulid).toHaveLength(26);
+    expect(row?.snowflake).toMatch(/^\d+$/);
     expect(row?.passwordHash).not.toBeNull();
   });
 
@@ -97,7 +98,7 @@ suite('PostgreSQL 驱动（真实库）', () => {
       headers: { authorization: `Bearer ${tokens.accessToken}` },
     });
     expect(me.statusCode).toBe(200);
-    expect(me.json().data.email).toContain('***');
+    expect(me.json().data.email).toBe(email);
   });
 
   it('刷新令牌轮换会撤销旧哈希', async () => {
