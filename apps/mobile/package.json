@@ -6,8 +6,8 @@
   "scripts": {
     "sync:android": "cap sync android",
     "open:android": "cap open android",
-    "build:debug": "cd android && gradlew.bat assembleDebug",
-    "build:release": "cd android && gradlew.bat assembleRelease"
+    "build:debug": "node ../../scripts/android-build.mjs assembleDebug",
+    "build:release": "node ../../scripts/android-build.mjs assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
