@@ -1,0 +1,259 @@
+#!/usr/bin/env node
+/**
+ * 版本号单一事实源：version.json
+ *
+ * 规约（详见 docs/08-versioning.md）：
+ * - 首个对外正式版本 = V0.0.0，之后每次功能/模块更新按 V0.0.1、V0.0.2 递增
+ * - 发布前不得占用正式版本号：没有真正对外发布，就不能把该号写进 released，也不能打 tag
+ * - 内部 / 预览 / 草稿构建一律显示 V0.0.0-preview，正式上线才显示 V0.0.0
+ * - 任何一处版本必须与 README 同步，不一致即门禁失败
+ *
+ * 命令：
+ *   node scripts/version.mjs show      打印当前版本（含展示形式）
+ *   node scripts/version.mjs check     校验全部版本位是否一致（CI 门禁用）
+ *   node scripts/version.mjs sync      把 version.json 同步到各处（包、env、config、README）
+ *   node scripts/version.mjs bump      递增补丁号（只允许在上一版已发布之后）
+ *   node scripts/version.mjs release   正式发布：占用当前号、打 tag 提示、推进到下一个 preview
+ */
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const VERSION_FILE = join(root, 'version.json');
+const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
+const PKG_FILES = [
+  'package.json',
+  'apps/app/package.json',
+  'apps/mobile/package.json',
+  'services/api/package.json',
+  'packages/contracts/package.json',
+  'packages/ids/package.json',
+];
+
+const ENV_FILE = '.env.example';
+const CONFIG_FILE = join('services', 'api', 'src', 'config.ts');
+const README_FILE = 'README.md';
+const BEGIN = '<!-- version:begin -->';
+const END = '<!-- version:end -->';
+
+function fail(message) {
+  console.error(`✗ ${message}`);
+  process.exit(1);
+}
+
+function readText(relativePath) {
+  return readFileSync(join(root, relativePath), 'utf8');
+}
+
+function writeText(relativePath, content) {
+  writeFileSync(join(root, relativePath), content, 'utf8');
+}
+
+function loadState() {
+  if (!existsSync(VERSION_FILE)) fail('缺少 version.json');
+  const state = JSON.parse(readFileSync(VERSION_FILE, 'utf8'));
+  if (!SEMVER.test(state.next ?? '')) fail(`version.json next 不是合法 X.Y.Z：${state.next}`);
+  if (state.channel !== 'preview' && state.channel !== 'release') {
+    fail(`version.json channel 只能是 preview 或 release：${state.channel}`);
+  }
+  if (!Array.isArray(state.released)) fail('version.json released 必须是数组');
+  return state;
+}
+
+function saveState(state) {
+  writeFileSync(VERSION_FILE, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+}
+
+/** 展示用版本（含 -preview 后缀） */
+function displayVersion(state) {
+  return state.channel === 'preview' ? `${state.next}-preview` : state.next;
+}
+
+/** 对外展示（带 V 前缀） */
+function publicVersion(state) {
+  return `V${displayVersion(state)}`;
+}
+
+function bumpPatch(version) {
+  const [major, minor, patch] = version.split('.').map(Number);
+  return `${major}.${minor}.${patch + 1}`;
+}
+
+function readmeBlock(state) {
+  const current = publicVersion(state);
+  const currentNote =
+    state.channel === 'preview' ? '内部预览构建，未对外发布' : '正式发布版本';
+  const released =
+    state.released.length === 0
+      ? '无'
+      : state.released.map((v) => `\`V${v}\``).join('、');
+  return [
+    BEGIN,
+    `当前构建版本：**${current}**（${currentNote}）`,
+    `已发布版本：${released}`,
+    '版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/08-versioning.md](docs/08-versioning.md)',
+    END,
+  ].join('\n');
+}
+
+function expectedConfigLine(state) {
+  return `str('APP_VERSION', '${displayVersion(state)}')`;
+}
+
+function expectedEnvLine(state) {
+  return `APP_VERSION=${displayVersion(state)}`;
+}
+
+function sync() {
+  const state = loadState();
+
+  for (const file of PKG_FILES) {
+    const pkg = JSON.parse(readText(file));
+    if (pkg.version !== state.next) {
+      pkg.version = state.next;
+      writeText(file, `${JSON.stringify(pkg, null, 2)}\n`);
+      console.log(`  · ${file} → ${state.next}`);
+    }
+  }
+
+  const env = readText(ENV_FILE);
+  const envNext = env.replace(/^APP_VERSION=.*$/m, expectedEnvLine(state));
+  if (envNext !== env) {
+    writeText(ENV_FILE, envNext);
+    console.log(`  · ${ENV_FILE} → ${displayVersion(state)}`);
+  }
+
+  const config = readText(CONFIG_FILE);
+  const configNext = config.replace(/str\('APP_VERSION',\s*'[^']*'\)/, expectedConfigLine(state));
+  if (configNext !== config) {
+    if (!/str\('APP_VERSION'/.test(configNext)) fail(`${CONFIG_FILE} 里找不到 APP_VERSION 默认值`);
+    writeText(CONFIG_FILE, configNext);
+    console.log(`  · ${CONFIG_FILE} → ${displayVersion(state)}`);
+  }
+
+  const readme = readText(README_FILE);
+  const block = readmeBlock(state);
+  if (readme.includes(BEGIN) && readme.includes(END)) {
+    const replaced = readme.replace(
+      new RegExp(`${BEGIN}[\\s\\S]*?${END}`, 'm'),
+      block,
+    );
+    if (replaced !== readme) {
+      writeText(README_FILE, replaced);
+      console.log(`  · ${README_FILE} → ${publicVersion(state)}`);
+    }
+  } else {
+    fail(`${README_FILE} 缺少版本标记 ${BEGIN} / ${END}，无法同步`);
+  }
+
+  console.log(`✓ 同步完成：${publicVersion(state)}`);
+}
+
+function check() {
+  const state = loadState();
+  const problems = [];
+
+  if (state.released.includes(state.next)) {
+    problems.push(`版本 ${state.next} 已在 released 列表里，属于「已占用」，不能再作为待发布版本`);
+  }
+
+  for (const file of PKG_FILES) {
+    const version = JSON.parse(readText(file)).version;
+    if (version !== state.next) problems.push(`${file} 的 version=${version}，应为 ${state.next}`);
+  }
+
+  if (!readText(ENV_FILE).includes(expectedEnvLine(state))) {
+    problems.push(`${ENV_FILE} 的 APP_VERSION 与 ${displayVersion(state)} 不一致`);
+  }
+  if (!readText(CONFIG_FILE).includes(expectedConfigLine(state))) {
+    problems.push(`${CONFIG_FILE} 的 APP_VERSION 默认值不是 ${displayVersion(state)}`);
+  }
+
+  const readme = readText(README_FILE);
+  if (!readme.includes(readmeBlock(state))) {
+    problems.push(`${README_FILE} 的版本块与 version.json 不同步（当前应为 ${publicVersion(state)}）`);
+  }
+
+  // 发布前不得占用正式版本号：未发布的号不允许存在同名 tag
+  if (state.channel === 'preview') {
+    let tags = '';
+    try {
+      tags = execFileSync('git', ['tag', '--list', `v${state.next}`], { cwd: root, encoding: 'utf8' }).trim();
+    } catch {
+      tags = '';
+    }
+    if (tags) problems.push(`tag ${tags} 已存在，但 ${state.next} 尚未发布（不得提前占用）`);
+  }
+
+  if (problems.length > 0) {
+    problems.forEach((p) => console.error(`✗ ${p}`));
+    process.exit(1);
+  }
+  console.log(`✓ 版本一致：${publicVersion(state)}（包 ${PKG_FILES.length} 个、env、config、README、tag 均已核对）`);
+}
+
+function bump() {
+  const state = loadState();
+  if (!state.released.includes(state.next)) {
+    fail(`当前 ${state.next} 还没正式发布，不能先占用下一个号（规约：发布前不得占用）`);
+  }
+  const prev = state.next;
+  state.next = bumpPatch(prev);
+  state.channel = 'preview';
+  saveState(state);
+  console.log(`✓ ${prev} 已发布，工作版本推进到 ${publicVersion(state)}`);
+  sync();
+}
+
+function release() {
+  const state = loadState();
+  if (state.channel === 'release' || state.released.includes(state.next)) {
+    fail(`${state.next} 已经是发布状态，无需重复发布`);
+  }
+  const tag = `v${state.next}`;
+  try {
+    const existing = execFileSync('git', ['tag', '--list', tag], { cwd: root, encoding: 'utf8' }).trim();
+    if (existing) fail(`tag ${tag} 已存在，不能重复发布`);
+  } catch (error) {
+    if (String(error?.message ?? '').includes('不能重复发布')) throw error;
+  }
+
+  const releasedVersion = state.next;
+  state.released.push(releasedVersion);
+  state.channel = 'preview';
+  state.next = bumpPatch(releasedVersion);
+  saveState(state);
+  sync();
+
+  console.log('');
+  console.log(`✓ 已登记正式发布：V${releasedVersion}（tag ${tag}）`);
+  console.log(`  下一步（由发布流程执行，脚本不自动打 tag，避免误触发上线）：`);
+  console.log(`    git add -A && git commit -m "release: V${releasedVersion}"`);
+  console.log(`    git tag -a ${tag} -m "MixmAPP ${releasedVersion}" && git push origin main ${tag}`);
+  console.log(`  当前工作版本：${publicVersion(state)}`);
+}
+
+const command = process.argv[2];
+switch (command) {
+  case 'show':
+    console.log(JSON.stringify({ ...loadState(), display: publicVersion(loadState()) }, null, 2));
+    break;
+  case 'check':
+    check();
+    break;
+  case 'sync':
+    sync();
+    break;
+  case 'bump':
+    bump();
+    break;
+  case 'release':
+    release();
+    break;
+  default:
+    console.error('用法：node scripts/version.mjs <show|check|sync|bump|release>');
+    process.exit(1);
+}

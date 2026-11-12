@@ -1,6 +1,6 @@
 {
   "name": "mixmapp",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@9.12.0",
   "engines": {
@@ -23,7 +23,12 @@
     "db:migrate": "pnpm --filter @mixmapp/api db:migrate",
     "ops:health": "node scripts/healthcheck.mjs",
     "ops:backup": "node scripts/backup.mjs",
-    "build:h5:single": "node scripts/build-h5-single.mjs"
+    "build:h5:single": "node scripts/build-h5-single.mjs",
+    "version:show": "node scripts/version.mjs show",
+    "version:check": "node scripts/version.mjs check",
+    "version:sync": "node scripts/version.mjs sync",
+    "version:bump": "node scripts/version.mjs bump",
+    "version:release": "node scripts/version.mjs release"
   },
   "devDependencies": {
     "typescript": "5.6.3"
