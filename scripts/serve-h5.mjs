@@ -28,7 +28,9 @@ const MIME = {
 
 /** 代理 /api 请求到后端，保留方法、请求头与原始 body。 */
 function proxy(req, res) {
-  const target = new URL(req.url, API_ORIGIN);
+  // API_ORIGIN 可能带路径前缀（线上是 https://cloud.mixm.top/mixmapp），必须拼回去再转发
+  const base = API_ORIGIN.replace(/\/+$/, '');
+  const target = new URL(base + req.url);
   const upstream = request(
     {
       protocol: target.protocol,

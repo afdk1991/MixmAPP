@@ -4,50 +4,57 @@
       "path": "pages/index/index",
       "style": {
         "navigationBarTitleText": "MixmAPP",
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "backgroundColorTop": "#08110F"
       }
     },
     {
       "path": "pages/auth/register",
-      "style": { "navigationBarTitleText": "创建账号" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/auth/login",
-      "style": { "navigationBarTitleText": "登录" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/me/index",
-      "style": { "navigationBarTitleText": "我的" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/mall/index",
-      "style": { "navigationBarTitleText": "商城" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/mall/detail",
-      "style": { "navigationBarTitleText": "商品详情" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/cart/index",
-      "style": { "navigationBarTitleText": "购物车" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/orders/index",
-      "style": { "navigationBarTitleText": "我的订单" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/tools/ids",
-      "style": { "navigationBarTitleText": "ID 试算器" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
       "path": "pages/settings/about",
-      "style": { "navigationBarTitleText": "关于" }
+      "style": { "navigationBarTitleText": "MixmAPP" }
+    },
+    {
+      "path": "pages/admin/index",
+      "style": { "navigationBarTitleText": "MixmAPP" }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "MixmAPP",
-    "navigationBarBackgroundColor": "#FFFFFF",
-    "backgroundColor": "#F6F7F9"
+    "navigationBarBackgroundColor": "#F2F5F3",
+    "backgroundColor": "#F2F5F3",
+    "backgroundColorTop": "#F2F5F3",
+    "backgroundColorBottom": "#F2F5F3"
   }
 }

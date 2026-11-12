@@ -84,6 +84,21 @@ function rawRequest(options: {
 }
 
 const TOKEN_KEY = 'mixmapp:tokens';
+const ADMIN_TOKEN_KEY = 'mixmapp:adminToken';
+
+/** 管理令牌只存本机，页面刷新后自动复用；服务端令牌才是权威 */
+export function readAdminToken(): string {
+  try {
+    const value = uni.getStorageSync(ADMIN_TOKEN_KEY) as string | '';
+    return typeof value === 'string' ? value : '';
+  } catch {
+    return '';
+  }
+}
+
+export function writeAdminToken(token: string): void {
+  uni.setStorageSync(ADMIN_TOKEN_KEY, token);
+}
 
 export type StoredTokens = { accessToken: string; refreshToken: string; expiresAt: number };
 
@@ -138,11 +153,16 @@ async function ensureRefreshed(): Promise<boolean> {
 
 export async function apiRequest<T>(
   path: string,
-  options: { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; data?: unknown; auth?: boolean } = {},
+  options: {
+    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    data?: unknown;
+    auth?: boolean;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<T> {
   const execute = async (): Promise<RawResponse> => {
     const tokens = readTokens();
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...(options.headers ?? {}) };
     if (options.auth !== false && tokens?.accessToken) {
       headers.authorization = `Bearer ${tokens.accessToken}`;
     }
@@ -232,6 +252,30 @@ export const metaApi = {
       thirdParty: Record<string, string>;
       serverTime: string;
     }>('/meta', { auth: false }),
+};
+
+export type DbStatusDto = {
+  target: 'cloudbase' | 'server';
+  driver: string;
+  host: string;
+  source: string;
+  available: Record<'cloudbase' | 'server', { configured: boolean; host: string }>;
+};
+
+/** 管理面：需要 x-admin-token；未在服务端设置 ADMIN_TOKEN 时这些接口整体 404 */
+export const adminApi = {
+  db: (token: string) => apiRequest<DbStatusDto>('/admin/db', { auth: false, headers: { 'x-admin-token': token } }),
+  switchDb: (token: string, target: 'cloudbase' | 'server') =>
+    apiRequest<DbStatusDto & { switched: { from: string; to: string; host: string } }>(
+      '/admin/db/switch',
+      { method: 'POST', data: { target }, auth: false, headers: { 'x-admin-token': token } },
+    ),
+  sweepOrders: (token: string) =>
+    apiRequest<{ ttlMinutes: number; cancelled: string[]; count: number }>('/admin/orders/sweep', {
+      method: 'POST',
+      auth: false,
+      headers: { 'x-admin-token': token },
+    }),
 };
 
 export const mallApi = {
