@@ -120,6 +120,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" 'rm -rf /tmp/mixmapp-deploy'
           scp -i ~/.ssh/deploy_key api-${{ github.sha }}.tar.gz \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/api.tar.gz"
           scp -i ~/.ssh/deploy_key -r deploy \
