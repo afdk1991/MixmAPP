@@ -25,18 +25,16 @@
 | 平台 | 项目名 | 说明 |
 |---|---|---|
 | GitHub 仓库 | `MixmAPP` | 由 `mixmapp` 改名而来，旧地址自动 301 跳转 |
-| GitHub Pages | 挂在 `MixmAPP` 主仓 | 私有仓不支持免费 Pages（API 返回 422），只能让主仓公开后直接托管；原先的 `mixmapp-h5` 产物仓已废弃 |
-| GitHub Packages | `mixmapp` | OCI 规范要求镜像名全小写，无法写成 `MixmAPP`，这是平台硬限制 |
+| GitHub Pages | 挂在 `MixmAPP` 主仓 | 私有仓不支持免费 Pages（API 返回 422），只能让主仓公开后直接托管；旧产物仓 `mixmapp-h5` 已删除（旧地址 404） |
+| GitHub Packages | `mixmapp` | OCI 规范要求镜像名全小写，无法写成 `MixmAPP`，这是平台硬限制；旧包 `mixmapp-api` 已删除 |
 | 腾讯云 CloudBase | `MixmAPP` | 服务名已统一；控制台域名由平台小写化为 `mixmapp-cs-1-…`，DNS 本身不区分大小写。旧 `mixmapp-h5` 应用已删除 |
 | 其余平台 | `MixmAPP` | 尚未创建，创建时统一使用该名称 |
 
-待删（`gh` token 缺 `delete_repo` / `delete:packages`，需补授权后执行）：
+命名统一已完成（2026-11-12 复核）：
 
-```bash
-gh auth refresh -h github.com -s delete_repo,delete:packages
-gh repo delete afdk1991/mixmapp-h5 --yes
-gh api -X DELETE user/packages/container/mixmapp-api
-```
+- `gh repo delete afdk1991/mixmapp-h5 --yes` 执行后，账号下仓库只剩 `MixmAPP`（及另一项目的 `mim`），旧地址 `https://afdk1991.github.io/mixmapp-h5/` 返回 404
+- `gh api -X DELETE user/packages/container/mixmapp-api` 执行后，容器包列表为 `mixmapp`（及另一项目的 `mim-api`）
+- 前提是 `gh auth refresh -h github.com -s delete_repo,delete:packages` 补齐 scope；现持有 `delete:packages, delete_repo, gist, read:org, repo, workflow, write:packages`
 
 ## 域名映射（待确认）
 
