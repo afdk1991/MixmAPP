@@ -52,6 +52,7 @@ suite('PostgreSQL 驱动（真实库）', () => {
     try {
       await client.query('delete from users where email = $1 or phone = $1', [email]);
       await client.query('delete from sms_codes where phone = $1', [phone]);
+      await client.query("delete from products where id like 'pg-p-%'");
     } finally {
       await client.end();
     }
@@ -150,5 +151,84 @@ suite('PostgreSQL 驱动（真实库）', () => {
       payload: { channel: 'wechat', amountFen: 100, subject: '重复单号', outTradeNo },
     });
     expect(duplicated.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it('商城四表可写：商品落库、条件扣库存、订单事务与明细', async () => {
+    const user = await store.users.findByEmail(email);
+    expect(user).not.toBeNull();
+    const userId = user?.id as string;
+    const productId = `pg-p-${stamp}`;
+
+    const inserted = await store.mall.products.insert({
+      id: productId,
+      title: '集成测试商品',
+      subtitle: 'PG 写入',
+      priceFen: 12900,
+      originalPriceFen: 15900,
+      stock: 5,
+      category: 'featured',
+      cover: '#0f9d8f',
+      images: [],
+      tags: ['pg'],
+      description: '验证 0002_mall.sql 建表与写入',
+      sortNo: 999,
+      createdAt: new Date(),
+    });
+    expect(inserted.stock).toBe(5);
+
+    const listed = await store.mall.products.list({ limit: 100, offset: 0 });
+    expect(listed.some((p) => p.id === productId)).toBe(true);
+
+    // 条件更新：库存不足时不允许扣减
+    expect(await store.mall.products.decrementStock(productId, 2)).toBe(true);
+    expect(await store.mall.products.decrementStock(productId, 99)).toBe(false);
+    expect((await store.mall.products.findById(productId))?.stock).toBe(3);
+
+    const cart = await store.mall.carts.upsert({
+      id: `pg-c-${stamp}`,
+      userId,
+      productId,
+      quantity: 2,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(cart.quantity).toBe(2);
+    const cartAgain = await store.mall.carts.upsert({ ...cart, quantity: 3, updatedAt: new Date() });
+    expect(cartAgain.quantity).toBe(3);
+    await store.mall.carts.remove(userId, productId);
+    expect(await store.mall.carts.find(userId, productId)).toBeNull();
+
+    const orderId = `pg-o-${stamp}`;
+    const orderNo = `PGO${stamp}`;
+    await store.mall.orders.insert(
+      {
+        id: orderId,
+        orderNo,
+        userId,
+        status: 'pending',
+        totalFen: 25800,
+        receiverName: '集成测试',
+        receiverPhone: '13900000000',
+        address: '浙江省宁波市集成测试地址',
+        remark: null,
+        createdAt: new Date(),
+        paidAt: null,
+      },
+      [
+        {
+          id: `pg-oi-${stamp}`,
+          orderId,
+          productId,
+          title: '集成测试商品',
+          priceFen: 12900,
+          quantity: 2,
+          subtotalFen: 25800,
+        },
+      ],
+    );
+
+    const found = await store.mall.orders.findByOrderNo(orderNo);
+    expect(found?.totalFen).toBe(25800);
+    expect(await store.mall.orders.itemsByOrder(orderId)).toHaveLength(1);
   });
 });
