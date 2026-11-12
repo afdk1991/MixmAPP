@@ -17,7 +17,7 @@ export const smsCodeSchema = z.string().regex(/^\d{6}$/, '验证码为 6 位数�
 
 export const oauthProviderSchema = z.enum(['wechat', 'qq', 'github', 'apple']);
 
-/** 用户名：3–20 位字母/数字/下划线，不能纯数字，不与保留名冲突。 */
+/** 用户名：2–20 位（中文/字母/数字/下划线），不能纯数字，不与保留名冲突。 */
 export const RESERVED_USERNAMES = [
   'admin',
   'root',
@@ -32,9 +32,9 @@ export const RESERVED_USERNAMES = [
 export const usernameSchema = z
   .string()
   .trim()
-  .min(3, '用户名至少 3 位')
-  .max(20, '用户名最多 20 位')
-  .regex(/^[a-zA-Z0-9_]+$/, '用户名仅支持字母、数字与下划线')
+  .min(2, '用户名至少 2 个字符')
+  .max(20, '用户名最多 20 个字符')
+  .regex(/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, '用户名仅支持中文、字母、数字与下划线')
   .refine((value) => !/^\d+$/.test(value), '用户名不能是纯数字')
   .refine(
     (value) => !RESERVED_USERNAMES.includes(value.toLowerCase() as (typeof RESERVED_USERNAMES)[number]),

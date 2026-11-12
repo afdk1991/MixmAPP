@@ -35,7 +35,7 @@
           class="field mt"
           type="text"
           maxlength="20"
-          placeholder="用户名（3–20 位字母/数字/下划线）"
+          placeholder="用户名（2–20 个字符，中文/字母/数字/下划线）"
           v-model="upUsername"
         />
         <input
@@ -44,6 +44,7 @@
           placeholder="密码（至少 8 位，含字母与数字）"
           v-model="upPassword"
         />
+        <text class="hint">不得使用管理员、官方、政府机关等名称。</text>
         <text v-if="upError" class="error">{{ upError }}</text>
         <view class="btn btn--primary mt" @tap="upgradeGuest">
           {{ upgrading ? '提交中…' : '设置用户名与密码' }}

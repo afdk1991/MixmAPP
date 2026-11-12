@@ -136,7 +136,7 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 ## 状态与边界（事实陈述，2026-11-12）
 
-**本地已验证**：`pnpm install` / `lint` / `typecheck` / 41 例测试（37 单元 + 4 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
+**本地已验证**：`pnpm install` / `lint` / `typecheck` / 58 例测试（53 单元 + 5 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
 
 **免费平台已验证（GitHub 云端 runner，非本机）**：
 

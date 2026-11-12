@@ -27,7 +27,7 @@
 | POST | `/auth/sms/code` | 否 | `{ phone, purpose: register\|login\|bind }` | 发送验证码，60s 限频，返回 `ttlSec`（开发态含 `devCode`） |
 | POST | `/auth/register/phone` | 否 | `{ phone, code, nickname? }` | 注册即分配 MixmAPP 号码，201 |
 | POST | `/auth/register/email` | 否 | `{ email, password, nickname? }` | 邮箱注册，201 |
-| POST | `/auth/register/username` | 否 | `{ username, password, nickname? }` | 用户名注册（3–20 位字母/数字/下划线），201 |
+| POST | `/auth/register/username` | 否 | `{ username, password, nickname? }` | 用户名注册（2–20 字符，中文/字母/数字/下划线；管理员、官方、国家机关等名称拒绝），201 |
 | POST | `/auth/register/guest` | 否 | `{ deviceId, nickname? }` | 游客注册，同设备复用同一账号（首次 201 / 复用 200） |
 | POST | `/auth/onekey` | 否 | `{ token, nickname? }` | 一键登录：已注册即登录、未注册即建号 |
 | POST | `/auth/login/password` | 否 | `{ account, password }`（账号可为用户名/邮箱/MixmAPP 号码） | 密码登录 |

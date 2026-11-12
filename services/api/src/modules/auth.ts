@@ -8,6 +8,7 @@ import type { OneKeyProvider } from '../adapters/onekey.js';
 import { AppError } from '../lib/errors.js';
 import { hashPassword, randomDigits, randomToken, sha256Hex, verifyPassword } from '../lib/crypto.js';
 import { signAccessToken } from '../lib/jwt.js';
+import { assertUsernameAllowed } from '../lib/username-policy.js';
 
 const SMS_TTL_MS = 5 * 60 * 1000;
 const SMS_RESEND_MS = 60 * 1000;
@@ -172,6 +173,7 @@ export class AuthService {
     password: string;
     nickname?: string;
   }): Promise<AuthResult> {
+    assertUsernameAllowed(input.username, this.config.usernameDenylist);
     const existing = await this.store.users.findByUsername(input.username);
     if (existing) throw AppError.conflict('该用户名已被占用，请换一个');
     const user = await this.createUser({
@@ -345,6 +347,7 @@ export class AuthService {
 
   /** 给游客账号补设用户名与密码，游客因此获得独立登录凭据。 */
   async bindUsername(userId: string, username: string, password: string): Promise<UserDto> {
+    assertUsernameAllowed(username, this.config.usernameDenylist);
     const owner = await this.store.users.findByUsername(username);
     if (owner && owner.id !== userId) throw AppError.conflict('该用户名已被占用，请换一个');
     const updated = await this.store.users.update(userId, {

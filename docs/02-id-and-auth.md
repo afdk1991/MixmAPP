@@ -79,7 +79,9 @@ POST /api/v1/auth/register/email  { email, password, nickname? }
 POST /api/v1/auth/register/username  { username, password, nickname? }
 ```
 
-- 用户名 3–20 位，仅字母/数字/下划线，不能纯数字，`admin/root/system/support/official/guest/mixm/mixmapp` 为保留名。
+- 用户名 2–20 个字符，支持中文、字母、数字、下划线，不能纯数字，`admin/root/system/support/official/guest/mixm/mixmapp` 为保留名。
+- 内容合规：不得使用管理员/官方/客服等平台身份类名称，不得使用国家机关与公职身份类名称，不得包含违法低俗词；`USERNAME_DENYLIST` 可按监管要求外挂补充词库。
+- 校验前会做归一化（全角转半角、去分隔符与零宽字符、数字替字母还原），拦截 `Ａｄｍｉｎ`、`4dm1n` 这类伪装。
 - 唯一性大小写不敏感（Postgres 用 `lower(username)` 唯一索引），撞名返回 `409 CONFLICT`。
 - 注册后可用「用户名 + 密码」或 MIX 号码登录；不绑定手机/邮箱也能独立使用。
 

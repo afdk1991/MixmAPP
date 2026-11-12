@@ -111,6 +111,8 @@ export type Config = {
     model: string;
   };
   rateLimit: { perMinute: number };
+  /** 用户名合规词库：运营方按监管要求补充，逗号/空白分隔 */
+  usernameDenylist: string[];
 };
 
 function pem(value: string): string {
@@ -215,6 +217,10 @@ export function loadConfig(): Config {
       model: str('AI_MODEL', 'doubao-pro-32k'),
     },
     rateLimit: { perMinute: num('RATE_LIMIT_PER_MINUTE', 60) },
+    usernameDenylist: str('USERNAME_DENYLIST')
+      .split(/[,，、\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean),
   };
 }
 

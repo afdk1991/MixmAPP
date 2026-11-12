@@ -364,6 +364,67 @@ describe('Apple 登录', () => {
   });
 });
 
+describe('用户名合规', () => {
+  it('允许中文用户名', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username: '小明同学', password: 'Passw0rd!x' },
+    });
+    expect(reg.statusCode).toBe(201);
+    expect(reg.json().data.user.username).toBe('小明同学');
+  });
+
+  it.each([
+    '超级管理员',
+    '管理员',
+    'root',
+    'MixmApp官方',
+    '北京市政府',
+    '公安局',
+    '赌博平台',
+    '4dm1n',
+  ])('拒绝敏感身份类用户名：%s', async (username) => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username, password: 'Passw0rd!x' },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it('游客升级时同样执行用户名合规校验', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const guest = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/guest',
+      payload: { deviceId: 'device-upgrade-123456' },
+    });
+    const token = guest.json().data.tokens.accessToken as string;
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/bind/username',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { username: '系统管理员', password: 'Passw0rd!x' },
+    });
+    expect(bad.statusCode).toBe(422);
+
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/bind/username',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { username: '转正用户_01', password: 'Passw0rd!x' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().data.isGuest).toBe(false);
+  });
+});
+
 describe('刷新令牌轮换', () => {
   it('刷新后旧令牌应失效', async () => {
     const ctx = await makeApp();

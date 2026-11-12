@@ -54,12 +54,13 @@
           class="field"
           type="text"
           maxlength="20"
-          placeholder="3–20 位字母、数字或下划线"
+          placeholder="2–20 个字符，中文/字母/数字/下划线"
           v-model="username"
         />
         <text class="label mt">密码</text>
         <input class="field" password placeholder="至少 8 位，含字母与数字" v-model="password" />
         <text class="hint mt">注册后可用「用户名 + 密码」直接登录，无需手机号。</text>
+        <text class="hint">不得使用管理员、官方、政府机关等名称，违者注册会被拒绝。</text>
       </block>
 
       <block v-else>
