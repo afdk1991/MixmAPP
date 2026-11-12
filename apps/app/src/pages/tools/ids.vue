@@ -194,6 +194,8 @@ function copy(text: string): void {
   font-weight: 700;
   color: #0b1220;
   letter-spacing: 0.5rpx;
+  min-width: 0;
+  word-break: break-all;
 }
 
 .result-value {

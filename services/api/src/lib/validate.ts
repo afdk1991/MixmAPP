@@ -22,6 +22,7 @@ declare module 'fastify' {
     store: import('../db/types.js').Store;
     sms: import('../adapters/sms.js').SmsProvider;
     oauth: Record<string, import('../adapters/oauth.js').OAuthProvider>;
+    onekey: import('../adapters/onekey.js').OneKeyProvider;
     auth: import('../modules/auth.js').AuthService;
     pay: import('../modules/pay.js').PayService;
     mall: import('../modules/mall.js').MallService;

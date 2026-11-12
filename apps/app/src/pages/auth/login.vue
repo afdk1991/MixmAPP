@@ -2,23 +2,29 @@
   <view class="page">
     <view class="head">
       <text class="title">欢迎回来</text>
-      <text class="hint">支持邮箱、MixmAPP 号码登录；也可用手机验证码免密登录。</text>
+      <text class="hint">支持邮箱、用户名、MixmAPP 号码登录；也可用手机验证码或本机号码一键登录。</text>
     </view>
 
     <view class="tabs">
       <view class="tab" :class="{ 'tab--on': mode === 'password' }" @tap="mode = 'password'">密码</view>
       <view class="tab" :class="{ 'tab--on': mode === 'sms' }" @tap="mode = 'sms'">验证码</view>
+      <view class="tab" :class="{ 'tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">一键登录</view>
     </view>
 
     <view class="card form">
       <block v-if="mode === 'password'">
         <text class="label">账号</text>
-        <input class="field" type="text" placeholder="邮箱或 MixmAPP-XXXX-XXXX-XXXX-X" v-model="account" />
+        <input
+          class="field"
+          type="text"
+          placeholder="邮箱、用户名或 MixmAPP-XXXX-XXXX-XXXX-X"
+          v-model="account"
+        />
         <text class="label mt">密码</text>
         <input class="field" password placeholder="请输入密码" v-model="password" />
       </block>
 
-      <block v-else>
+      <block v-else-if="mode === 'sms'">
         <text class="label">手机号</text>
         <input class="field" type="number" maxlength="11" placeholder="请输入手机号" v-model="phone" />
         <view class="code-row">
@@ -29,6 +35,17 @@
         </view>
         <text v-if="devCode" class="dev-hint">开发态验证码：{{ devCode }}</text>
         <text class="hint mt-inline">未注册的手机号登录时将自动创建账号。</text>
+      </block>
+
+      <block v-else>
+        <text class="label">本机号码</text>
+        <text class="hint">唤起本机号码认证后自动登录；未注册手机号会直接建号。</text>
+        <input
+          class="field mt"
+          type="text"
+          placeholder="本机号码认证凭证（开发态填 dev:手机号）"
+          v-model="onekeyToken"
+        />
       </block>
 
       <text v-if="error" class="error">{{ error }}</text>
@@ -60,11 +77,12 @@ import { ref } from 'vue';
 import { authApi, ApiError } from '../../api/client';
 import { applyAuth, loginByOAuth, loginByPassword, loginBySms } from '../../stores/session';
 
-const mode = ref<'password' | 'sms'>('password');
+const mode = ref<'password' | 'sms' | 'onekey'>('password');
 const account = ref('');
 const password = ref('');
 const phone = ref('');
 const code = ref('');
+const onekeyToken = ref('');
 const devCode = ref('');
 const error = ref('');
 const submitting = ref(false);
@@ -76,6 +94,7 @@ const providers = [
   { key: 'github' as const, name: 'GitHub' },
   { key: 'wechat' as const, name: '微信' },
   { key: 'qq' as const, name: 'QQ' },
+  { key: 'apple' as const, name: 'Apple' },
 ];
 
 function goRegister(): void {
@@ -117,7 +136,12 @@ async function submit(): Promise<void> {
     const result =
       mode.value === 'password'
         ? await loginByPassword(account.value.trim(), password.value)
-        : await loginBySms(phone.value, code.value);
+        : mode.value === 'sms'
+          ? await loginBySms(phone.value, code.value)
+          : await authApi.oneKey({ token: onekeyToken.value }).then(async (data) => {
+              await applyAuth(data);
+              return data;
+            });
     uni.showToast({ title: result.user.accountNo, icon: 'none' });
     setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 600);
   } catch (e) {
@@ -127,7 +151,7 @@ async function submit(): Promise<void> {
   }
 }
 
-async function oauthLogin(provider: 'wechat' | 'qq' | 'github'): Promise<void> {
+async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promise<void> {
   try {
     const result = await loginByOAuth(provider);
     await applyAuth(result);

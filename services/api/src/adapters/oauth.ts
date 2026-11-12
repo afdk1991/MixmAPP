@@ -1,3 +1,4 @@
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { Config } from '../config.js';
 import { AppError } from '../lib/errors.js';
 
@@ -8,7 +9,7 @@ export type OAuthProfile = {
   avatarUrl: string | null;
 };
 
-export type OAuthProviderName = 'wechat' | 'qq' | 'github';
+export type OAuthProviderName = 'wechat' | 'qq' | 'github' | 'apple';
 
 export type OAuthProvider = {
   readonly name: OAuthProviderName;
@@ -151,10 +152,44 @@ export class QqOAuth implements OAuthProvider {
   }
 }
 
+const appleJwks = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
+
+/**
+ * Apple 登录：端侧（Sign in with Apple）拿到的是 identityToken（JWT），
+ * 服务端用 Apple 公钥验签并校验 issuer/audience，再取 sub 作为用户标识。
+ * `code` 参数在这里承载 identityToken。
+ */
+export class AppleOAuth implements OAuthProvider {
+  readonly name = 'apple' as const;
+
+  constructor(private readonly config: Config['oauth']['apple']) {}
+
+  get enabled(): boolean {
+    return Boolean(this.config.clientId);
+  }
+
+  async exchange(identityToken: string): Promise<OAuthProfile> {
+    if (!this.enabled) throw new AppError('PROVIDER_DISABLED', 'Apple 登录未配置');
+    try {
+      const { payload } = await jwtVerify(identityToken, appleJwks, {
+        issuer: 'https://appleid.apple.com',
+        audience: this.config.clientId,
+      });
+      const openId = typeof payload.sub === 'string' ? payload.sub : '';
+      if (!openId) throw new AppError('PROVIDER_ERROR', 'Apple 身份令牌缺少用户标识');
+      return { openId, unionId: null, nickname: 'Apple 用户', avatarUrl: null };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('PROVIDER_ERROR', 'Apple 身份令牌校验失败');
+    }
+  }
+}
+
 export function createOAuthProviders(config: Config): Record<OAuthProviderName, OAuthProvider> {
   return {
     wechat: new WechatOAuth(config.oauth.wechat),
     qq: new QqOAuth(config.oauth.qq),
     github: new GithubOAuth(config.oauth.github),
+    apple: new AppleOAuth(config.oauth.apple),
   };
 }

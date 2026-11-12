@@ -4,7 +4,7 @@
       <view class="id-card">
         <view class="id-top">
           <text class="id-label">我的 MixmAPP 号码</text>
-          <view class="pill">自动分配</view>
+          <view class="pill">{{ user.isGuest ? '游客账号' : '自动分配' }}</view>
         </view>
         <text class="id-value mono">{{ user.accountNo }}</text>
         <view class="id-actions">
@@ -17,6 +17,7 @@
       <view class="card">
         <text class="section">账号资料</text>
         <view class="row"><text class="k">昵称</text><text class="v">{{ user.nickname }}</text></view>
+        <view class="row"><text class="k">用户名</text><text class="v">{{ user.username ?? '未设置' }}</text></view>
         <view class="row"><text class="k">手机号</text><text class="v">{{ user.phone ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">邮箱</text><text class="v">{{ user.email ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">注册时间</text><text class="v">{{ createdText }}</text></view>
@@ -25,6 +26,28 @@
           <text class="v">{{ user.bindings.length ? user.bindings.join(' / ') : '暂无' }}</text>
         </view>
         <view class="row"><text class="k">主键样例</text><text class="v mono break">{{ user.id }}</text></view>
+      </view>
+
+      <view v-if="user.isGuest" class="card">
+        <text class="section">升级为正式账号</text>
+        <text class="hint">补设用户名与密码后，换设备也能用「用户名 + 密码」登录。</text>
+        <input
+          class="field mt"
+          type="text"
+          maxlength="20"
+          placeholder="用户名（3–20 位字母/数字/下划线）"
+          v-model="upUsername"
+        />
+        <input
+          class="field mt"
+          password
+          placeholder="密码（至少 8 位，含字母与数字）"
+          v-model="upPassword"
+        />
+        <text v-if="upError" class="error">{{ upError }}</text>
+        <view class="btn btn--primary mt" @tap="upgradeGuest">
+          {{ upgrading ? '提交中…' : '设置用户名与密码' }}
+        </view>
       </view>
 
       <view class="card">
@@ -59,14 +82,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { session, logout, refreshProfile } from '../../stores/session';
+import { meApi, ApiError } from '../../api/client';
 
 const user = computed(() => session.user);
 const createdText = computed(() =>
   user.value ? new Date(user.value.createdAt).toLocaleString() : '',
 );
+const upUsername = ref('');
+const upPassword = ref('');
+const upError = ref('');
+const upgrading = ref(false);
 
 function go(url: string): void {
   uni.navigateTo({ url });

@@ -14,6 +14,7 @@ import {
 import { S3Storage } from '../src/adapters/storage.js';
 import { generateRsaKeyPair, rsaSign, rsaVerify } from '../src/lib/crypto.js';
 import { MemoryStore } from '../src/db/memory.js';
+import { DevOneKeyProvider } from '../src/adapters/onekey.js';
 
 const keys = generateRsaKeyPair();
 
@@ -152,6 +153,26 @@ describe('S3 预签名', () => {
   it('未配置密钥应拒绝', async () => {
     const storage = new S3Storage({ ...config, accessKeyId: '', secretAccessKey: '' });
     await expect(storage.presignUpload('a.png')).rejects.toThrow();
+  });
+});
+
+describe('一键登录适配器', () => {
+  it('开发态把 dev: 前缀 token 解析为手机号', async () => {
+    const provider = new DevOneKeyProvider('test');
+    expect(provider.enabled).toBe(true);
+    await expect(provider.resolvePhone('dev:13800001234')).resolves.toBe('13800001234');
+  });
+
+  it('凭证格式错误应拒绝', async () => {
+    const provider = new DevOneKeyProvider('test');
+    await expect(provider.resolvePhone('whatever')).rejects.toThrow();
+    await expect(provider.resolvePhone('dev:123456')).rejects.toThrow();
+  });
+
+  it('生产环境禁用开发态实现', async () => {
+    const provider = new DevOneKeyProvider('production');
+    expect(provider.enabled).toBe(false);
+    await expect(provider.resolvePhone('dev:13800001234')).rejects.toThrow();
   });
 });
 

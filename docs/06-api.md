@@ -27,9 +27,12 @@
 | POST | `/auth/sms/code` | 否 | `{ phone, purpose: register\|login\|bind }` | 发送验证码，60s 限频，返回 `ttlSec`（开发态含 `devCode`） |
 | POST | `/auth/register/phone` | 否 | `{ phone, code, nickname? }` | 注册即分配 MixmAPP 号码，201 |
 | POST | `/auth/register/email` | 否 | `{ email, password, nickname? }` | 邮箱注册，201 |
-| POST | `/auth/login/password` | 否 | `{ account, password }`（账号可为手机号/邮箱/MixmAPP 号码） | 密码登录 |
+| POST | `/auth/register/username` | 否 | `{ username, password, nickname? }` | 用户名注册（3–20 位字母/数字/下划线），201 |
+| POST | `/auth/register/guest` | 否 | `{ deviceId, nickname? }` | 游客注册，同设备复用同一账号（首次 201 / 复用 200） |
+| POST | `/auth/onekey` | 否 | `{ token, nickname? }` | 一键登录：已注册即登录、未注册即建号 |
+| POST | `/auth/login/password` | 否 | `{ account, password }`（账号可为用户名/邮箱/MixmAPP 号码） | 密码登录 |
 | POST | `/auth/login/sms` | 否 | `{ phone, code }` | 验证码登录（未注册则自动建号） |
-| POST | `/auth/login/oauth` | 否 | `{ provider: wechat\|qq\|github, code }` | 第三方登录，首次登录自动建号 |
+| POST | `/auth/login/oauth` | 否 | `{ provider: wechat\|qq\|github\|apple, code }` | 第三方登录，首次登录自动建号（Apple 的 code 传 identityToken） |
 | POST | `/auth/refresh` | 否 | `{ refreshToken }` | 轮换刷新令牌 |
 | POST | `/auth/logout` | 否 | `{ refreshToken }` | 撤销刷新令牌 |
 
@@ -49,6 +52,7 @@
 | PATCH | `/me` | 是 | 改 `nickname` / `avatarUrl` / `bio` |
 | POST | `/me/bind/phone` | 是 | `{ phone, code }` 绑定手机号 |
 | POST | `/me/bind/email` | 是 | `{ email, password }` 绑定邮箱 |
+| POST | `/me/bind/username` | 是 | `{ username, password }` 补设用户名（游客升级为正式账号） |
 | POST | `/me/bind/oauth` | 是 | `{ provider, code }` 绑定第三方 |
 | POST | `/me/push-token` | 是 | `{ token, platform: android\|ios\|harmony\|web, provider?: fcm\|jpush }` 上报设备 |
 | POST | `/me/push-test` | 是 | 向本人设备发测试推送 |

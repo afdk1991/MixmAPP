@@ -183,6 +183,187 @@ describe('第三方登录与绑定', () => {
   });
 });
 
+describe('用户名注册', () => {
+  it('注册后可用用户名或 MixmAPP 号登录', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username: 'mixfan_01', password: 'Passw0rd!x', nickname: '用户名用户' },
+    });
+    expect(reg.statusCode).toBe(201);
+    const data = reg.json().data;
+    expect(data.user.username).toBe('mixfan_01');
+    expect(data.user.isGuest).toBe(false);
+    expect(data.user.bindings).toEqual([]);
+
+    for (const account of ['mixfan_01', 'MIXFAN_01', data.user.accountNo]) {
+      const login = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login/password',
+        payload: { account, password: 'Passw0rd!x' },
+      });
+      expect(login.statusCode).toBe(200);
+      expect(login.json().data.user.accountNo).toBe(data.user.accountNo);
+    }
+  });
+
+  it('重复用户名 409，保留名与纯数字用户名 422', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username: 'mixfan_02', password: 'Passw0rd!x' },
+    });
+    expect(first.statusCode).toBe(201);
+    const dup = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username: 'MixFan_02', password: 'Passw0rd!x' },
+    });
+    expect(dup.statusCode).toBe(409);
+
+    for (const username of ['admin', '12345678', 'a b']) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/register/username',
+        payload: { username, password: 'Passw0rd!x' },
+      });
+      expect(res.statusCode).toBe(422);
+    }
+  });
+});
+
+describe('游客注册', () => {
+  it('同一设备重复注册复用同一账号，绑定手机号后不再是游客', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const deviceId = 'device-abcdef-123456';
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/guest',
+      payload: { deviceId },
+    });
+    expect(first.statusCode).toBe(201);
+    const guest = first.json().data;
+    expect(guest.isNewUser).toBe(true);
+    expect(guest.user.isGuest).toBe(true);
+    expect(guest.user.bindings).toEqual(['guest']);
+
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/guest',
+      payload: { deviceId },
+    });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().data.isNewUser).toBe(false);
+    expect(again.json().data.user.accountNo).toBe(guest.user.accountNo);
+
+    const phone = '13900001111';
+    const code = await requestCode(app, phone, 'bind');
+    const bind = await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/bind/phone',
+      headers: { authorization: `Bearer ${guest.tokens.accessToken}` },
+      payload: { phone, code },
+    });
+    expect(bind.statusCode).toBe(200);
+    expect(bind.json().data.isGuest).toBe(false);
+    expect(bind.json().data.phone).toBe('139****1111');
+  });
+
+  it('设备标识过短应 422', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/guest',
+      payload: { deviceId: 'short' },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+});
+
+describe('一键登录', () => {
+  it('未注册手机号直接建号，再次登录复用同一账号', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/onekey',
+      payload: { token: 'dev:13900002222', nickname: '一键用户' },
+    });
+    expect(first.statusCode).toBe(200);
+    const data = first.json().data;
+    expect(data.isNewUser).toBe(true);
+    expect(data.user.phone).toBe('139****2222');
+
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/onekey',
+      payload: { token: 'dev:13900002222' },
+    });
+    expect(again.json().data.isNewUser).toBe(false);
+    expect(again.json().data.user.accountNo).toBe(data.user.accountNo);
+  });
+
+  it('无效一键登录凭证应 422', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/onekey',
+      payload: { token: 'dev:123456' },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe('CODE_INVALID');
+  });
+});
+
+describe('Apple 登录', () => {
+  it('首次登录建号，二次登录复用同一账号', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login/oauth',
+      payload: { provider: 'apple', code: 'apple-identity-token' },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().data.isNewUser).toBe(true);
+    expect(first.json().data.user.bindings).toEqual(['apple']);
+
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login/oauth',
+      payload: { provider: 'apple', code: 'apple-identity-token' },
+    });
+    expect(again.json().data.isNewUser).toBe(false);
+    expect(again.json().data.user.accountNo).toBe(first.json().data.user.accountNo);
+  });
+
+  it('未配置凭据的渠道应返回 PROVIDER_DISABLED', async () => {
+    const disabled = {
+      name: 'apple' as const,
+      enabled: false,
+      exchange: async () => {
+        throw new Error('不应被调用');
+      },
+    };
+    const ctx = await makeApp({ oauth: { apple: disabled } });
+    app = ctx.app;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login/oauth',
+      payload: { provider: 'apple', code: 'token' },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe('PROVIDER_DISABLED');
+  });
+});
+
 describe('刷新令牌轮换', () => {
   it('刷新后旧令牌应失效', async () => {
     const ctx = await makeApp();

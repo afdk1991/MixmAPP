@@ -4,6 +4,7 @@ import type { Config } from '../config.js';
 import type { Store, UserRecord } from '../db/types.js';
 import type { OAuthProvider, OAuthProviderName, OAuthProfile } from '../adapters/oauth.js';
 import type { SmsProvider, SmsPurpose } from '../adapters/sms.js';
+import type { OneKeyProvider } from '../adapters/onekey.js';
 import { AppError } from '../lib/errors.js';
 import { hashPassword, randomDigits, randomToken, sha256Hex, verifyPassword } from '../lib/crypto.js';
 import { signAccessToken } from '../lib/jwt.js';
@@ -18,6 +19,7 @@ export type AuthDeps = {
   store: Store;
   sms: SmsProvider;
   oauth: Record<OAuthProviderName, OAuthProvider>;
+  onekey: OneKeyProvider;
   ids?: IdFactory;
 };
 
@@ -26,6 +28,7 @@ export class AuthService {
   private readonly store: Store;
   private readonly sms: SmsProvider;
   private readonly oauth: Record<OAuthProviderName, OAuthProvider>;
+  private readonly onekey: OneKeyProvider;
   private readonly ids: IdFactory;
   private readonly smsCounter = new Map<string, { day: string; count: number }>();
 
@@ -34,6 +37,7 @@ export class AuthService {
     this.store = deps.store;
     this.sms = deps.sms;
     this.oauth = deps.oauth;
+    this.onekey = deps.onekey;
     const opts: IdFactoryOptions = {
       strategy: deps.config.ids.strategy,
       workerId: deps.config.ids.workerId,
@@ -100,6 +104,8 @@ export class AuthService {
   private async createUser(input: {
     phone?: string | null;
     email?: string | null;
+    username?: string | null;
+    guest?: boolean;
     passwordHash?: string | null;
     nickname?: string;
     avatarUrl?: string | null;
@@ -118,6 +124,8 @@ export class AuthService {
       nickname,
       avatarUrl: input.avatarUrl ?? null,
       bio: null,
+      username: input.username ?? null,
+      guest: input.guest ?? false,
       phone: input.phone ?? null,
       email: input.email ?? null,
       passwordHash: input.passwordHash ?? null,
@@ -158,11 +166,79 @@ export class AuthService {
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }
 
+  /** 用户名注册：不依赖手机号/邮箱，注册完即可用「用户名 + 密码」登录。 */
+  async registerByUsername(input: {
+    username: string;
+    password: string;
+    nickname?: string;
+  }): Promise<AuthResult> {
+    const existing = await this.store.users.findByUsername(input.username);
+    if (existing) throw AppError.conflict('该用户名已被占用，请换一个');
+    const user = await this.createUser({
+      username: input.username,
+      passwordHash: await hashPassword(input.password),
+      ...(input.nickname ? { nickname: input.nickname } : {}),
+    });
+    return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
+  }
+
+  /** 游客注册：同一设备复用同一账号，避免每次进 App 都新建一个号。 */
+  async registerGuest(input: { deviceId: string; nickname?: string }): Promise<AuthResult> {
+    const deviceKey = sha256Hex(input.deviceId.trim());
+    const binding = await this.store.bindings.findByProvider('guest', deviceKey);
+    if (binding) {
+      const bound = await this.store.users.findById(binding.userId);
+      if (bound) {
+        return {
+          user: await this.toDto(bound),
+          tokens: await this.issueTokens(bound),
+          isNewUser: false,
+        };
+      }
+    }
+    const user = await this.createUser({
+      guest: true,
+      ...(input.nickname ? { nickname: input.nickname } : {}),
+    });
+    await this.store.bindings.insert({
+      id: this.ids.next().id,
+      userId: user.id,
+      provider: 'guest',
+      openId: deviceKey,
+      unionId: null,
+      nickname: null,
+      avatarUrl: null,
+      createdAt: new Date(),
+    });
+    return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
+  }
+
+  /** 一键登录：手机号已注册则登录，未注册则直接建号（等同免注册）。 */
+  async oneKeyLogin(input: { token: string; nickname?: string }): Promise<AuthResult> {
+    const phone = await this.onekey.resolvePhone(input.token);
+    const existing = await this.store.users.findByPhone(phone);
+    if (existing) {
+      if (existing.status !== 'active') throw new AppError('FORBIDDEN', '账号已被冻结');
+      return {
+        user: await this.toDto(existing),
+        tokens: await this.issueTokens(existing),
+        isNewUser: false,
+      };
+    }
+    const user = await this.createUser({
+      phone,
+      ...(input.nickname ? { nickname: input.nickname } : {}),
+    });
+    return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
+  }
+
   async loginByPassword(input: { account: string; password: string }): Promise<AuthResult> {
     const account = input.account.trim();
+    const compact = account.replace(/\s/g, '');
     const user = account.includes('@')
       ? await this.store.users.findByEmail(account)
-      : await this.store.users.findByAccountNo(account.replace(/\s/g, ''));
+      : ((await this.store.users.findByUsername(compact)) ??
+        (await this.store.users.findByAccountNo(compact)));
     if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
       throw new AppError('UNAUTHORIZED', '账号或密码不正确');
     }
@@ -240,7 +316,7 @@ export class AuthService {
       avatarUrl: profile.avatarUrl,
       createdAt: new Date(),
     });
-    const user = await this.store.users.findById(userId);
+    const user = await this.store.users.update(userId, { guest: false });
     if (!user) throw AppError.notFound();
     return this.toDto(user);
   }
@@ -249,7 +325,7 @@ export class AuthService {
     const owner = await this.store.users.findByPhone(phone);
     if (owner && owner.id !== userId) throw AppError.conflict('该手机号已被其他账号绑定');
     await this.consumeSmsCode(phone, 'bind', code);
-    const updated = await this.store.users.update(userId, { phone });
+    const updated = await this.store.users.update(userId, { phone, guest: false });
     if (!updated) throw AppError.notFound();
     return this.toDto(updated);
   }
@@ -261,6 +337,20 @@ export class AuthService {
     const updated = await this.store.users.update(userId, {
       email: normalized,
       passwordHash: await hashPassword(password),
+      guest: false,
+    });
+    if (!updated) throw AppError.notFound();
+    return this.toDto(updated);
+  }
+
+  /** 给游客账号补设用户名与密码，游客因此获得独立登录凭据。 */
+  async bindUsername(userId: string, username: string, password: string): Promise<UserDto> {
+    const owner = await this.store.users.findByUsername(username);
+    if (owner && owner.id !== userId) throw AppError.conflict('该用户名已被占用，请换一个');
+    const updated = await this.store.users.update(userId, {
+      username,
+      passwordHash: await hashPassword(password),
+      guest: false,
     });
     if (!updated) throw AppError.notFound();
     return this.toDto(updated);
@@ -289,6 +379,8 @@ export class AuthService {
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
       bio: user.bio,
+      username: user.username,
+      isGuest: user.guest,
       phone: user.phone ? `${user.phone.slice(0, 3)}****${user.phone.slice(7)}` : null,
       email: user.email,
       bindings: bindings.map((b) => b.provider),

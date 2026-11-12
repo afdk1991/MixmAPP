@@ -43,7 +43,9 @@ export async function loginBySms(phone: string, code: string): Promise<AuthResul
   return result;
 }
 
-export async function loginByOAuth(provider: 'wechat' | 'qq' | 'github'): Promise<AuthResult> {
+export async function loginByOAuth(
+  provider: 'wechat' | 'qq' | 'github' | 'apple',
+): Promise<AuthResult> {
   const code = getOAuthCode();
   if (!code) throw new Error('未获取到第三方授权 code：H5 需从授权回跳携带，原生端需先配置 SDK');
   const result = await authApi.loginByOAuth(provider, code);

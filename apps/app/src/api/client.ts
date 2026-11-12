@@ -139,11 +139,19 @@ export const authApi = {
     apiRequest<AuthResult>('/auth/register/phone', { method: 'POST', data: input, auth: false }),
   registerByEmail: (input: { email: string; password: string; nickname?: string }) =>
     apiRequest<AuthResult>('/auth/register/email', { method: 'POST', data: input, auth: false }),
+  registerByUsername: (input: { username: string; password: string; nickname?: string }) =>
+    apiRequest<AuthResult>('/auth/register/username', { method: 'POST', data: input, auth: false }),
+  /** 游客注册：同一设备重复调用返回同一账号 */
+  registerGuest: (input: { deviceId: string; nickname?: string }) =>
+    apiRequest<AuthResult>('/auth/register/guest', { method: 'POST', data: input, auth: false }),
+  /** 一键登录：已注册手机号即登录，未注册即建号 */
+  oneKey: (input: { token: string; nickname?: string }) =>
+    apiRequest<AuthResult>('/auth/onekey', { method: 'POST', data: input, auth: false }),
   loginByPassword: (input: { account: string; password: string }) =>
     apiRequest<AuthResult>('/auth/login/password', { method: 'POST', data: input, auth: false }),
   loginBySms: (input: { phone: string; code: string }) =>
     apiRequest<AuthResult>('/auth/login/sms', { method: 'POST', data: input, auth: false }),
-  loginByOAuth: (provider: 'wechat' | 'qq' | 'github', code: string) =>
+  loginByOAuth: (provider: 'wechat' | 'qq' | 'github' | 'apple', code: string) =>
     apiRequest<AuthResult>('/auth/login/oauth', {
       method: 'POST',
       data: { provider, code },
@@ -159,6 +167,9 @@ export const meApi = {
     apiRequest<UserDto>('/me', { method: 'PATCH', data: patch }),
   bindPhone: (phone: string, code: string) =>
     apiRequest<UserDto>('/me/bind/phone', { method: 'POST', data: { phone, code } }),
+  /** 给游客账号补设用户名密码，绑定后不再算游客 */
+  bindUsername: (username: string, password: string) =>
+    apiRequest<UserDto>('/me/bind/username', { method: 'POST', data: { username, password } }),
 };
 
 export const idsApi = {

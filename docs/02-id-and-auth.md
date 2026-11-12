@@ -37,6 +37,8 @@
 
 生成逻辑在 `packages/ids/src/crockford.ts`，号码与雪花值可互相还原，便于客服凭号码反查主键。
 
+> 登录时号段大小写不敏感：用户输入 `mixmapp-7k2q-…` 也能命中同一账号（`findByAccountNo` 两侧统一大写比较）。
+
 ### 1.5 策略切换
 
 ```ini
@@ -71,13 +73,46 @@ POST /api/v1/auth/register/email  { email, password, nickname? }
 
 密码用 `scrypt`（`N=16384, r=8, p=1`，32 字节盐），存储格式自带参数前缀，未来调参不影响老用户校验。
 
-### 2.3 第三方首次登录
+### 2.3 用户名注册
 
 ```
-POST /api/v1/auth/login/oauth  { provider: "wechat"|"qq"|"github", code }
+POST /api/v1/auth/register/username  { username, password, nickname? }
+```
+
+- 用户名 3–20 位，仅字母/数字/下划线，不能纯数字，`admin/root/system/support/official/guest/mixm/mixmapp` 为保留名。
+- 唯一性大小写不敏感（Postgres 用 `lower(username)` 唯一索引），撞名返回 `409 CONFLICT`。
+- 注册后可用「用户名 + 密码」或 MIX 号码登录；不绑定手机/邮箱也能独立使用。
+
+### 2.4 一键登录（本机号码认证）
+
+```
+POST /api/v1/auth/onekey  { token, nickname? }
+```
+
+- `token` 由端侧本机号码认证 SDK 下发，服务端交给 `ONEKEY_PROVIDER` 解析成手机号：
+  - `dev`：token 形如 `dev:13800001234`，仅非生产环境可用，方便本地联调；
+  - `http`：POST `ONEKEY_ENDPOINT`，请求体 `{ token }`，期望返回 `{ "phone": "13800001234" }`。
+- 手机号已注册则直接登录（`isNewUser=false`），未注册则建号并返回 201 语义（接口统一 200，靠 `isNewUser` 区分）。
+- 解析失败返回 `422 CODE_INVALID`，网关不可达返回 `502 PROVIDER_ERROR`，未配置返回 `503 PROVIDER_DISABLED`。
+
+### 2.5 游客账号
+
+```
+POST /api/v1/auth/register/guest  { deviceId, nickname? }
+```
+
+- 同一设备重复调用复用同一账号（设备号哈希存在 `bindings` 的 `provider='guest'`），首次返回 201、复用返回 200。
+- 游客用户 `isGuest=true`，绑定手机号/邮箱/第三方或补设用户名后自动置 `false`。
+- 游客升级：`POST /me/bind/phone`、`POST /me/bind/email`、`POST /me/bind/username` 任一即可。
+
+### 2.6 第三方首次登录
+
+```
+POST /api/v1/auth/login/oauth  { provider: "wechat"|"qq"|"github"|"apple", code }
 ```
 
 - 用 `code` 换 `open_id`；`(provider, open_id)` 命中 `bindings` 则登录，未命中则**自动建号并分配 MixmAPP 号码**。
+- Apple 走 `identityToken`（`code` 字段承载 JWT）：服务端用 Apple 公钥验签，并校验 `iss=https://appleid.apple.com`、`aud=OAUTH_APPLE_CLIENT_ID`。
 - 已登录用户可通过 `POST /api/v1/me/bind/oauth` 把第三方身份挂到现有账号。
 - 未配置对应 OAuth 凭据时，该 provider 在 `/meta` 里显示 `off`，端侧按钮会给出明确提示而不是静默失败。
 
@@ -115,6 +150,7 @@ RATE_LIMIT_PER_MINUTE=60
 | `PATCH /me` | 改昵称、头像、简介（zod 限长） |
 | `POST /me/bind/phone` | 短信验证码绑定手机号 |
 | `POST /me/bind/email` | 邮箱 + 密码绑定 |
+| `POST /me/bind/username` | 补设用户名 + 密码（游客升级为正式账号） |
 | `POST /me/bind/oauth` | 绑定第三方身份 |
 | `POST /me/push-token` | 上报设备推送 token |
 | `POST /me/push-test` | 向本人设备发一条测试推送 |

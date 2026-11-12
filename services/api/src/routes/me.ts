@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   bindEmailSchema,
   bindPhoneSchema,
+  bindUsernameSchema,
   oauthLoginSchema,
   pushTokenSchema,
   updateProfileSchema,
@@ -31,6 +32,13 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     const body = parse(bindEmailSchema, request.body);
     return {
       data: await app.auth.bindEmail(request.userId as string, body.email, body.password),
+    };
+  });
+
+  app.post('/me/bind/username', { preHandler: app.requireAuth }, async (request) => {
+    const body = parse(bindUsernameSchema, request.body);
+    return {
+      data: await app.auth.bindUsername(request.userId as string, body.username, body.password),
     };
   });
 

@@ -3,9 +3,12 @@ import {
   loginByPasswordSchema,
   loginBySmsSchema,
   oauthLoginSchema,
+  oneKeySchema,
   refreshTokenSchema,
   registerByEmailSchema,
   registerByPhoneSchema,
+  registerByUsernameSchema,
+  registerGuestSchema,
 } from '@mixmapp/contracts';
 import { z } from 'zod';
 import { parse } from '../lib/validate.js';
@@ -32,6 +35,25 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const body = parse(registerByEmailSchema, request.body);
     const result = await app.auth.registerByEmail(body);
     return reply.code(201).send({ data: result });
+  });
+
+  app.post('/auth/register/username', async (request, reply) => {
+    const body = parse(registerByUsernameSchema, request.body);
+    const result = await app.auth.registerByUsername(body);
+    return reply.code(201).send({ data: result });
+  });
+
+  /** 游客注册：同一设备重复调用返回同一账号，可后续绑定手机号/邮箱/用户名升级。 */
+  app.post('/auth/register/guest', async (request, reply) => {
+    const body = parse(registerGuestSchema, request.body);
+    const result = await app.auth.registerGuest(body);
+    return reply.code(result.isNewUser ? 201 : 200).send({ data: result });
+  });
+
+  /** 一键登录：手机号已注册即登录，未注册即建号。 */
+  app.post('/auth/onekey', async (request) => {
+    const body = parse(oneKeySchema, request.body);
+    return { data: await app.auth.oneKeyLogin(body) };
   });
 
   app.post('/auth/login/password', async (request) => {

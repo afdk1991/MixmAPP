@@ -8,6 +8,8 @@
     <view class="tabs">
       <view class="tab" :class="{ 'tab--on': mode === 'phone' }" @tap="mode = 'phone'">手机号</view>
       <view class="tab" :class="{ 'tab--on': mode === 'email' }" @tap="mode = 'email'">邮箱</view>
+      <view class="tab" :class="{ 'tab--on': mode === 'username' }" @tap="mode = 'username'">用户名</view>
+      <view class="tab" :class="{ 'tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">一键登录</view>
     </view>
 
     <view class="card form">
@@ -39,11 +41,37 @@
         <text v-if="devCode" class="dev-hint">开发态验证码：{{ devCode }}（正式环境不会显示）</text>
       </block>
 
-      <block v-else>
+      <block v-else-if="mode === 'email'">
         <text class="label">邮箱</text>
         <input class="field" type="text" placeholder="you@example.com" v-model="email" />
         <text class="label mt">密码</text>
         <input class="field" password placeholder="至少 8 位，含字母与数字" v-model="password" />
+      </block>
+
+      <block v-else-if="mode === 'username'">
+        <text class="label">用户名</text>
+        <input
+          class="field"
+          type="text"
+          maxlength="20"
+          placeholder="3–20 位字母、数字或下划线"
+          v-model="username"
+        />
+        <text class="label mt">密码</text>
+        <input class="field" password placeholder="至少 8 位，含字母与数字" v-model="password" />
+        <text class="hint mt">注册后可用「用户名 + 密码」直接登录，无需手机号。</text>
+      </block>
+
+      <block v-else>
+        <text class="label">本机号码</text>
+        <text class="hint">点下方按钮唤起本机号码认证，一次完成注册与登录。</text>
+        <input
+          class="field mt"
+          type="text"
+          placeholder="本机号码认证凭证（开发态填 dev:手机号）"
+          v-model="onekeyToken"
+        />
+        <text class="hint mt">同一手机号已注册时直接登录，不会重复建号。</text>
       </block>
 
       <text class="label mt">昵称（选填）</text>
@@ -58,6 +86,14 @@
       <view class="switch">
         <text class="hint">已有账号？</text>
         <text class="link" @tap="goLogin">去登录</text>
+      </view>
+    </view>
+
+    <view class="card guest">
+      <text class="section">先逛逛</text>
+      <text class="hint">游客账号在同一设备上直接可用，之后可在「我的」绑定手机号或补设用户名升级。</text>
+      <view class="guest-btn" :class="{ 'btn--disabled': submitting }" @tap="guestStart">
+        {{ submitting ? '创建中…' : '游客身份进入' }}
       </view>
     </view>
 
@@ -78,11 +114,13 @@ import { ref } from 'vue';
 import { authApi, ApiError } from '../../api/client';
 import { applyAuth, loginByOAuth } from '../../stores/session';
 
-const mode = ref<'phone' | 'email'>('phone');
+const mode = ref<'phone' | 'email' | 'username' | 'onekey'>('phone');
 const phone = ref('');
 const code = ref('');
 const email = ref('');
+const username = ref('');
 const password = ref('');
+const onekeyToken = ref('');
 const nickname = ref('');
 const devCode = ref('');
 const error = ref('');
@@ -95,7 +133,18 @@ const providers = [
   { key: 'github' as const, name: 'GitHub' },
   { key: 'wechat' as const, name: '微信' },
   { key: 'qq' as const, name: 'QQ' },
+  { key: 'apple' as const, name: 'Apple' },
 ];
+
+/** 设备标识：游客账号按设备复用，避免同一台机器每次进来都新建号。 */
+function getDeviceId(): string {
+  const key = 'mixmapp:deviceId';
+  const cached = uni.getStorageSync(key) as string | '';
+  if (cached) return cached;
+  const next = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  uni.setStorageSync(key, next);
+  return next;
+}
 
 function goLogin(): void {
   uni.redirectTo({ url: '/pages/auth/login' });
@@ -145,13 +194,28 @@ async function submit(): Promise<void> {
             code: code.value,
             ...(nickname.value ? { nickname: nickname.value } : {}),
           })
-        : await authApi.registerByEmail({
-            email: email.value,
-            password: password.value,
-            ...(nickname.value ? { nickname: nickname.value } : {}),
-          });
+        : mode.value === 'email'
+          ? await authApi.registerByEmail({
+              email: email.value,
+              password: password.value,
+              ...(nickname.value ? { nickname: nickname.value } : {}),
+            })
+          : mode.value === 'username'
+            ? await authApi.registerByUsername({
+                username: username.value,
+                password: password.value,
+                ...(nickname.value ? { nickname: nickname.value } : {}),
+              })
+            : await authApi.oneKey({
+                token: onekeyToken.value,
+                ...(nickname.value ? { nickname: nickname.value } : {}),
+              });
     await applyAuth(data);
-    uni.showToast({ title: `注册成功 ${data.user.accountNo}`, icon: 'none', duration: 2500 });
+    uni.showToast({
+      title: data.isNewUser ? `注册成功 ${data.user.accountNo}` : `登录成功 ${data.user.accountNo}`,
+      icon: 'none',
+      duration: 2500,
+    });
     setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 800);
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '注册失败，请稍后重试';
@@ -160,7 +224,28 @@ async function submit(): Promise<void> {
   }
 }
 
-async function oauthLogin(provider: 'wechat' | 'qq' | 'github'): Promise<void> {
+/** 游客入口：不填任何资料，用设备号建号（同设备重复点会恢复原账号）。 */
+async function guestStart(): Promise<void> {
+  if (submitting.value) return;
+  error.value = '';
+  submitting.value = true;
+  try {
+    const data = await authApi.registerGuest({ deviceId: getDeviceId() });
+    await applyAuth(data);
+    uni.showToast({
+      title: data.isNewUser ? `游客账号 ${data.user.accountNo}` : '已恢复游客账号',
+      icon: 'none',
+      duration: 2500,
+    });
+    setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 800);
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : '游客账号创建失败，请稍后重试';
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promise<void> {
   try {
     const result = await loginByOAuth(provider);
     await applyAuth(result);
@@ -269,6 +354,36 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github'): Promise<void> {
 
 .submit {
   margin-top: 36rpx;
+}
+
+.guest {
+  margin-top: 24rpx;
+}
+
+.guest-btn {
+  margin-top: 20rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  border: 1rpx dashed #cbd5e1;
+  color: #334155;
+  font-size: 26rpx;
+}
+
+.guest {
+  margin-top: 24rpx;
+}
+
+.guest-btn {
+  margin-top: 20rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  border: 1rpx dashed #cbd5e1;
+  color: #334155;
+  font-size: 26rpx;
 }
 
 .switch {

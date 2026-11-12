@@ -8,6 +8,7 @@ import { MallService } from './modules/mall.js';
 import { PayService } from './modules/pay.js';
 import { createSmsProvider, type SmsProvider } from './adapters/sms.js';
 import { createOAuthProviders, type OAuthProvider, type OAuthProviderName } from './adapters/oauth.js';
+import { createOneKeyProvider, type OneKeyProvider } from './adapters/onekey.js';
 import { createMapProvider, type MapProvider } from './adapters/map.js';
 import { createStorageProvider, type StorageProvider } from './adapters/storage.js';
 import { createPushProvider, type PushProvider } from './adapters/push.js';
@@ -25,6 +26,7 @@ export type AppDeps = {
   store: Store;
   sms?: SmsProvider;
   oauth?: Record<OAuthProviderName, OAuthProvider>;
+  onekey?: OneKeyProvider;
   map?: MapProvider;
   storage?: StorageProvider;
   push?: PushProvider;
@@ -52,6 +54,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate('store', deps.store);
   app.decorate('sms', deps.sms ?? createSmsProvider(deps.config));
   app.decorate('oauth', deps.oauth ?? createOAuthProviders(deps.config));
+  app.decorate('onekey', deps.onekey ?? createOneKeyProvider(deps.config));
   app.decorate('map', deps.map ?? createMapProvider(deps.config));
   app.decorate('storage', deps.storage ?? createStorageProvider(deps.config));
   app.decorate('push', deps.push ?? createPushProvider(deps.config));
@@ -64,6 +67,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       store: deps.store,
       sms: app.sms,
       oauth: app.oauth,
+      onekey: app.onekey,
     }),
   );
   app.decorate('pay', new PayService(deps.config, deps.store));
