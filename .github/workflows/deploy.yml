@@ -95,22 +95,23 @@ jobs:
     timeout-minutes: 20
     environment: production
     env:
-      SSH_READY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+      SSH_READY: ${{ secrets.DEPLOY_SSH_KEY_B64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: release-bundles
 
-      - name: 写入部署私钥
+      - name: 写入部署私钥（base64 单行传输，避免换行符破坏 OpenSSH 私钥）
         if: env.SSH_READY == 'true'
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: 上传发布包与脚本
