@@ -66,6 +66,8 @@
       "mode": "history",
       "base": "/"
     },
+    "rpxCalcMaxDeviceWidth": 750,
+    "rpxCalcBaseDeviceWidth": 750,
     "optimization": {
       "treeShaking": {
         "enable": true

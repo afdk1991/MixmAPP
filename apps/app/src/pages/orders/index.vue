@@ -1,40 +1,83 @@
 <template>
   <view class="page">
-    <view v-if="loading" class="hint center">加载中…</view>
-    <view v-else-if="error" class="hint center">
-      <text>{{ error }}</text>
-      <view class="retry" hover-class="pressed" @tap="load">重新加载</view>
+    <view class="head">
+      <text class="eyebrow">ORDERS</text>
+      <text class="title">我的订单</text>
+      <text class="sub mono">{{ orders.length ? `${orders.length} RECORDS` : 'NO RECORDS' }}</text>
     </view>
+
+    <view v-if="loading" class="loading">
+      <view v-for="i in 2" :key="i" class="sheet ticket-sk">
+        <view class="sk tk-head" />
+        <view class="sk tk-line" />
+        <view class="sk tk-line tk-short" />
+      </view>
+    </view>
+
+    <view v-else-if="error" class="empty">
+      <view class="empty-mark mono">!</view>
+      <text class="empty-title">订单没打开</text>
+      <text class="empty-sub">{{ error }}</text>
+      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
+    </view>
+
     <view v-else-if="orders.length === 0" class="empty">
+      <view class="empty-mark">0</view>
       <text class="empty-title">还没有订单</text>
-      <text class="empty-sub">下单后可在这里查看进度</text>
-      <view class="empty-btn" hover-class="pressed" @tap="goMall">去商城</view>
+      <text class="empty-sub">下单后可在这里查看进度。</text>
+      <view class="btn btn--deep empty-btn" hover-class="is-press" @tap="goMall">去商城</view>
     </view>
 
     <view v-else class="list">
       <view
         v-for="order in orders"
         :key="order.id"
-        class="card order"
-        :class="{ 'order--active': order.orderNo === highlight }"
+        class="sheet ticket"
+        :class="{ 'ticket--active': order.orderNo === highlight }"
       >
-        <view class="order-head">
-          <text class="order-no">{{ order.orderNo }}</text>
-          <text class="status" :class="`status--${order.status}`">{{ statusText(order.status) }}</text>
+        <view class="ticket-head">
+          <view class="tk-no-wrap">
+            <text class="tk-no mono">{{ order.orderNo }}</text>
+            <view class="tk-sub">
+              <text class="tk-date mono">{{ dateText(order.createdAt) }}</text>
+              <view v-if="order.orderNo === highlight" class="active-flag">
+                <text class="active-flag-text mono">本次下单</text>
+              </view>
+            </view>
+          </view>
+          <text class="stamp tk-status" :class="`tk-status--${order.status}`">{{ statusText(order.status) }}</text>
         </view>
+
+        <view class="perf">
+          <view class="notch notch--l" />
+          <view class="notch notch--r" />
+        </view>
+
         <view class="items">
           <view v-for="item in order.items" :key="item.productId + item.title" class="item">
             <text class="item-title">{{ item.title }}</text>
-            <text class="item-meta">× {{ item.quantity }}</text>
-            <text class="item-price">¥{{ price(item.subtotalFen) }}</text>
+            <text class="item-qty mono">×{{ item.quantity }}</text>
+            <text class="item-price mono">¥{{ price(item.subtotalFen) }}</text>
           </view>
         </view>
-        <view class="order-foot">
-          <text class="receiver">{{ order.receiverName }} · {{ maskPhone(order.receiverPhone) }}</text>
-          <text class="total">合计 ¥{{ price(order.totalFen) }}</text>
+
+        <view class="ticket-foot">
+          <view class="receiver">
+            <text class="receiver-name">{{ order.receiverName }}</text>
+            <text class="receiver-phone mono">{{ maskPhone(order.receiverPhone) }}</text>
+          </view>
+          <view class="total-wrap">
+            <text class="total-k mono">合计</text>
+            <text class="total-v mono">¥{{ price(order.totalFen) }}</text>
+          </view>
         </view>
+
         <text class="address">{{ order.address }}</text>
       </view>
+    </view>
+
+    <view v-if="orders.length" class="foot">
+      <text class="micro mono">订单与库存以服务端为准 · 下拉刷新可重新加载</text>
     </view>
   </view>
 </template>
@@ -60,6 +103,12 @@ function maskPhone(phone: string): string {
 
 function statusText(status: OrderDto['status']): string {
   return { pending: '待支付', paid: '已支付', cancelled: '已取消' }[status];
+}
+
+function dateText(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 async function load(): Promise<void> {
@@ -89,140 +138,266 @@ onLoad((options) => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f6f7f9;
-  padding: 24rpx;
+  background: $paper;
+  padding: 0 $sp-3 $sp-8;
 }
-.card {
-  background: #ffffff;
-  border-radius: 24rpx;
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.06);
+
+.head {
+  padding: $sp-5 4rpx $sp-4;
 }
-.order {
-  padding: 26rpx;
-  margin-bottom: 22rpx;
-  border: 2rpx solid transparent;
-}
-.order--active {
-  border-color: #0f9d8f;
-}
-.order-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.order-no {
-  font-size: 24rpx;
-  color: #64748b;
-  font-family: monospace;
-}
-.status {
-  font-size: 24rpx;
-  font-weight: 600;
-}
-.status--pending {
-  color: #d97706;
-}
-.status--paid {
-  color: #0f9d8f;
-}
-.status--cancelled {
-  color: #94a3b8;
-}
-.items {
+
+.title {
+  display: block;
   margin-top: 16rpx;
-  border-top: 1rpx solid #eef2f6;
-  border-bottom: 1rpx solid #eef2f6;
-  padding: 12rpx 0;
+  font-family: $font-display;
+  font-size: $fs-h1;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 1rpx;
+  color: $ink;
 }
+
+.sub {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: $ink-3;
+}
+
+/* ---------- 票据 ---------- */
+.ticket {
+  position: relative;
+  overflow: hidden;
+  padding: $sp-4 $sp-4 0;
+  margin-bottom: $sp-3;
+}
+
+.ticket--active {
+  border-color: rgba(15, 157, 143, 0.5);
+}
+
+.ticket-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.tk-no-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tk-no {
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+  color: $ink;
+}
+
+.tk-date {
+  font-size: 20rpx;
+  color: $ink-4;
+}
+
+.tk-sub {
+  display: flex;
+  align-items: center;
+  margin-top: 6rpx;
+}
+
+.active-flag {
+  margin-left: 12rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  background: $brand;
+}
+
+.active-flag-text {
+  font-size: 18rpx;
+  letter-spacing: 1rpx;
+  color: #ffffff;
+}
+
+.tk-status {
+  margin-left: $sp-2;
+  flex-shrink: 0;
+}
+
+.tk-status--pending {
+  color: $amber;
+}
+
+.tk-status--paid {
+  color: $brand-deep;
+}
+
+.tk-status--cancelled {
+  color: $ink-4;
+}
+
+.perf {
+  position: relative;
+  height: 1rpx;
+  margin: $sp-3 (-$sp-4);
+  border-top: 1rpx dashed $paper-3;
+}
+
+.notch {
+  position: absolute;
+  top: -13rpx;
+  width: 26rpx;
+  height: 26rpx;
+  border-radius: 50%;
+  background: $paper;
+}
+
+.notch--l {
+  left: -13rpx;
+}
+
+.notch--r {
+  right: -13rpx;
+}
+
+.items {
+  padding: 2rpx 0 $sp-2;
+}
+
 .item {
   display: flex;
   align-items: center;
-  padding: 8rpx 0;
+  padding: 10rpx 0;
 }
+
 .item-title {
   flex: 1;
   font-size: 26rpx;
-  color: #0f172a;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.item-meta {
-  width: 90rpx;
+
+.item-qty {
+  width: 80rpx;
   text-align: right;
-  font-size: 22rpx;
-  color: #94a3b8;
+  font-size: 20rpx;
+  color: $ink-4;
 }
+
 .item-price {
-  width: 150rpx;
+  width: 140rpx;
   text-align: right;
   font-size: 26rpx;
-  color: #475569;
+  color: $ink-2;
 }
-.order-foot {
+
+.ticket-foot {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-top: 16rpx;
+  margin-top: $sp-2;
+  padding-top: $sp-3;
+  border-top: 1rpx solid $paper-2;
 }
+
 .receiver {
-  font-size: 24rpx;
-  color: #64748b;
+  display: flex;
+  flex-direction: column;
 }
-.total {
-  font-size: 28rpx;
+
+.receiver-name {
+  font-size: 26rpx;
+  color: $ink-2;
+}
+
+.receiver-phone {
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  color: $ink-4;
+}
+
+.total-wrap {
+  display: flex;
+  align-items: baseline;
+}
+
+.total-k {
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: $ink-4;
+  margin-right: 8rpx;
+}
+
+.total-v {
+  font-size: 32rpx;
   font-weight: 700;
-  color: #d92d20;
+  color: $ink;
 }
+
 .address {
   display: block;
-  margin-top: 8rpx;
+  margin-top: $sp-2;
+  padding-bottom: $sp-4;
   font-size: 22rpx;
-  color: #94a3b8;
+  line-height: 1.6;
+  color: $ink-3;
 }
-.empty {
-  padding: 140rpx 40rpx;
-  text-align: center;
+
+.active-flag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: $brand;
+  padding: 6rpx 16rpx;
+  border-bottom-right-radius: 12rpx;
 }
-.empty-title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #0f172a;
-}
-.empty-sub {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: #94a3b8;
-}
-.empty-btn {
-  margin: 32rpx auto 0;
-  width: 240rpx;
-  padding: 16rpx 0;
-  border-radius: 999rpx;
-  background: #0f9d8f;
+
+.active-flag-text {
+  font-size: 18rpx;
+  letter-spacing: 1rpx;
   color: #ffffff;
-  font-size: 26rpx;
 }
-.hint {
-  display: block;
-  padding: 120rpx 32rpx;
-  color: #64748b;
-  font-size: 26rpx;
+
+/* ---------- 骨架 / 空态 ---------- */
+.ticket-sk {
+  padding: $sp-4;
+  margin-bottom: $sp-3;
+  border-radius: $r-card;
 }
-.center {
-  text-align: center;
+
+.tk-head {
+  height: 30rpx;
+  width: 52%;
 }
+
+.tk-line {
+  height: 24rpx;
+  width: 82%;
+  margin-top: 22rpx;
+}
+
+.tk-short {
+  width: 40%;
+  margin-top: 14rpx;
+}
+
 .retry {
-  margin: 24rpx auto 0;
-  width: 220rpx;
-  padding: 14rpx 0;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 26rpx;
+  margin-top: $sp-4;
+  padding: 0 40rpx;
 }
-.pressed {
-  opacity: 0.82;
+
+.empty-btn {
+  margin-top: $sp-5;
+  width: 300rpx;
+}
+
+.foot {
+  padding: $sp-3 0 $sp-6;
+  text-align: center;
 }
 </style>

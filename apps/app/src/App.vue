@@ -18,19 +18,22 @@ onLaunch(() => {
 @import './styles/theme.scss';
 
 page {
-  background-color: #f6f7f9;
-  color: #0b1220;
-  font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', 'Microsoft YaHei', sans-serif;
+  background-color: $paper;
+  color: $ink;
+  font-family: $font-body;
+  font-size: $fs-body;
+  -webkit-font-smoothing: antialiased;
 }
 
-.container {
-  padding: 32rpx;
+view,
+text,
+input,
+textarea,
+button {
+  box-sizing: border-box;
 }
 
-.card {
-  background: #ffffff;
-  border-radius: 24rpx;
-  padding: 32rpx;
-  box-shadow: 0 8rpx 24rpx rgba(11, 18, 32, 0.06);
+image {
+  display: block;
 }
 </style>

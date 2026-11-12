@@ -1,18 +1,31 @@
 <template>
-  <view class="page">
+  <view class="page page--auth">
     <view class="head">
+      <text class="eyebrow">NEW PASS</text>
       <text class="title">创建 MixmAPP 账号</text>
       <text class="hint">注册成功后自动分配一个全局唯一的 MixmAPP 号码，可作为登录名与对外展示 ID。</text>
     </view>
 
-    <view class="tabs">
-      <view class="tab" :class="{ 'tab--on': mode === 'phone' }" @tap="mode = 'phone'">手机号</view>
-      <view class="tab" :class="{ 'tab--on': mode === 'email' }" @tap="mode = 'email'">邮箱</view>
-      <view class="tab" :class="{ 'tab--on': mode === 'username' }" @tap="mode = 'username'">用户名</view>
-      <view class="tab" :class="{ 'tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">一键登录</view>
+    <view class="mode">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'phone' }" @tap="mode = 'phone'">
+        <text class="mode-label">手机号</text>
+        <view class="mode-line" />
+      </view>
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'email' }" @tap="mode = 'email'">
+        <text class="mode-label">邮箱</text>
+        <view class="mode-line" />
+      </view>
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'username' }" @tap="mode = 'username'">
+        <text class="mode-label">用户名</text>
+        <view class="mode-line" />
+      </view>
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">
+        <text class="mode-label">一键</text>
+        <view class="mode-line" />
+      </view>
     </view>
 
-    <view class="card form">
+    <view class="sheet form">
       <block v-if="mode === 'phone'">
         <text class="label">手机号</text>
         <input
@@ -20,22 +33,28 @@
           type="number"
           maxlength="11"
           placeholder="请输入 11 位手机号"
+          placeholder-class="field-ph"
           v-model="phone"
         />
+        <text class="label mt">验证码</text>
         <view class="code-row">
           <input
             class="field code-input"
             type="number"
             maxlength="6"
             placeholder="6 位验证码"
+            placeholder-class="field-ph"
             v-model="code"
           />
           <view
             class="code-btn"
             :class="{ 'code-btn--off': counting || sending }"
+            hover-class="is-press"
             @tap="sendCode"
           >
-            {{ counting ? `${countdown}s` : sending ? '发送中' : '获取验证码' }}
+            <text class="code-btn-text mono">
+              {{ counting ? `${countdown}s` : sending ? '发送中' : '获取验证码' }}
+            </text>
           </view>
         </view>
         <text v-if="devCode" class="dev-hint">开发态验证码：{{ devCode }}（正式环境不会显示）</text>
@@ -43,9 +62,21 @@
 
       <block v-else-if="mode === 'email'">
         <text class="label">邮箱</text>
-        <input class="field" type="text" placeholder="you@example.com" v-model="email" />
+        <input
+          class="field"
+          type="text"
+          placeholder="you@example.com"
+          placeholder-class="field-ph"
+          v-model="email"
+        />
         <text class="label mt">密码</text>
-        <input class="field" password placeholder="至少 8 位，含字母与数字" v-model="password" />
+        <input
+          class="field"
+          password
+          placeholder="至少 8 位，含字母与数字"
+          placeholder-class="field-ph"
+          v-model="password"
+        />
       </block>
 
       <block v-else-if="mode === 'username'">
@@ -55,11 +86,18 @@
           type="text"
           maxlength="20"
           placeholder="2–20 个字符，中文/字母/数字/下划线"
+          placeholder-class="field-ph"
           v-model="username"
         />
         <text class="label mt">密码</text>
-        <input class="field" password placeholder="至少 8 位，含字母与数字" v-model="password" />
-        <text class="hint mt">注册后可用「用户名 + 密码」直接登录，无需手机号。</text>
+        <input
+          class="field"
+          password
+          placeholder="至少 8 位，含字母与数字"
+          placeholder-class="field-ph"
+          v-model="password"
+        />
+        <text class="hint mt-s">注册后可用「用户名 + 密码」直接登录，无需手机号。</text>
         <text class="hint">不得使用管理员、官方、政府机关等名称，违者注册会被拒绝。</text>
       </block>
 
@@ -70,43 +108,70 @@
           class="field mt"
           type="text"
           placeholder="本机号码认证凭证（开发态填 dev:手机号）"
+          placeholder-class="field-ph"
           v-model="onekeyToken"
         />
-        <text class="hint mt">同一手机号已注册时直接登录，不会重复建号。</text>
+        <text class="hint mt-s">同一手机号已注册时直接登录，不会重复建号。</text>
       </block>
 
       <text class="label mt">昵称（选填）</text>
-      <input class="field" type="text" maxlength="24" placeholder="不填则自动生成" v-model="nickname" />
+      <input
+        class="field"
+        type="text"
+        maxlength="24"
+        placeholder="不填则自动生成"
+        placeholder-class="field-ph"
+        v-model="nickname"
+      />
 
-      <text v-if="error" class="error">{{ error }}</text>
+      <view v-if="error" class="error-row">
+        <text class="error-mark mono">!</text>
+        <text class="error-text">{{ error }}</text>
+      </view>
 
-      <view class="btn btn--primary submit" :class="{ 'btn--disabled': submitting }" @tap="submit">
-        {{ submitting ? '提交中…' : '注册并登录' }}
+      <view
+        class="btn btn--deep btn--block submit"
+        :class="{ 'btn--disabled': submitting }"
+        hover-class="is-press"
+        @tap="submit"
+      >
+        <text class="submit-text">{{ submitting ? '提交中…' : '注册并登录' }}</text>
       </view>
 
       <view class="switch">
-        <text class="hint">已有账号？</text>
+        <text class="switch-text">已有账号？</text>
         <text class="link" @tap="goLogin">去登录</text>
       </view>
     </view>
 
-    <view class="card guest">
-      <text class="section">先逛逛</text>
+    <view class="sheet guest">
+      <text class="eyebrow">GUEST</text>
+      <text class="guest-title">先逛逛</text>
       <text class="hint">游客账号在同一设备上直接可用，之后可在「我的」绑定手机号或补设用户名升级。</text>
-      <view class="guest-btn" :class="{ 'btn--disabled': submitting }" @tap="guestStart">
-        {{ submitting ? '创建中…' : '游客身份进入' }}
+      <view class="guest-btn" :class="{ 'btn--disabled': submitting }" hover-class="is-press" @tap="guestStart">
+        <text class="guest-btn-text">{{ submitting ? '创建中…' : '游客身份进入' }}</text>
       </view>
     </view>
 
-    <view class="card oauth">
-      <text class="section">第三方账号</text>
+    <view class="sheet oauth">
+      <text class="eyebrow">OAUTH</text>
+      <text class="oauth-title">第三方账号</text>
       <text class="hint">需在服务端配置对应 OAUTH_* 参数后启用；首次授权会自动建号并绑定。</text>
-      <view class="oauth-row">
-        <view v-for="p in providers" :key="p.key" class="oauth-btn" @tap="oauthLogin(p.key)">
+      <view class="oauth-grid">
+        <view
+          v-for="p in providers"
+          :key="p.key"
+          class="oauth-btn"
+          hover-class="is-press"
+          @tap="oauthLogin(p.key)"
+        >
           <text class="oauth-name">{{ p.name }}</text>
+          <text class="oauth-arrow mono">↗</text>
         </view>
       </view>
     </view>
+
+    <text class="foot mono">MIXMAPP · ISSUING DESK</text>
   </view>
 </template>
 
@@ -260,64 +325,83 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 
 <style scoped lang="scss">
 .page {
-  padding: 40rpx 32rpx 80rpx;
+  min-height: 100vh;
+  background: $paper;
+  padding: $sp-5 $sp-4 $sp-8;
 }
 
 .head {
-  margin-bottom: 28rpx;
+  margin-bottom: $sp-4;
 }
 
 .title {
   display: block;
-  font-size: 44rpx;
-  font-weight: 700;
-  letter-spacing: -0.5rpx;
-}
-
-.hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: #94a3b8;
-  line-height: 1.6;
-}
-
-.tabs {
-  display: flex;
-  background: #eef1f5;
-  border-radius: 999rpx;
-  padding: 6rpx;
-  margin-bottom: 24rpx;
-}
-
-.tab {
-  flex: 1;
-  text-align: center;
-  font-size: 26rpx;
-  color: #475569;
-  padding: 18rpx 0;
-  border-radius: 999rpx;
-}
-
-.tab--on {
-  background: #ffffff;
-  color: #0b1220;
+  margin-top: 16rpx;
+  font-family: $font-display;
+  font-size: 52rpx;
   font-weight: 600;
-  box-shadow: 0 4rpx 12rpx rgba(11, 18, 32, 0.08);
+  line-height: 1.22;
+  letter-spacing: 1rpx;
+  color: $ink;
 }
 
+.head .hint {
+  margin-top: 14rpx;
+}
+
+/* ---------- 模式切换 ---------- */
+.mode {
+  display: flex;
+  margin-bottom: $sp-4;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.mode-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mode-label {
+  padding: 20rpx 0 16rpx;
+  font-size: 25rpx;
+  letter-spacing: 0.5rpx;
+  color: $ink-3;
+}
+
+.mode-tab--on .mode-label {
+  color: $ink;
+  font-weight: 600;
+}
+
+.mode-line {
+  width: 56rpx;
+  height: 3rpx;
+  border-radius: 3rpx;
+  background: transparent;
+}
+
+.mode-tab--on .mode-line {
+  background: $brand;
+}
+
+/* ---------- 表单 ---------- */
 .form {
-  padding: 32rpx;
+  padding: $sp-4;
 }
 
 .mt {
-  margin-top: 24rpx;
+  margin-top: $sp-3;
+}
+
+.mt-s {
+  margin-top: 16rpx;
 }
 
 .code-row {
   display: flex;
   align-items: center;
-  margin-top: 20rpx;
 }
 
 .code-input {
@@ -325,100 +409,182 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 }
 
 .code-btn {
-  margin-left: 16rpx;
-  padding: 0 28rpx;
-  height: 84rpx;
-  line-height: 84rpx;
-  background: #0b1220;
-  color: #ffffff;
-  border-radius: 16rpx;
-  font-size: 24rpx;
+  margin-left: 14rpx;
+  height: 96rpx;
+  padding: 0 24rpx;
+  border-radius: $r-control;
+  background: $ink;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .code-btn--off {
-  opacity: 0.5;
+  opacity: 0.45;
+}
+
+.code-btn-text {
+  font-size: $fs-micro;
+  letter-spacing: 0.5rpx;
+  color: #f4f8f6;
 }
 
 .dev-hint {
   display: block;
   margin-top: 14rpx;
-  font-size: 22rpx;
-  color: #b45309;
+  font-size: $fs-micro;
+  color: $amber;
 }
 
-.error {
-  display: block;
-  margin-top: 20rpx;
-  font-size: 24rpx;
-  color: #dc2626;
+.error-row {
+  display: flex;
+  align-items: flex-start;
+  margin-top: $sp-3;
+}
+
+.error-mark {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: $signal;
+  color: #ffffff;
+  font-size: 20rpx;
+  line-height: 32rpx;
+  text-align: center;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+
+.error-text {
+  flex: 1;
+  font-size: $fs-meta;
+  line-height: 1.5;
+  color: $signal;
 }
 
 .submit {
-  margin-top: 36rpx;
+  margin-top: $sp-4;
 }
 
-.guest {
-  margin-top: 24rpx;
-}
-
-.guest-btn {
-  margin-top: 20rpx;
-  height: 84rpx;
-  line-height: 84rpx;
-  text-align: center;
-  border-radius: 16rpx;
-  border: 1rpx dashed #cbd5e1;
-  color: #334155;
-  font-size: 26rpx;
+.submit-text {
+  font-size: 30rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #f4f8f6;
 }
 
 .switch {
-  margin-top: 24rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: $sp-3;
+}
+
+.switch-text {
+  font-size: $fs-meta;
+  color: $ink-3;
 }
 
 .link {
-  color: #0f9d8f;
-  font-size: 24rpx;
   margin-left: 8rpx;
-}
-
-.oauth {
-  margin-top: 24rpx;
-}
-
-.section {
-  display: block;
-  font-size: 28rpx;
+  font-size: $fs-meta;
   font-weight: 600;
-  margin-bottom: 10rpx;
+  color: $brand-deep;
 }
 
-.oauth-row {
-  display: flex;
-  margin-top: 20rpx;
+/* ---------- 游客 ---------- */
+.guest {
+  margin-top: $sp-3;
+  padding: $sp-4;
 }
 
-.oauth-btn {
-  flex: 1;
-  margin-right: 16rpx;
-  height: 84rpx;
-  border-radius: 16rpx;
-  background: #f4f6f8;
-  border: 1rpx solid #e2e8f0;
+.guest-title {
+  display: block;
+  margin-top: 12rpx;
+  font-family: $font-display;
+  font-size: $fs-h2;
+  font-weight: 600;
+  color: $ink;
+}
+
+.guest .hint {
+  margin-top: 10rpx;
+}
+
+.guest-btn {
+  margin-top: $sp-3;
+  height: 88rpx;
+  background: $paper;
+  border: 1rpx dashed $ink-4;
+  border-radius: $r-control;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.oauth-btn:last-child {
-  margin-right: 0;
+.guest-btn-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  color: $ink;
+}
+
+/* ---------- 第三方 ---------- */
+.oauth {
+  margin-top: $sp-3;
+  padding: $sp-4;
+}
+
+.oauth-title {
+  display: block;
+  margin-top: 12rpx;
+  font-family: $font-display;
+  font-size: $fs-h2;
+  font-weight: 600;
+  color: $ink;
+}
+
+.oauth .hint {
+  margin-top: 10rpx;
+}
+
+.oauth-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: $sp-3;
+}
+
+.oauth-btn {
+  width: 48.5%;
+  height: 88rpx;
+  margin-bottom: 14rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  background: #f7faf8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .oauth-name {
-  font-size: 24rpx;
-  color: #0b1220;
+  font-size: 26rpx;
+  color: $ink;
+}
+
+.oauth-arrow {
+  font-size: 22rpx;
+  color: $ink-4;
+}
+
+.foot {
+  display: block;
+  margin-top: $sp-6;
+  text-align: center;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: $ink-4;
 }
 </style>

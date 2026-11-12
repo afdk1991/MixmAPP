@@ -1,64 +1,136 @@
 <template>
   <view class="page">
-    <view v-if="loading" class="hint center">加载中…</view>
-    <view v-else-if="error" class="hint center">
-      <text>{{ error }}</text>
-      <view class="retry" hover-class="pressed" @tap="load">重新加载</view>
+    <view class="head">
+      <text class="eyebrow">BAG</text>
+      <text class="title">购物车</text>
+      <text class="sub mono">
+        {{ cart.items.length ? `${cart.totalQuantity} 件 · ${cart.items.length} 个商品` : 'EMPTY' }}
+      </text>
     </view>
+
+    <view v-if="loading" class="loading">
+      <view v-for="i in 2" :key="i" class="sheet line-sk">
+        <view class="sk thumb-sk" />
+        <view class="sk-col">
+          <view class="sk line-w" />
+          <view class="sk line-n" />
+          <view class="sk line-s" />
+        </view>
+      </view>
+    </view>
+
+    <view v-else-if="error" class="empty">
+      <view class="empty-mark mono">!</view>
+      <text class="empty-title">购物车没打开</text>
+      <text class="empty-sub">{{ error }}</text>
+      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
+    </view>
+
     <view v-else-if="cart.items.length === 0" class="empty">
+      <view class="empty-mark">空</view>
       <text class="empty-title">购物车还是空的</text>
-      <text class="empty-sub">去商城挑点喜欢的东西吧</text>
-      <view class="empty-btn" hover-class="pressed" @tap="goMall">去逛逛</view>
+      <text class="empty-sub">去商城挑点喜欢的东西吧。</text>
+      <view class="btn btn--deep empty-btn" hover-class="is-press" @tap="goMall">去逛逛</view>
     </view>
 
     <block v-else>
       <view class="list">
-        <view v-for="line in cart.items" :key="line.productId" class="card line">
+        <view v-for="line in cart.items" :key="line.productId" class="sheet line">
           <view class="cover" :style="{ backgroundColor: line.cover }">
+            <view class="cover-scrim" />
             <text class="cover-char">{{ line.title.slice(0, 1) }}</text>
           </view>
           <view class="info">
-            <text class="name">{{ line.title }}</text>
-            <text class="price">¥{{ price(line.priceFen) }}</text>
-            <view class="row">
-              <view class="stepper">
-                <view class="step" hover-class="pressed" @tap="changeQty(line.productId, line.quantity - 1)">−</view>
-                <text class="count">{{ line.quantity }}</text>
-                <view class="step" hover-class="pressed" @tap="changeQty(line.productId, line.quantity + 1)">+</view>
+            <view class="name-row">
+              <text class="name">{{ line.title }}</text>
+              <view class="remove" hover-class="is-press" @tap="remove(line.productId)">
+                <text class="remove-text mono">移除</text>
               </view>
-              <text class="subtotal">小计 ¥{{ price(line.subtotalFen) }}</text>
             </view>
-            <text class="stock">库存 {{ line.stock }}</text>
+            <view class="unit-row">
+              <text class="unit mono">¥{{ price(line.priceFen) }} / 件</text>
+              <text class="stock mono">库存 {{ line.stock }}</text>
+            </view>
+            <view class="line-foot">
+              <view class="stepper">
+                <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity - 1)">
+                  <text class="step-text mono">−</text>
+                </view>
+                <text class="count mono">{{ line.quantity }}</text>
+                <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity + 1)">
+                  <text class="step-text mono">+</text>
+                </view>
+              </view>
+              <view class="subtotal">
+                <text class="subtotal-k mono">小计</text>
+                <text class="subtotal-v mono">¥{{ price(line.subtotalFen) }}</text>
+              </view>
+            </view>
           </view>
-          <view class="remove" hover-class="pressed" @tap="remove(line.productId)">删除</view>
         </view>
       </view>
 
-      <view v-if="checkoutVisible" class="card form">
-        <text class="form-title">收货信息</text>
-        <input v-model="form.receiverName" class="field" placeholder="收货人姓名" />
-        <input v-model="form.receiverPhone" class="field" type="number" maxlength="11" placeholder="手机号" />
-        <textarea v-model="form.address" class="field field--area" placeholder="详细地址（省市区 + 门牌号）" />
-        <input v-model="form.remark" class="field" placeholder="备注（选填）" />
+      <view v-if="checkoutVisible" class="sheet checkout">
+        <text class="eyebrow">CHECKOUT</text>
+        <text class="checkout-title">收货信息</text>
+        <text class="hint">提交后库存即扣减，可在订单页查看进度。</text>
+
+        <text class="label mt">收货人</text>
+        <input v-model="form.receiverName" class="field" placeholder="收货人姓名" placeholder-class="field-ph" />
+        <text class="label mt">手机号</text>
+        <input
+          v-model="form.receiverPhone"
+          class="field"
+          type="number"
+          maxlength="11"
+          placeholder="手机号"
+          placeholder-class="field-ph"
+        />
+        <text class="label mt">详细地址</text>
+        <textarea
+          v-model="form.address"
+          class="field field--area"
+          placeholder="省市区 + 门牌号"
+          placeholder-class="field-ph"
+        />
+        <text class="label mt">备注（选填）</text>
+        <input v-model="form.remark" class="field" placeholder="备注" placeholder-class="field-ph" />
+
         <view class="form-actions">
-          <view class="form-btn ghost" hover-class="pressed" @tap="checkoutVisible = false">取消</view>
-          <view class="form-btn" hover-class="pressed" @tap="submitOrder">提交订单</view>
+          <view class="btn btn--ghost form-btn" hover-class="is-press" @tap="checkoutVisible = false">
+            <text class="form-btn-text">取消</text>
+          </view>
+          <view
+            class="btn btn--deep form-btn"
+            :class="{ 'btn--disabled': submitting }"
+            hover-class="is-press"
+            @tap="submitOrder"
+          >
+            <text class="form-btn-text form-btn-text--deep">{{ submitting ? '提交中…' : '提交订单' }}</text>
+          </view>
         </view>
       </view>
 
       <view class="bar">
         <view class="bar-total">
-          <text class="bar-label">共 {{ cart.totalQuantity }} 件</text>
-          <text class="bar-price">¥{{ price(cart.totalFen) }}</text>
+          <text class="bar-label mono">共 {{ cart.totalQuantity }} 件</text>
+          <text class="bar-price mono">¥{{ price(cart.totalFen) }}</text>
         </view>
-        <view class="bar-btn" hover-class="pressed" @tap="checkoutVisible = true">去结算</view>
+        <view
+          class="bar-btn"
+          :class="{ 'bar-btn--busy': submitting }"
+          hover-class="is-press"
+          @tap="onBarAction"
+        >
+          <text class="bar-btn-text">{{ barLabel }}</text>
+        </view>
       </view>
     </block>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { CartDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
@@ -69,6 +141,21 @@ const error = ref('');
 const checkoutVisible = ref(false);
 const submitting = ref(false);
 const form = ref({ receiverName: '', receiverPhone: '', address: '', remark: '' });
+const barLabel = computed(() => {
+  if (!checkoutVisible.value) return '去结算';
+  return submitting.value ? '提交中…' : '提交订单';
+});
+
+function onBarAction(): void {
+  if (checkoutVisible.value) {
+    void submitOrder();
+    return;
+  }
+  checkoutVisible.value = true;
+  void nextTick(() => {
+    uni.pageScrollTo({ selector: '.checkout', duration: 280, offsetTop: -72, fail: () => undefined });
+  });
+}
 
 function price(fen: number): string {
   return (fen / 100).toFixed(2);
@@ -156,220 +243,319 @@ onShow(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f6f7f9;
-  padding: 24rpx 24rpx 200rpx;
+  background: $paper;
+  padding: 0 $sp-3 240rpx;
 }
+
+.head {
+  padding: $sp-5 4rpx $sp-4;
+}
+
+.title {
+  display: block;
+  margin-top: 16rpx;
+  font-family: $font-display;
+  font-size: $fs-h1;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 1rpx;
+  color: $ink;
+}
+
+.sub {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: $ink-3;
+}
+
 .list {
-  margin-bottom: 20rpx;
+  margin-bottom: $sp-4;
 }
-.card {
-  background: #ffffff;
-  border-radius: 24rpx;
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.06);
-}
+
 .line {
   display: flex;
-  padding: 24rpx;
-  margin-bottom: 20rpx;
-  position: relative;
+  padding: $sp-3;
+  margin-bottom: $sp-3;
 }
+
 .cover {
-  width: 152rpx;
-  height: 152rpx;
-  border-radius: 18rpx;
+  position: relative;
+  width: 148rpx;
+  height: 148rpx;
+  border-radius: $r-control;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  overflow: hidden;
 }
+
+.cover-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(150deg, rgba(8, 17, 15, 0.04), rgba(8, 17, 15, 0.4));
+}
+
 .cover-char {
-  color: #ffffff;
+  position: relative;
+  z-index: 2;
+  font-family: $font-display;
   font-size: 52rpx;
-  font-weight: 700;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
 }
+
 .info {
   flex: 1;
-  margin-left: 20rpx;
+  margin-left: $sp-3;
+  min-width: 0;
 }
+
+.name-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
 .name {
-  display: block;
-  font-size: 28rpx;
+  flex: 1;
+  padding-right: $sp-2;
+  font-family: $font-display;
+  font-size: 32rpx;
   font-weight: 600;
-  color: #0f172a;
-  padding-right: 80rpx;
+  line-height: 1.35;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.price {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #d92d20;
+
+.remove {
+  height: 48rpx;
+  padding: 0 4rpx;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
-.row {
+
+.remove-text {
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.unit-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 14rpx;
+  margin-top: 8rpx;
 }
+
+.unit {
+  font-size: 22rpx;
+  color: $ink-3;
+}
+
+.line-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: $sp-2;
+}
+
 .stepper {
   display: flex;
   align-items: center;
 }
+
 .step {
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 14rpx;
-  background: #f1f5f9;
+  width: 64rpx;
+  height: 64rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: 12rpx;
+  background: #f7faf8;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28rpx;
-  color: #0f172a;
 }
+
+.step-text {
+  font-size: 28rpx;
+  color: $ink;
+}
+
 .count {
-  width: 72rpx;
+  width: 76rpx;
   text-align: center;
-  font-size: 26rpx;
-}
-.subtotal {
-  font-size: 24rpx;
-  color: #475569;
-}
-.stock {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #94a3b8;
-}
-.remove {
-  position: absolute;
-  right: 24rpx;
-  top: 24rpx;
-  font-size: 22rpx;
-  color: #94a3b8;
-}
-.form {
-  margin-top: 12rpx;
-  padding: 26rpx;
-}
-.form-title {
-  display: block;
   font-size: 28rpx;
+  color: $ink;
+}
+
+.subtotal {
+  display: flex;
+  align-items: baseline;
+}
+
+.subtotal-k {
+  font-size: 20rpx;
+  color: $ink-4;
+  margin-right: 6rpx;
+}
+
+.subtotal-v {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: $ink;
+}
+
+.stock {
+  font-size: 20rpx;
+  color: $ink-4;
+}
+
+/* ---------- 结算表单 ---------- */
+.checkout {
+  padding: $sp-4;
+  margin-bottom: $sp-4;
+  animation: rise 0.35s ease both;
+}
+
+.checkout-title {
+  display: block;
+  margin-top: 12rpx;
+  font-family: $font-display;
+  font-size: 40rpx;
   font-weight: 600;
-  color: #0f172a;
-  margin-bottom: 14rpx;
+  color: $ink;
 }
-.field {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 18rpx 20rpx;
-  margin-bottom: 14rpx;
-  border-radius: 16rpx;
-  background: #f1f5f9;
-  font-size: 26rpx;
-  color: #0f172a;
+
+.checkout .hint {
+  margin-top: 8rpx;
 }
-.field--area {
-  height: 140rpx;
+
+.mt {
+  margin-top: $sp-3;
 }
+
 .form-actions {
   display: flex;
-  margin-top: 8rpx;
+  margin-top: $sp-4;
 }
+
 .form-btn {
   flex: 1;
-  margin-left: 16rpx;
-  padding: 18rpx 0;
-  border-radius: 999rpx;
-  text-align: center;
-  background: #0f9d8f;
-  color: #ffffff;
+  height: 88rpx;
+}
+
+.form-btn:first-child {
+  margin-right: $sp-2;
+}
+
+.form-btn-text {
   font-size: 26rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  color: $ink;
 }
-.form-btn.ghost {
-  margin-left: 0;
-  background: #e6f5f2;
-  color: #0b7a70;
+
+.form-btn-text--deep {
+  color: #f4f8f6;
 }
-.bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
-  background: #ffffff;
-  box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.08);
-}
+
+/* ---------- 底栏 ---------- */
 .bar-total {
   flex: 1;
 }
+
 .bar-label {
   display: block;
   font-size: 20rpx;
-  color: #94a3b8;
+  letter-spacing: 1rpx;
+  color: $ink-4;
 }
+
 .bar-price {
   display: block;
-  font-size: 34rpx;
+  margin-top: 4rpx;
+  font-size: 36rpx;
   font-weight: 700;
-  color: #d92d20;
+  line-height: 1.1;
+  color: $ink;
 }
+
 .bar-btn {
-  padding: 18rpx 44rpx;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 28rpx;
+  height: 88rpx;
+  padding: 0 48rpx;
+  border-radius: $r-pill;
+  background: $ink;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12rpx 28rpx -16rpx rgba(13, 25, 23, 0.5);
 }
-.empty {
-  padding: 140rpx 40rpx;
-  text-align: center;
+
+.bar-btn--busy {
+  opacity: 0.72;
 }
-.empty-title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #0f172a;
+
+.bar-btn-text {
+  font-size: 28rpx;  font-weight: 600;
+  letter-spacing: 1rpx;
+  color: #f4f8f6;
 }
-.empty-sub {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: #94a3b8;
+
+/* ---------- 骨架 ---------- */
+.line-sk {
+  display: flex;
+  padding: $sp-3;
+  margin-bottom: $sp-3;
+  border-radius: $r-card;
 }
-.empty-btn {
-  margin: 32rpx auto 0;
-  width: 240rpx;
-  padding: 16rpx 0;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 26rpx;
+
+.thumb-sk {
+  width: 148rpx;
+  height: 148rpx;
+  flex-shrink: 0;
 }
-.hint {
-  display: block;
-  padding: 120rpx 32rpx;
-  color: #64748b;
-  font-size: 26rpx;
+
+.sk-col {
+  flex: 1;
+  margin-left: $sp-3;
+  padding-top: 8rpx;
 }
-.center {
-  text-align: center;
+
+.line-w {
+  height: 30rpx;
+  width: 70%;
 }
+
+.line-n {
+  height: 22rpx;
+  width: 34%;
+  margin-top: 16rpx;
+}
+
+.line-s {
+  height: 56rpx;
+  width: 100%;
+  margin-top: 22rpx;
+}
+
 .retry {
-  margin: 24rpx auto 0;
-  width: 220rpx;
-  padding: 14rpx 0;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 26rpx;
+  margin-top: $sp-4;
+  padding: 0 40rpx;
 }
-.pressed {
-  opacity: 0.82;
+
+.empty-btn {
+  margin-top: $sp-5;
+  width: 300rpx;
 }
 </style>

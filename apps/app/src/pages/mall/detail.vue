@@ -1,53 +1,88 @@
 <template>
   <view class="page">
-    <view v-if="loading" class="hint center">加载中…</view>
-    <view v-else-if="error" class="hint center">
-      <text>{{ error }}</text>
-      <view class="retry" hover-class="pressed" @tap="load">重新加载</view>
+    <view v-if="loading" class="loading">
+      <view class="sk hero-sk" />
+      <view class="loading-body">
+        <view class="sk line-xl" />
+        <view class="sk line" />
+        <view class="sk line short" />
+      </view>
+    </view>
+
+    <view v-else-if="error" class="empty">
+      <view class="empty-mark mono">!</view>
+      <text class="empty-title">商品没打开</text>
+      <text class="empty-sub">{{ error }}</text>
+      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
     </view>
 
     <block v-else-if="product">
       <view class="hero" :style="{ backgroundColor: product.cover }">
+        <view class="hero-scrim" />
+        <view class="hero-ring" />
+        <view class="hero-ring hero-ring--sm" />
+        <text class="hero-tag mono">{{ product.category }}</text>
         <text class="hero-char">{{ product.title.slice(0, 1) }}</text>
-        <view class="hero-badge">{{ product.category }}</view>
+        <text class="hero-serial mono">NO. {{ product.id.slice(0, 8).toUpperCase() }}</text>
       </view>
 
       <view class="body">
+        <text class="eyebrow">SPECIMEN</text>
         <text class="title">{{ product.title }}</text>
         <text class="subtitle">{{ product.subtitle }}</text>
 
         <view class="price-row">
-          <text class="price">¥{{ price(product.priceFen) }}</text>
-          <text v-if="product.originalPriceFen > 0" class="price-old">¥{{ price(product.originalPriceFen) }}</text>
-          <text class="stock">库存 {{ product.stock }}</text>
+          <view class="price-main">
+            <text class="cur mono">¥</text>
+            <text class="amount mono">{{ price(product.priceFen) }}</text>
+            <text v-if="product.originalPriceFen > 0" class="price-old mono">¥{{ price(product.originalPriceFen) }}</text>
+          </view>
+          <text class="stock mono">余 {{ product.stock }}</text>
         </view>
 
-        <view class="tags">
+        <view v-if="product.tags.length" class="tags">
           <text v-for="tag in product.tags" :key="tag" class="tag">{{ tag }}</text>
         </view>
 
-        <view class="card section">
+        <view class="sheet section">
+          <text class="sec-label mono">DETAIL</text>
           <text class="section-title">商品说明</text>
           <text class="desc">{{ product.description }}</text>
         </view>
 
-        <view class="card section">
-          <text class="section-title">购买数量</text>
-          <view class="stepper">
-            <view class="step" hover-class="pressed" @tap="dec">−</view>
-            <text class="count">{{ quantity }}</text>
-            <view class="step" hover-class="pressed" @tap="inc">+</view>
+        <view class="sheet section">
+          <text class="sec-label mono">QUANTITY</text>
+          <view class="qty-head">
+            <text class="qty-title">购买数量</text>
+            <view class="stepper">
+              <view class="step" hover-class="is-press" @tap="dec">
+                <text class="step-text mono">−</text>
+              </view>
+              <text class="count mono">{{ quantity }}</text>
+              <view class="step" hover-class="is-press" @tap="inc">
+                <text class="step-text mono">+</text>
+              </view>
+            </view>
           </view>
+          <text class="hint">单笔最多 99 件，超出库存会提示。</text>
+        </view>
+
+        <view class="note">
+          <text class="micro mono">MIXMAPP · 首发限定周边 · 数量有限</text>
         </view>
       </view>
 
       <view class="bar">
         <view class="bar-total">
-          <text class="bar-label">合计</text>
-          <text class="bar-price">¥{{ price(product.priceFen * quantity) }}</text>
+          <text class="bar-label mono">合计</text>
+          <text class="bar-price mono">¥{{ price(product.priceFen * quantity) }}</text>
         </view>
-        <view class="bar-btn ghost" hover-class="pressed" @tap="addToCart">加入购物车</view>
-        <view class="bar-btn" hover-class="pressed" @tap="buyNow">立即购买</view>
+        <view class="bar-btn bar-btn--ghost" hover-class="is-press" @tap="addToCart">
+          <text class="bar-btn-text bar-btn-text--ghost">加入购物车</text>
+        </view>
+        <view class="bar-btn bar-btn--primary" hover-class="is-press" @tap="buyNow">
+          <text class="bar-btn-text">立即购买</text>
+        </view>
       </view>
     </block>
   </view>
@@ -130,183 +165,330 @@ onLoad((options) => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f6f7f9;
-  padding-bottom: 180rpx;
+  background: $paper;
+  padding-bottom: 240rpx;
 }
+
+/* ---------- 主视觉 ---------- */
 .hero {
-  height: 420rpx;
+  position: relative;
+  height: 470rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  overflow: hidden;
 }
-.hero-char {
-  color: #ffffff;
-  font-size: 140rpx;
-  font-weight: 700;
-  opacity: 0.9;
-}
-.hero-badge {
+
+.hero-scrim {
   position: absolute;
-  left: 32rpx;
-  bottom: 28rpx;
-  padding: 6rpx 20rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  font-size: 22rpx;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(160deg, rgba(8, 17, 15, 0.05) 10%, rgba(8, 17, 15, 0.46) 100%);
 }
+
+.hero-ring {
+  position: absolute;
+  width: 400rpx;
+  height: 400rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.hero-ring--sm {
+  width: 280rpx;
+  height: 280rpx;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.hero-tag {
+  position: absolute;
+  left: $sp-4;
+  top: $sp-4;
+  z-index: 2;
+  font-size: 20rpx;
+  letter-spacing: 3rpx;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+  padding: 6rpx 14rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.32);
+  border-radius: 8rpx;
+}
+
+.hero-char {
+  position: relative;
+  z-index: 2;
+  font-family: $font-display;
+  font-size: 140rpx;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.hero-serial {
+  position: absolute;
+  right: $sp-4;
+  bottom: $sp-6;
+  z-index: 2;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* ---------- 正文层 ---------- */
 .body {
-  padding: 28rpx 32rpx 0;
+  position: relative;
+  z-index: 3;
+  margin-top: -44rpx;
+  padding: $sp-5 $sp-4 0;
+  background: $paper;
+  border-top-left-radius: 44rpx;
+  border-top-right-radius: 44rpx;
 }
+
 .title {
   display: block;
-  font-size: 38rpx;
-  font-weight: 700;
-  color: #0f172a;
+  margin-top: 14rpx;
+  font-family: $font-display;
+  font-size: 46rpx;
+  font-weight: 600;
+  line-height: 1.28;
+  color: $ink;
 }
+
 .subtitle {
   display: block;
-  margin-top: 8rpx;
+  margin-top: 10rpx;
   font-size: 26rpx;
-  color: #64748b;
+  line-height: 1.6;
+  color: $ink-3;
 }
+
 .price-row {
   display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: $sp-4;
+  padding-bottom: $sp-3;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.price-main {
+  display: flex;
   align-items: baseline;
-  margin-top: 18rpx;
 }
-.price {
-  font-size: 44rpx;
-  font-weight: 700;
-  color: #d92d20;
-}
-.price-old {
-  margin-left: 12rpx;
+
+.cur {
   font-size: 24rpx;
-  color: #94a3b8;
+  color: $ink-2;
+  margin-right: 4rpx;
+}
+
+.amount {
+  font-size: 56rpx;
+  font-weight: 700;
+  line-height: 1;
+  color: $ink;
+}
+
+.price-old {
+  margin-left: 14rpx;
+  font-size: 22rpx;
+  color: $ink-4;
   text-decoration: line-through;
 }
+
 .stock {
-  margin-left: auto;
-  font-size: 24rpx;
-  color: #94a3b8;
+  font-size: 22rpx;
+  letter-spacing: 0.5rpx;
+  color: $ink-3;
 }
+
 .tags {
   display: flex;
   flex-wrap: wrap;
-  margin-top: 14rpx;
+  margin-top: $sp-3;
 }
+
 .tag {
-  margin-right: 12rpx;
-  padding: 4rpx 14rpx;
-  border-radius: 8rpx;
-  background: #eef6f4;
-  color: #0b7a70;
-  font-size: 22rpx;
+  margin: 0 12rpx 12rpx 0;
 }
-.card {
-  background: #ffffff;
-  border-radius: 24rpx;
-}
+
 .section {
-  margin-top: 24rpx;
-  padding: 26rpx;
+  margin-top: $sp-4;
+  padding: $sp-4;
 }
+
+.sec-label {
+  display: block;
+  font-size: 20rpx;
+  letter-spacing: 3rpx;
+  color: $ink-4;
+}
+
 .section-title {
   display: block;
-  font-size: 26rpx;
+  margin-top: 8rpx;
+  font-family: $font-display;
+  font-size: $fs-h2;
   font-weight: 600;
-  color: #0f172a;
+  color: $ink;
 }
+
 .desc {
   display: block;
-  margin-top: 12rpx;
-  font-size: 26rpx;
-  line-height: 1.7;
-  color: #475569;
+  margin-top: 14rpx;
+  font-size: 28rpx;
+  line-height: 1.8;
+  color: $ink-2;
 }
+
+.qty-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10rpx;
+}
+
+.qty-title {
+  font-family: $font-display;
+  font-size: $fs-h2;
+  font-weight: 600;
+  color: $ink;
+}
+
+.hint {
+  margin-top: 10rpx;
+}
+
 .stepper {
   display: flex;
   align-items: center;
-  margin-top: 18rpx;
+  flex-shrink: 0;
 }
+
 .step {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 16rpx;
-  background: #f1f5f9;
+  width: 72rpx;
+  height: 72rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  background: #f7faf8;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32rpx;
-  color: #0f172a;
 }
+
+.step-text {
+  font-size: 30rpx;
+  color: $ink;
+}
+
 .count {
-  width: 96rpx;
+  width: 84rpx;
   text-align: center;
-  font-size: 28rpx;
-  color: #0f172a;
+  font-size: 30rpx;
+  color: $ink;
 }
-.bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
-  background: #ffffff;
-  box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.08);
+
+.note {
+  margin: $sp-5 0 0;
+  padding-top: $sp-4;
+  border-top: 1rpx solid $paper-3;
+  text-align: center;
 }
+
+/* ---------- 底部购买条 ---------- */
 .bar-total {
   flex: 1;
 }
+
 .bar-label {
   display: block;
   font-size: 20rpx;
-  color: #94a3b8;
+  letter-spacing: 2rpx;
+  color: $ink-4;
 }
+
 .bar-price {
   display: block;
-  font-size: 34rpx;
+  margin-top: 4rpx;
+  font-size: 36rpx;
   font-weight: 700;
-  color: #d92d20;
+  line-height: 1.1;
+  color: $ink;
 }
+
 .bar-btn {
-  margin-left: 16rpx;
-  padding: 18rpx 30rpx;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
+  height: 84rpx;
+  padding: 0 30rpx;
+  border-radius: $r-pill;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 14rpx;
+}
+
+.bar-btn--ghost {
+  background: $shell;
+  border: 1rpx solid $paper-3;
+}
+
+.bar-btn--primary {
+  background: $ink;
+  box-shadow: 0 12rpx 28rpx -16rpx rgba(13, 25, 23, 0.5);
+}
+
+.bar-btn-text {
   font-size: 26rpx;
+  font-weight: 600;
+  letter-spacing: 0.5rpx;
+  color: #f4f8f6;
 }
-.bar-btn.ghost {
-  background: #e6f5f2;
-  color: #0b7a70;
+
+.bar-btn-text--ghost {
+  color: $ink;
 }
-.hint {
-  display: block;
-  padding: 120rpx 32rpx;
-  color: #64748b;
-  font-size: 26rpx;
+
+/* ---------- 骨架 / 空态 ---------- */
+.loading {
+  padding-bottom: 40rpx;
 }
-.center {
-  text-align: center;
+
+.hero-sk {
+  height: 470rpx;
+  border-radius: 0;
 }
+
+.loading-body {
+  padding: $sp-5 $sp-4 0;
+  margin-top: -44rpx;
+  background: $paper;
+  border-top-left-radius: 44rpx;
+  border-top-right-radius: 44rpx;
+}
+
+.line-xl {
+  height: 56rpx;
+  width: 70%;
+  margin-bottom: 22rpx;
+}
+
+.line {
+  height: 26rpx;
+  width: 50%;
+  margin-bottom: 16rpx;
+}
+
+.short {
+  width: 32%;
+}
+
 .retry {
-  margin: 24rpx auto 0;
-  width: 220rpx;
-  padding: 14rpx 0;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 26rpx;
-}
-.pressed {
-  opacity: 0.82;
+  margin-top: $sp-4;
+  padding: 0 40rpx;
 }
 </style>

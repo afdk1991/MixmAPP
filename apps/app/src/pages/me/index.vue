@@ -1,82 +1,169 @@
 <template>
   <view class="page">
     <block v-if="user">
-      <view class="id-card">
-        <view class="id-top">
-          <text class="id-label">我的 MixmAPP 号码</text>
-          <view class="pill">{{ user.isGuest ? '游客账号' : '自动分配' }}</view>
+      <view class="pass">
+        <view class="pass-foil" />
+        <text class="pass-watermark mono">MX</text>
+
+        <view class="pass-head">
+          <view class="pass-brand">
+            <text class="pass-kicker mono">MIXMAPP PASS</text>
+            <text class="pass-title">通行证</text>
+          </view>
+          <view class="pass-state" :class="{ 'pass-state--guest': user.isGuest }">
+            <text class="pass-state-text mono">{{ user.isGuest ? 'GUEST' : 'MEMBER' }}</text>
+          </view>
         </view>
-        <text class="id-value mono">{{ user.accountNo }}</text>
-        <view class="id-actions">
-          <view class="btn btn--ghost small" @tap="copyId">复制号码</view>
-          <view class="btn btn--ghost small" @tap="reload">刷新资料</view>
+
+        <text class="pass-label mono">账号号码 / ACCOUNT NO.</text>
+        <text class="pass-no mono">{{ user.accountNo }}</text>
+
+        <view class="pass-perf">
+          <view class="notch notch--l" />
+          <view class="notch notch--r" />
         </view>
-        <text class="id-foot">该号码全局唯一，可直接作为登录账号使用</text>
+
+        <view class="pass-meta">
+          <view class="pass-cell">
+            <text class="pass-k mono">持有者</text>
+            <text class="pass-v">{{ user.nickname }}</text>
+          </view>
+          <view class="pass-cell">
+            <text class="pass-k mono">签发日期</text>
+            <text class="pass-v">{{ createdShort }}</text>
+          </view>
+          <view class="pass-cell">
+            <text class="pass-k mono">覆盖</text>
+            <text class="pass-v">6 ENDS</text>
+          </view>
+        </view>
+
+        <view class="pass-actions">
+          <view class="pass-btn" hover-class="is-press" @tap="copyId">
+            <text class="pass-btn-text">复制号码</text>
+          </view>
+          <view class="pass-btn" hover-class="is-press" @tap="reload">
+            <text class="pass-btn-text">刷新资料</text>
+          </view>
+        </view>
+        <text class="pass-foot mono">该号码全局唯一，可直接作为登录账号使用</text>
       </view>
 
-      <view class="card">
-        <text class="section">账号资料</text>
+      <view class="sheet profile">
+        <view class="profile-head">
+          <text class="eyebrow">PROFILE</text>
+          <text class="profile-title">账号资料</text>
+        </view>
         <view class="row"><text class="k">昵称</text><text class="v">{{ user.nickname }}</text></view>
         <view class="row"><text class="k">用户名</text><text class="v">{{ user.username ?? '未设置' }}</text></view>
-        <view class="row"><text class="k">手机号</text><text class="v">{{ user.phone ?? '未绑定' }}</text></view>
+        <view class="row"><text class="k">手机号</text><text class="v mono">{{ user.phone ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">邮箱</text><text class="v">{{ user.email ?? '未绑定' }}</text></view>
-        <view class="row"><text class="k">注册时间</text><text class="v">{{ createdText }}</text></view>
+        <view class="row"><text class="k">注册时间</text><text class="v mono">{{ createdText }}</text></view>
         <view class="row">
           <text class="k">第三方绑定</text>
-          <text class="v">{{ user.bindings.length ? user.bindings.join(' / ') : '暂无' }}</text>
+          <text class="v">{{ bindingText }}</text>
         </view>
-        <view class="row"><text class="k">主键样例</text><text class="v mono break">{{ user.id }}</text></view>
+        <view class="row row--last">
+          <text class="k">主键样例</text>
+          <text class="v v--mono mono">{{ user.id }}</text>
+        </view>
       </view>
 
-      <view v-if="user.isGuest" class="card">
-        <text class="section">升级为正式账号</text>
+      <view v-if="user.isGuest" class="sheet upgrade">
+        <text class="eyebrow">UPGRADE</text>
+        <text class="upgrade-title">升级为正式账号</text>
         <text class="hint">补设用户名与密码后，换设备也能用「用户名 + 密码」登录。</text>
+        <text class="label mt">用户名</text>
         <input
-          class="field mt"
+          class="field"
           type="text"
           maxlength="20"
           placeholder="用户名（2–20 个字符，中文/字母/数字/下划线）"
+          placeholder-class="field-ph"
           v-model="upUsername"
         />
+        <text class="label mt">密码</text>
         <input
-          class="field mt"
+          class="field"
           password
           placeholder="密码（至少 8 位，含字母与数字）"
+          placeholder-class="field-ph"
           v-model="upPassword"
         />
-        <text class="hint">不得使用管理员、官方、政府机关等名称。</text>
+        <text class="hint mt-s">不得使用管理员、官方、政府机关等名称。</text>
         <text v-if="upError" class="error">{{ upError }}</text>
-        <view class="btn btn--primary mt" @tap="upgradeGuest">
-          {{ upgrading ? '提交中…' : '设置用户名与密码' }}
+        <view class="btn btn--deep btn--block mt-l" hover-class="is-press" @tap="upgradeGuest">
+          <text class="btn-text">{{ upgrading ? '提交中…' : '设置用户名与密码' }}</text>
         </view>
       </view>
 
-      <view class="card">
-        <text class="section">我的商城</text>
-        <view class="quick">
-          <view class="btn btn--ghost" @tap="go('/pages/mall/index')">去商城</view>
-          <view class="btn btn--ghost" @tap="go('/pages/cart/index')">购物车</view>
-          <view class="btn btn--ghost" @tap="go('/pages/orders/index')">我的订单</view>
+      <view class="sheet links">
+        <text class="eyebrow">SHORTCUTS</text>
+        <view class="link-row" hover-class="is-press" @tap="go('/pages/mall/index')">
+          <text class="link-title">去商城</text>
+          <text class="link-desc">商品 · 购物车 · 订单</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row" hover-class="is-press" @tap="go('/pages/cart/index')">
+          <text class="link-title">购物车</text>
+          <text class="link-desc">查看已选商品并结算</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row" hover-class="is-press" @tap="go('/pages/orders/index')">
+          <text class="link-title">我的订单</text>
+          <text class="link-desc">下单后可查看进度</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row" hover-class="is-press" @tap="go('/pages/tools/ids')">
+          <text class="link-title">ID 试算器</text>
+          <text class="link-desc">雪花 / ULID / UUIDv7</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row link-row--last" hover-class="is-press" @tap="go('/pages/settings/about')">
+          <text class="link-title">关于与能力</text>
+          <text class="link-desc">能力矩阵与版本</text>
+          <text class="link-arrow mono">→</text>
         </view>
       </view>
 
-      <view class="card">
-        <text class="section">快捷入口</text>
-        <view class="quick">
-          <view class="btn btn--ghost" @tap="go('/pages/tools/ids')">ID 试算器</view>
-          <view class="btn btn--ghost" @tap="go('/pages/settings/about')">关于与能力</view>
-        </view>
+      <view class="logout" hover-class="is-press" @tap="doLogout">
+        <text class="logout-text">退出登录</text>
       </view>
-
-      <view class="danger" @tap="doLogout">退出登录</view>
     </block>
 
     <block v-else>
-      <view class="empty">
-        <text class="empty-title">还没有登录</text>
-        <text class="hint">注册后即可获得一个专属 MixmAPP 号码，用于全端统一身份。</text>
-        <view class="btn btn--primary mt" @tap="go('/pages/auth/register')">创建账号</view>
-        <view class="btn btn--ghost mt" @tap="go('/pages/auth/login')">已有账号，去登录</view>
+      <view class="guest-hero">
+        <text class="eyebrow eyebrow--light">NO PASS</text>
+        <text class="guest-title">还没有通行证</text>
+        <text class="guest-lede">注册后即可获得一个专属 MixmAPP 号码，用于全端统一身份。</text>
+      </view>
+
+      <view class="guest-actions">
+        <view class="btn btn--deep btn--block" hover-class="is-press" @tap="go('/pages/auth/register')">
+          <text class="btn-text">创建账号</text>
+        </view>
+        <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="go('/pages/auth/login')">
+          <text class="btn-text btn-text--dark">已有账号，去登录</text>
+        </view>
+      </view>
+
+      <view class="sheet links">
+        <text class="eyebrow">BROWSE</text>
+        <view class="link-row" hover-class="is-press" @tap="go('/pages/mall/index')">
+          <text class="link-title">去商城</text>
+          <text class="link-desc">商品 · 结算 · 订单</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row" hover-class="is-press" @tap="go('/pages/tools/ids')">
+          <text class="link-title">ID 试算器</text>
+          <text class="link-desc">雪花 / ULID / UUIDv7</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row link-row--last" hover-class="is-press" @tap="go('/pages/settings/about')">
+          <text class="link-title">关于与能力</text>
+          <text class="link-desc">能力矩阵与版本</text>
+          <text class="link-arrow mono">→</text>
+        </view>
       </view>
     </block>
   </view>
@@ -89,9 +176,27 @@ import { session, logout, refreshProfile } from '../../stores/session';
 import { meApi, ApiError } from '../../api/client';
 
 const user = computed(() => session.user);
+const createdShort = computed(() => {
+  if (!user.value) return '';
+  const d = new Date(user.value.createdAt);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+});
 const createdText = computed(() =>
   user.value ? new Date(user.value.createdAt).toLocaleString() : '',
 );
+const BINDING_LABEL: Record<string, string> = {
+  github: 'GitHub',
+  wechat: '微信',
+  qq: 'QQ',
+  apple: 'Apple',
+  google: 'Google',
+};
+const bindingText = computed(() => {
+  if (!user.value) return '';
+  const list = user.value.bindings;
+  if (!list.length) return '暂无';
+  return list.map((b) => BINDING_LABEL[b] ?? b).join(' / ');
+});
 const upUsername = ref('');
 const upPassword = ref('');
 const upError = ref('');
@@ -147,157 +252,386 @@ onShow(() => {
 
 <style scoped lang="scss">
 .page {
-  padding: 32rpx;
+  min-height: 100vh;
+  background: $paper;
+  padding: $sp-4 $sp-3 $sp-8;
 }
 
-.id-card {
-  background: linear-gradient(140deg, #0b1220 0%, #16414a 70%, #0f9d8f 160%);
-  border-radius: 32rpx;
-  padding: 40rpx;
-  box-shadow: 0 16rpx 40rpx rgba(11, 18, 32, 0.18);
+/* ---------- 通行证 ---------- */
+.pass {
+  position: relative;
+  overflow: hidden;
+  padding: $sp-4;
+  background:
+    radial-gradient(130% 100% at 92% -16%, rgba(15, 157, 143, 0.28), rgba(15, 157, 143, 0) 56%),
+    linear-gradient(152deg, #08110f 0%, #0e2925 64%, #14453c 128%);
+  border-radius: $r-shell;
+  box-shadow: 0 24rpx 56rpx -28rpx rgba(8, 17, 15, 0.55);
 }
 
-.id-top {
+.pass-foil {
+  position: absolute;
+  top: -40%;
+  left: 0;
+  width: 30%;
+  height: 180%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+  animation: foil 9s ease-in-out 1s infinite;
+  pointer-events: none;
+}
+
+.pass-watermark {
+  position: absolute;
+  right: -10rpx;
+  bottom: -26rpx;
+  font-size: 130rpx;
+  line-height: 1;
+  letter-spacing: 6rpx;
+  color: rgba(242, 245, 243, 0.06);
+}
+
+.pass-head {
+  position: relative;
+  z-index: 2;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
 }
 
-.id-label {
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 24rpx;
-}
-
-.pill {
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.id-value {
+.pass-kicker {
   display: block;
-  margin-top: 22rpx;
-  color: #ffffff;
+  font-size: 20rpx;
+  letter-spacing: 3rpx;
+  color: rgba(242, 245, 243, 0.5);
+}
+
+.pass-title {
+  display: block;
+  margin-top: 10rpx;
+  font-family: $font-display;
   font-size: 40rpx;
+  font-weight: 600;
+  letter-spacing: 4rpx;
+  color: #f4f8f6;
+}
+
+.pass-state {
+  padding: 6rpx 16rpx;
+  border: 1rpx solid rgba(242, 245, 243, 0.26);
+  border-radius: $r-pill;
+}
+
+.pass-state--guest {
+  border-color: rgba(216, 168, 90, 0.55);
+}
+
+.pass-state--guest .pass-state-text {
+  color: #d8a85a;
+}
+
+.pass-state-text {
+  font-size: 18rpx;
+  letter-spacing: 2rpx;
+  color: rgba(242, 245, 243, 0.8);
+}
+
+.pass-label {
+  position: relative;
+  z-index: 2;
+  display: block;
+  margin-top: $sp-6;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: rgba(242, 245, 243, 0.46);
+}
+
+.pass-no {
+  position: relative;
+  z-index: 2;
+  display: block;
+  margin-top: 10rpx;
+  font-size: 36rpx;
   font-weight: 700;
-  letter-spacing: 1rpx;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: #f6faf8;
   word-break: break-all;
 }
 
-.id-actions {
+.pass-perf {
+  position: relative;
+  height: 1rpx;
+  margin: $sp-4 (-$sp-4) $sp-3;
+  border-top: 1rpx dashed rgba(242, 245, 243, 0.18);
+}
+
+.notch {
+  position: absolute;
+  top: -13rpx;
+  width: 26rpx;
+  height: 26rpx;
+  border-radius: 50%;
+  background: $paper;
+}
+
+.notch--l {
+  left: -13rpx;
+}
+
+.notch--r {
+  right: -13rpx;
+}
+
+.pass-meta {
+  position: relative;
+  z-index: 2;
   display: flex;
-  margin-top: 32rpx;
 }
 
-.small {
-  height: 72rpx;
-  padding: 0 28rpx;
-  margin-right: 16rpx;
-  font-size: 24rpx;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1rpx solid rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+.pass-cell {
+  flex: 1;
+  min-width: 0;
 }
 
-.id-foot {
+.pass-k {
   display: block;
-  margin-top: 24rpx;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 18rpx;
+  letter-spacing: 2rpx;
+  color: rgba(242, 245, 243, 0.44);
 }
 
-.card {
-  margin-top: 24rpx;
-}
-
-.section {
+.pass-v {
   display: block;
-  font-size: 28rpx;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: rgba(242, 245, 243, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pass-actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  margin-top: $sp-4;
+}
+
+.pass-btn {
+  height: 68rpx;
+  padding: 0 26rpx;
+  margin-right: 14rpx;
+  border: 1rpx solid rgba(242, 245, 243, 0.24);
+  border-radius: $r-pill;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pass-btn-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: #f4f8f6;
+}
+
+.pass-foot {
+  position: relative;
+  z-index: 2;
+  display: block;
+  max-width: 74%;
+  margin-top: $sp-3;
+  font-size: 18rpx;
+  letter-spacing: 0.5rpx;
+  color: rgba(242, 245, 243, 0.46);
+}
+
+/* ---------- 资料 ---------- */
+.profile {
+  margin-top: $sp-4;
+  padding: $sp-4 $sp-4 8rpx;
+}
+
+.profile-head {
+  padding-bottom: $sp-3;
+  border-bottom: 1rpx solid $paper-2;
+}
+
+.profile-title {
+  display: block;
+  margin-top: 10rpx;
+  font-family: $font-display;
+  font-size: $fs-h2;
   font-weight: 600;
-  margin-bottom: 18rpx;
+  color: $ink;
 }
 
 .row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 18rpx 0;
-  border-bottom: 1rpx solid #f1f5f9;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid $paper-2;
 }
 
-.row:last-child {
+.row--last {
   border-bottom: none;
 }
 
 .k {
-  font-size: 26rpx;
-  color: #64748b;
   flex-shrink: 0;
-  margin-right: 24rpx;
+  margin-right: $sp-3;
+  font-size: 24rpx;
+  color: $ink-3;
 }
 
 .v {
-  font-size: 26rpx;
-  color: #0b1220;
-  text-align: right;
   flex: 1;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: $ink;
+  text-align: right;
   word-break: break-all;
 }
 
-.break {
-  font-size: 22rpx;
-  color: #475569;
+.v--mono {
+  font-size: 20rpx;
+  color: $ink-3;
 }
 
-.quick {
-  display: flex;
+/* ---------- 升级 ---------- */
+.upgrade {
+  margin-top: $sp-3;
+  padding: $sp-4;
 }
 
-.quick .btn {
-  flex: 1;
-  margin-right: 16rpx;
-  height: 80rpx;
-  font-size: 26rpx;
-}
-
-.quick .btn:last-child {
-  margin-right: 0;
-}
-
-.danger {
-  margin-top: 40rpx;
-  text-align: center;
-  font-size: 26rpx;
-  color: #dc2626;
-  padding: 24rpx;
-}
-
-.empty {
-  margin-top: 120rpx;
-  text-align: center;
-}
-
-.empty-title {
+.upgrade-title {
   display: block;
-  font-size: 40rpx;
-  font-weight: 700;
+  margin-top: 12rpx;
+  font-family: $font-display;
+  font-size: $fs-h2;
+  font-weight: 600;
+  color: $ink;
 }
 
-.hint {
-  display: block;
-  margin-top: 16rpx;
-  font-size: 24rpx;
-  color: #94a3b8;
-  line-height: 1.6;
+.upgrade .hint {
+  margin-top: 10rpx;
 }
 
 .mt {
-  margin-top: 32rpx;
+  margin-top: $sp-3;
+}
+
+.mt-s {
+  margin-top: 16rpx;
+}
+
+.mt-l {
+  margin-top: $sp-4;
+}
+
+.btn-text {
+  font-size: 28rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #f4f8f6;
+}
+
+.btn-text--dark {
+  color: $ink;
 }
 
 .error {
   display: block;
   margin-top: 16rpx;
+  font-size: $fs-meta;
+  color: $signal;
+}
+
+/* ---------- 快捷入口 ---------- */
+.links {
+  margin-top: $sp-3;
+  padding: $sp-4 $sp-4 8rpx;
+}
+
+.link-row {
+  display: flex;
+  align-items: center;
+  padding: $sp-3 0;
+  border-bottom: 1rpx solid $paper-2;
+}
+
+.link-row--last {
+  border-bottom: none;
+}
+
+.link-title {
+  font-family: $font-display;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: $ink;
+  flex-shrink: 0;
+}
+
+.link-desc {
+  flex: 1;
+  margin-left: $sp-3;
+  font-size: 22rpx;
+  color: $ink-3;
+  text-align: right;
+}
+
+.link-arrow {
+  margin-left: 14rpx;
   font-size: 24rpx;
-  color: #dc2626;
+  color: $ink-4;
+}
+
+/* ---------- 退出 ---------- */
+.logout {
+  margin-top: $sp-5;
+  padding: $sp-3;
+  text-align: center;
+}
+
+.logout-text {
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+  color: $signal;
+}
+
+/* ---------- 未登录 ---------- */
+.guest-hero {
+  padding: $sp-6 $sp-5;
+  background:
+    radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.24), rgba(15, 157, 143, 0) 58%),
+    linear-gradient(158deg, #08110f 0%, #0e2925 100%);
+  border-radius: $r-shell;
+}
+
+.eyebrow--light {
+  color: rgba(242, 245, 243, 0.6);
+}
+
+.guest-title {
+  display: block;
+  margin-top: $sp-4;
+  font-family: $font-display;
+  font-size: 56rpx;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 2rpx;
+  color: #f4f8f6;
+}
+
+.guest-lede {
+  display: block;
+  margin-top: $sp-3;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: rgba(242, 245, 243, 0.66);
+}
+
+.guest-actions {
+  margin-top: $sp-4;
 }
 </style>

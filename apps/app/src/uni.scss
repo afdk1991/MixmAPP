@@ -1,11 +1,69 @@
-/* 全局 SCSS 变量：uni-app 会自动注入到每个 <style lang="scss"> */
-$mixmapp-ink: #0b1220;
-$mixmapp-slate: #475569;
-$mixmapp-muted: #94a3b8;
-$mixmapp-line: #e2e8f0;
-$mixmapp-surface: #f6f7f9;
-$mixmapp-teal: #0f9d8f;
-$mixmapp-teal-deep: #0b7f74;
-$mixmapp-amber: #f59e0b;
-$mixmapp-danger: #dc2626;
-$mixmapp-radius: 24rpx;
+/* MixmAPP 设计令牌 · 冷调通行证体系
+ * canvas = 纸面  /  world = 深墨  /  accent = 青  /  ink = 文字
+ * 所有页面只从这组值里取值，不再写裸色值。
+ */
+
+/* ---------- 色板 ---------- */
+$paper: #f2f5f3;        // 页面底：冷调浅纸
+$paper-2: #e8edeb;      // 次级底 / 骨架
+$paper-3: #dbe3df;      // 发丝线 / 描边
+$shell: #ffffff;        // 只作为卡片外壳，不作为页面底
+$ink: #0d1917;          // 正文：深墨绿黑
+$ink-2: #33443f;
+$ink-3: #697b76;
+$ink-4: #97a5a1;
+$deep: #08110f;         // 主视觉深场
+$deep-2: #0e2925;
+$deep-3: #14453c;
+$brand: #0f9d8f;        // 品牌青
+$brand-deep: #0a7a70;
+$brand-soft: #e3f2ef;
+$signal: #b33a2b;       // 仅用于错误 / 危险操作
+$amber: #a9761a;        // 仅用于提醒态
+
+/* ---------- 圆角：四个角色值 ---------- */
+$r-shell: 56rpx;        // 大区块 / 通行证
+$r-card: 32rpx;         // 常规卡片
+$r-control: 16rpx;      // 输入框 / 小标签
+$r-pill: 999rpx;        // 按钮 / chip
+
+/* ---------- 阴影：三层有色影 ---------- */
+$shadow-card: 0 1rpx 2rpx rgba(13, 25, 23, 0.04), 0 10rpx 24rpx -10rpx rgba(13, 25, 23, 0.1),
+  0 30rpx 60rpx -36rpx rgba(13, 25, 23, 0.14);
+$shadow-lift: 0 2rpx 4rpx rgba(13, 25, 23, 0.05), 0 18rpx 40rpx -14rpx rgba(13, 25, 23, 0.16),
+  0 44rpx 80rpx -40rpx rgba(13, 25, 23, 0.18);
+
+/* ---------- 字体：衬线展示 + 无衬线正文 + 等宽数据 ---------- */
+$font-display: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+$font-body: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Hiragino Sans GB',
+  'Microsoft YaHei', sans-serif;
+$font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Roboto Mono', Consolas, 'Courier New', monospace;
+
+/* ---------- 字阶 ---------- */
+$fs-display: 72rpx;
+$fs-h1: 48rpx;
+$fs-h2: 36rpx;
+$fs-body: 30rpx;
+$fs-meta: 24rpx;
+$fs-micro: 22rpx;
+
+/* ---------- 间距（base 8rpx = 4px） ---------- */
+$sp-1: 8rpx;
+$sp-2: 16rpx;
+$sp-3: 24rpx;
+$sp-4: 32rpx;
+$sp-5: 40rpx;
+$sp-6: 48rpx;
+$sp-8: 64rpx;
+
+/* ---------- 兼容旧变量名 ---------- */
+$mixmapp-ink: $ink;
+$mixmapp-slate: $ink-2;
+$mixmapp-muted: $ink-3;
+$mixmapp-line: $paper-3;
+$mixmapp-surface: $paper;
+$mixmapp-teal: $brand;
+$mixmapp-teal-deep: $brand-deep;
+$mixmapp-amber: $amber;
+$mixmapp-danger: $signal;
+$mixmapp-radius: $r-card;

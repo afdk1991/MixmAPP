@@ -1,29 +1,37 @@
 <template>
   <view class="page">
     <view class="head">
-      <view class="head-row">
-        <view>
-          <text class="title">MixmAPP 商城</text>
+      <view class="head-top">
+        <view class="head-title">
+          <text class="eyebrow">MIXMAPP STORE</text>
+          <text class="title">商城</text>
           <text class="sub">单码多端周边 · 首发限定</text>
         </view>
-        <view class="cart-btn" hover-class="pressed" @tap="goCart">
-          <text class="cart-icon">🛒</text>
+        <view class="cart-btn" hover-class="is-press" @tap="goCart">
           <text class="cart-text">购物车</text>
+          <text class="cart-arrow mono">→</text>
         </view>
       </view>
 
       <view class="search">
+        <view class="search-mark">
+          <view class="search-lens" />
+          <view class="search-handle" />
+        </view>
         <input
           v-model="keyword"
           class="search-input"
-          placeholder="搜商品，如 充电器 / 礼盒"
+          placeholder="搜商品，如 通行证 / 支架"
+          placeholder-class="field-ph"
           confirm-type="search"
           @confirm="load"
         />
-        <view class="search-go" hover-class="pressed" @tap="load">搜索</view>
+        <view class="search-go" hover-class="is-press" @tap="load">
+          <text class="search-go-text">搜索</text>
+        </view>
       </view>
 
-      <scroll-view scroll-x class="tabs">
+      <scroll-view :scroll-x="true" class="tabs" :show-scrollbar="false">
         <view
           v-for="item in categories"
           :key="item.key"
@@ -31,66 +39,107 @@
           :class="{ 'tab--active': active === item.key }"
           @tap="switchCategory(item.key)"
         >
-          {{ item.label }}
+          <text class="tab-label">{{ item.label }}</text>
+          <view class="tab-line" />
         </view>
       </scroll-view>
     </view>
 
-    <view v-if="loading" class="hint center">加载中…</view>
-    <view v-else-if="error" class="hint center">
-      <text>{{ error }}</text>
-      <view class="retry" hover-class="pressed" @tap="load">重新加载</view>
+    <view v-if="loading" class="grid wrap">
+      <view v-for="i in 4" :key="i" class="product">
+        <view class="sk cover-sk" />
+        <view class="p-info">
+          <view class="sk sk-line" />
+          <view class="sk sk-line sk-line--short" />
+          <view class="sk sk-price" />
+        </view>
+      </view>
     </view>
-    <view v-else-if="products.length === 0" class="hint center">暂无商品</view>
 
-    <view v-else class="list">
-      <view
-        v-for="product in products"
-        :key="product.id"
-        class="card product"
-        hover-class="pressed"
-        @tap="openDetail(product)"
-      >
-        <view class="cover" :style="{ backgroundColor: product.cover }">
-          <text class="cover-char">{{ product.title.slice(0, 1) }}</text>
-        </view>
-        <view class="info">
-          <text class="name">{{ product.title }}</text>
-          <text class="desc">{{ product.subtitle }}</text>
-          <view class="tags">
-            <text v-for="tag in product.tags" :key="tag" class="tag">{{ tag }}</text>
+    <view v-else-if="error" class="empty">
+      <view class="empty-mark mono">!</view>
+      <text class="empty-title">没能取到商品</text>
+      <text class="empty-sub">{{ error }}</text>
+      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
+    </view>
+
+    <view v-else-if="products.length === 0" class="empty">
+      <view class="empty-mark">空</view>
+      <text class="empty-title">这个分类还没有商品</text>
+      <text class="empty-sub">换个分类或清空关键词再试。</text>
+    </view>
+
+    <view v-else>
+      <view class="list-head">
+        <text class="micro mono">{{ products.length }} ITEMS</text>
+        <text class="micro mono">按上架顺序</text>
+      </view>
+      <view class="grid wrap">
+        <view
+          v-for="product in products"
+          :key="product.id"
+          class="product"
+          hover-class="is-press"
+          @tap="openDetail(product)"
+        >
+          <view class="cover" :style="{ backgroundColor: product.cover }">
+            <view class="cover-scrim" />
+            <view class="cover-ring" />
+            <text class="cover-tag mono">{{ product.category }}</text>
+            <text class="cover-char">{{ product.title.slice(0, 1) }}</text>
+            <view class="cover-add" hover-class="is-press" @tap.stop="addToCart(product)">
+              <text class="cover-add-text mono">+</text>
+            </view>
           </view>
-          <view class="price-row">
-            <text class="price">¥{{ price(product.priceFen) }}</text>
-            <text v-if="product.originalPriceFen > 0" class="price-old">¥{{ price(product.originalPriceFen) }}</text>
-            <text class="stock">库存 {{ product.stock }}</text>
+          <view class="p-info">
+            <text class="p-name">{{ product.title }}</text>
+            <text class="p-sub">{{ product.subtitle }}</text>
+            <view class="p-foot">
+              <view class="p-price">
+                <text class="p-cur mono">¥</text>
+                <text class="p-amount mono">{{ price(product.priceFen) }}</text>
+                <text v-if="product.originalPriceFen > 0" class="p-old mono">¥{{ price(product.originalPriceFen) }}</text>
+              </view>
+              <text class="p-stock mono">余 {{ product.stock }}</text>
+            </view>
           </view>
         </view>
-        <view class="add" hover-class="pressed" @tap.stop="addToCart(product)">加购</view>
+      </view>
+      <view class="list-foot">
+        <text class="mono foot-note">库存与价格以服务端实时数据为准</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { ProductDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
 
-const categories = [
+/** 分类由服务端商品数据推导，避免前端写死与后端不一致的分类。 */
+const facets = ref<string[]>([]);
+const categories = computed(() => [
   { key: '', label: '全部' },
-  { key: 'featured', label: '精选' },
-  { key: 'digital', label: '数码' },
-  { key: 'life', label: '生活' },
-  { key: 'wear', label: '穿搭' },
-];
+  ...facets.value.map((name) => ({ key: name, label: name })),
+]);
 
 const active = ref('');
 const keyword = ref('');
 const products = ref<ProductDto[]>([]);
 const loading = ref(false);
 const error = ref('');
+
+async function loadFacets(): Promise<void> {
+  try {
+    const all = await mallApi.listProducts({ pageSize: 50 });
+    const names = Array.from(new Set(all.map((p) => p.category).filter(Boolean)));
+    facets.value = names.slice(0, 6);
+  } catch {
+    facets.value = [];
+  }
+}
 
 function price(fen: number): string {
   return (fen / 100).toFixed(2);
@@ -140,199 +189,372 @@ async function addToCart(product: ProductDto): Promise<void> {
 }
 
 onShow(() => {
+  if (!facets.value.length) void loadFacets();
   void load();
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page {
   min-height: 100vh;
-  background: #f6f7f9;
-  padding-bottom: 40rpx;
+  background: $paper;
+  padding: 0 $sp-3 $sp-8;
 }
+
+/* ---------- 页头 ---------- */
 .head {
-  padding: 32rpx 32rpx 8rpx;
-  background: linear-gradient(160deg, #0f9d8f 0%, #0b7a70 100%);
-  border-bottom-left-radius: 32rpx;
-  border-bottom-right-radius: 32rpx;
+  padding: $sp-5 4rpx $sp-3;
 }
-.head-row {
+
+.head-top {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
+  justify-content: space-between;
 }
+
+.head-title {
+  flex: 1;
+}
+
 .title {
   display: block;
-  font-size: 40rpx;
-  font-weight: 700;
-  color: #ffffff;
+  margin-top: 16rpx;
+  font-family: $font-display;
+  font-size: $fs-h1;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 1rpx;
+  color: $ink;
 }
+
 .sub {
   display: block;
-  margin-top: 6rpx;
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.82);
+  margin-top: 10rpx;
+  font-size: $fs-meta;
+  letter-spacing: 0.5rpx;
+  color: $ink-3;
 }
+
 .cart-btn {
+  margin-top: 20rpx;
   display: flex;
   align-items: center;
-  padding: 10rpx 18rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.16);
+  height: 64rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-pill;
+  background: $shell;
 }
+
 .cart-text {
+  font-size: $fs-micro;
+  letter-spacing: 0.5rpx;
+  color: $ink-2;
+}
+
+.cart-arrow {
   margin-left: 8rpx;
-  font-size: 24rpx;
-  color: #ffffff;
+  font-size: $fs-micro;
+  color: $ink-4;
 }
-.cart-icon {
-  font-size: 28rpx;
-}
+
 .search {
   display: flex;
   align-items: center;
-  margin-top: 24rpx;
-  background: #ffffff;
-  border-radius: 999rpx;
-  padding: 8rpx 8rpx 8rpx 24rpx;
+  margin-top: $sp-4;
+  height: 96rpx;
+  padding: 0 8rpx 0 26rpx;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  box-shadow: $shadow-card;
 }
+
+.search-mark {
+  position: relative;
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+
+.search-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24rpx;
+  height: 24rpx;
+  border: 2rpx solid $ink-4;
+  border-radius: 50%;
+}
+
+.search-handle {
+  position: absolute;
+  right: 0;
+  bottom: 2rpx;
+  width: 16rpx;
+  height: 2rpx;
+  background: $ink-4;
+  transform: rotate(45deg);
+}
+
 .search-input {
   flex: 1;
-  font-size: 26rpx;
-  height: 56rpx;
+  height: 96rpx;
+  font-size: 28rpx;
+  color: $ink;
 }
+
 .search-go {
-  padding: 10rpx 28rpx;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 24rpx;
-}
-.tabs {
-  margin-top: 22rpx;
-  white-space: nowrap;
-}
-.tab {
-  display: inline-block;
-  padding: 10rpx 24rpx;
-  margin-right: 14rpx;
-  border-radius: 999rpx;
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.14);
-}
-.tab--active {
-  background: #ffffff;
-  color: #0b7a70;
-  font-weight: 600;
-}
-.list {
-  padding: 24rpx 24rpx 0;
-}
-.card {
-  background: #ffffff;
-  border-radius: 24rpx;
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.06);
-}
-.product {
-  display: flex;
-  padding: 24rpx;
-  margin-bottom: 22rpx;
-  align-items: center;
-}
-.cover {
-  width: 168rpx;
-  height: 168rpx;
-  border-radius: 20rpx;
+  height: 72rpx;
+  padding: 0 28rpx;
+  border-radius: $r-pill;
+  background: $ink;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
 }
-.cover-char {
-  color: #ffffff;
-  font-size: 56rpx;
-  font-weight: 700;
-  opacity: 0.9;
+
+.search-go-text {
+  font-size: $fs-meta;
+  letter-spacing: 1rpx;
+  color: #f4f8f6;
 }
-.info {
-  flex: 1;
-  margin-left: 22rpx;
+
+.tabs {
+  margin-top: $sp-4;
+  white-space: nowrap;
 }
-.name {
-  display: block;
-  font-size: 30rpx;
+
+.tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12rpx 0 0;
+  margin-right: 40rpx;
+}
+
+.tab-label {
+  font-size: 26rpx;
+  letter-spacing: 0.5rpx;
+  color: $ink-3;
+  padding-bottom: 12rpx;
+}
+
+.tab--active .tab-label {
+  color: $ink;
   font-weight: 600;
-  color: #0f172a;
 }
-.desc {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 24rpx;
-  color: #64748b;
+
+.tab-line {
+  width: 100%;
+  height: 3rpx;
+  border-radius: 3rpx;
+  background: transparent;
 }
-.tags {
+
+.tab--active .tab-line {
+  background: $brand;
+}
+
+/* ---------- 商品网格 ---------- */
+.list-head {
+  display: flex;
+  justify-content: space-between;
+  padding: $sp-2 4rpx $sp-3;
+}
+
+.wrap {
   display: flex;
   flex-wrap: wrap;
-  margin-top: 10rpx;
+  justify-content: space-between;
 }
-.tag {
-  margin-right: 10rpx;
-  padding: 2rpx 12rpx;
-  border-radius: 8rpx;
-  background: #eef6f4;
-  color: #0b7a70;
+
+.product {
+  width: 48.6%;
+  margin-bottom: $sp-3;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+  box-shadow: $shadow-card;
+  overflow: hidden;
+  transition: transform 0.16s ease;
+}
+
+.cover {
+  position: relative;
+  height: 300rpx;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(150deg, rgba(8, 17, 15, 0.04) 12%, rgba(8, 17, 15, 0.42) 100%);
+}
+
+.cover-ring {
+  position: absolute;
+  width: 210rpx;
+  height: 210rpx;
+  border-radius: 50%;
+  border: 1rpx solid rgba(255, 255, 255, 0.22);
+  top: 46rpx;
+  left: 50%;
+  margin-left: -105rpx;
+}
+
+.cover-tag {
+  position: absolute;
+  left: 20rpx;
+  top: 20rpx;
+  font-size: 18rpx;
+  letter-spacing: 2rpx;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  border-radius: 6rpx;
+  padding: 4rpx 10rpx;
+  z-index: 2;
+}
+
+.cover-char {
+  position: relative;
+  z-index: 2;
+  font-family: $font-display;
+  font-size: 84rpx;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.cover-add {
+  position: absolute;
+  right: 16rpx;
+  bottom: 16rpx;
+  z-index: 3;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-add-text {
+  font-size: 34rpx;
+  line-height: 1;
+  color: $ink;
+}
+
+.p-info {
+  padding: 20rpx 22rpx 22rpx;
+  display: flex;
+  flex-direction: column;
+  min-height: 168rpx;
+}
+
+.p-name {
+  font-family: $font-display;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.p-sub {
+  display: block;
+  margin-top: 6rpx;
   font-size: 20rpx;
+  color: $ink-3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.price-row {
+
+.p-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 16rpx;
+}
+
+.p-price {
   display: flex;
   align-items: baseline;
-  margin-top: 12rpx;
 }
-.price {
-  font-size: 32rpx;
+
+.p-cur {
+  font-size: 20rpx;
+  color: $ink-2;
+  margin-right: 2rpx;
+}
+
+.p-amount {
+  font-size: 34rpx;
   font-weight: 700;
-  color: #d92d20;
+  color: $ink;
 }
-.price-old {
-  margin-left: 10rpx;
-  font-size: 22rpx;
-  color: #94a3b8;
+
+.p-old {
+  margin-left: 8rpx;
+  font-size: 18rpx;
+  color: $ink-4;
   text-decoration: line-through;
 }
-.stock {
-  margin-left: auto;
-  font-size: 22rpx;
-  color: #94a3b8;
+
+.p-stock {
+  font-size: 18rpx;
+  color: $ink-4;
 }
-.add {
-  margin-left: 16rpx;
-  padding: 14rpx 22rpx;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 24rpx;
-  flex-shrink: 0;
+
+.cover-sk {
+  height: 300rpx;
+  border-radius: 0;
 }
-.hint {
-  display: block;
-  padding: 60rpx 32rpx;
-  color: #64748b;
-  font-size: 26rpx;
+
+.sk-line {
+  height: 28rpx;
+  margin-top: 14rpx;
+  width: 82%;
 }
-.center {
+
+.sk-line--short {
+  width: 54%;
+}
+
+.sk-price {
+  height: 32rpx;
+  margin-top: 20rpx;
+  width: 40%;
+}
+
+.list-foot {
+  padding: $sp-3 4rpx $sp-6;
   text-align: center;
 }
-.retry {
-  margin: 24rpx auto 0;
-  width: 220rpx;
-  padding: 14rpx 0;
-  border-radius: 999rpx;
-  background: #0f9d8f;
-  color: #ffffff;
-  font-size: 26rpx;
+
+.foot-note {
+  font-size: 18rpx;
+  letter-spacing: 1rpx;
+  color: $ink-4;
 }
-.pressed {
-  opacity: 0.82;
+
+.retry {
+  margin-top: $sp-4;
+  padding: 0 40rpx;
 }
 </style>

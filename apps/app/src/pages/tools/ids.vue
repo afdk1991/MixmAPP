@@ -1,6 +1,7 @@
 <template>
   <view class="page">
     <view class="head">
+      <text class="eyebrow">ID FORGE</text>
       <text class="title">ID 试算器</text>
       <text class="hint">同一个发号器同时产出主键、雪花数值、MixmAPP 号码、ULID 与 UUIDv7；主键形态由服务端 ID_STRATEGY 决定。</text>
     </view>
@@ -11,53 +12,81 @@
         :key="s.key"
         class="seg-item"
         :class="{ 'seg-item--on': strategy === s.key }"
+        hover-class="is-press"
         @tap="strategy = s.key"
       >
-        {{ s.name }}
+        <text class="seg-label">{{ s.name }}</text>
       </view>
     </view>
 
-    <view class="card">
-      <view class="btn btn--primary" :class="{ 'btn--disabled': loading }" @tap="generate">
-        {{ loading ? '生成中…' : '生成一个 ID' }}
+    <view class="sheet panel">
+      <view class="gen-row">
+        <view class="gen-text">
+          <text class="gen-k mono">GENERATE</text>
+          <text class="gen-title">发一个号</text>
+        </view>
+        <view
+          class="gen-btn"
+          :class="{ 'btn--disabled': loading }"
+          hover-class="is-press"
+          @tap="generate"
+        >
+          <text class="gen-btn-text mono">{{ loading ? '…' : '→' }}</text>
+        </view>
       </view>
+      <text class="gen-note mono">{{ loading ? '正在向服务端取号' : `当前策略 · ${strategy}` }}</text>
 
-      <view v-if="error" class="error">{{ error }}</view>
+      <view v-if="error" class="error-row">
+        <text class="error-mark mono">!</text>
+        <text class="error-text">{{ error }}</text>
+      </view>
 
       <block v-if="result">
-        <view class="result-block">
-          <text class="result-label">MixmAPP 号码（对外展示）</text>
-          <view class="row">
-            <text class="result-mono mono">{{ result.accountNo }}</text>
-            <text class="copy" @tap="copy(result.accountNo)">复制</text>
+        <view class="result">
+          <view class="result-head">
+            <text class="result-k mono">MIXMAPP 号码 / 对外展示</text>
+            <view class="copy" hover-class="is-press" @tap="copy(result.accountNo)">
+              <text class="copy-text mono">复制</text>
+            </view>
           </view>
+          <text class="account mono">{{ result.accountNo }}</text>
         </view>
-        <view class="result-block">
-          <text class="result-label">主键（{{ strategy }}）</text>
-          <text class="result-value mono">{{ result.id }}</text>
+
+        <view class="kv">
+          <text class="kv-k mono">主键 · {{ strategy }}</text>
+          <text class="kv-v mono">{{ result.id }}</text>
         </view>
-        <view class="result-block">
-          <text class="result-label">雪花数值（分片/排查用）</text>
-          <text class="result-value mono">{{ result.snowflake }}</text>
+        <view v-if="result.snowflake !== result.id" class="kv">
+          <text class="kv-k mono">雪花数值 · 分片/排查</text>
+          <text class="kv-v mono">{{ result.snowflake }}</text>
         </view>
-        <view class="result-block">
-          <text class="result-label">ULID</text>
-          <text class="result-value mono">{{ result.ulid }}</text>
+        <view class="kv">
+          <text class="kv-k mono">ULID</text>
+          <text class="kv-v mono">{{ result.ulid }}</text>
         </view>
-        <view class="result-block last">
-          <text class="result-label">UUIDv7</text>
-          <text class="result-value mono">{{ result.uuidV7 }}</text>
+        <view class="kv kv--last">
+          <text class="kv-k mono">UUIDv7</text>
+          <text class="kv-v mono">{{ result.uuidV7 }}</text>
         </view>
       </block>
+
+      <view v-else class="placeholder">
+        <text class="placeholder-mark mono">∅</text>
+        <text class="placeholder-text mono">NO OUTPUT YET</text>
+        <text class="placeholder-hint">选择策略后点「发一个号」，结果会落在这里。</text>
+      </view>
     </view>
 
-    <view class="card explain">
-      <text class="section">三套策略怎么选</text>
-      <view v-for="s in strategies" :key="s.key" class="explain-row">
+    <view class="sheet explain">
+      <text class="eyebrow">STRATEGIES</text>
+      <text class="explain-title">三套策略怎么选</text>
+      <view v-for="(s, i) in strategies" :key="s.key" class="explain-row" :class="{ 'explain-row--last': i === strategies.length - 1 }">
         <text class="explain-name">{{ s.name }}</text>
         <text class="explain-desc">{{ s.desc }}</text>
       </view>
     </view>
+
+    <text class="foot mono">MIXMAPP · ID STRATEGY</text>
   </view>
 </template>
 
@@ -119,129 +148,286 @@ function copy(text: string): void {
 
 <style scoped lang="scss">
 .page {
-  padding: 32rpx;
+  min-height: 100vh;
+  background: $paper;
+  padding: $sp-5 $sp-4 $sp-8;
+}
+
+.head {
+  margin-bottom: $sp-4;
 }
 
 .title {
   display: block;
-  font-size: 44rpx;
-  font-weight: 700;
+  margin-top: 16rpx;
+  font-family: $font-display;
+  font-size: $fs-h1;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 1rpx;
+  color: $ink;
 }
 
-.hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: #94a3b8;
-  line-height: 1.6;
+.head .hint {
+  margin-top: 14rpx;
 }
 
+/* ---------- 策略切换 ---------- */
 .seg {
   display: flex;
-  background: #eef1f5;
-  border-radius: 999rpx;
-  padding: 6rpx;
-  margin: 28rpx 0 24rpx;
+  padding: 8rpx;
+  background: $paper-2;
+  border-radius: $r-pill;
+  margin-bottom: $sp-4;
 }
 
 .seg-item {
   flex: 1;
-  text-align: center;
-  padding: 18rpx 0;
-  font-size: 26rpx;
-  color: #475569;
-  border-radius: 999rpx;
+  height: 76rpx;
+  border-radius: $r-pill;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .seg-item--on {
-  background: #ffffff;
-  color: #0b1220;
+  background: $ink;
+  box-shadow: 0 10rpx 24rpx -14rpx rgba(13, 25, 23, 0.5);
+}
+
+.seg-label {
+  font-size: 26rpx;
+  letter-spacing: 0.5rpx;
+  color: $ink-2;
+}
+
+.seg-item--on .seg-label {
+  color: #f4f8f6;
   font-weight: 600;
 }
 
-.error {
-  margin-top: 20rpx;
-  font-size: 24rpx;
-  color: #dc2626;
+/* ---------- 发号台 ---------- */
+.panel {
+  padding: $sp-4;
 }
 
-.result-block {
-  margin-top: 30rpx;
-  padding-bottom: 22rpx;
-  border-bottom: 1rpx solid #f1f5f9;
-}
-
-.result-block.last {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.result-label {
-  display: block;
-  font-size: 22rpx;
-  color: #94a3b8;
-  margin-bottom: 10rpx;
-}
-
-.row {
+.gen-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.result-mono {
-  font-size: 38rpx;
-  font-weight: 700;
-  color: #0b1220;
-  letter-spacing: 0.5rpx;
-  min-width: 0;
-  word-break: break-all;
+.gen-k {
+  display: block;
+  font-size: 20rpx;
+  letter-spacing: 3rpx;
+  color: $ink-4;
 }
 
-.result-value {
+.gen-title {
   display: block;
-  font-size: 24rpx;
-  color: #334155;
-  word-break: break-all;
-  line-height: 1.5;
+  margin-top: 8rpx;
+  font-family: $font-display;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: $ink;
+}
+
+.gen-btn {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: $ink;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12rpx 28rpx -12rpx rgba(13, 25, 23, 0.55);
+}
+
+.gen-btn-text {
+  font-size: 34rpx;
+  color: #f4f8f6;
+}
+
+.gen-note {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: $ink-4;
+}
+
+.error-row {
+  display: flex;
+  align-items: flex-start;
+  margin-top: $sp-3;
+}
+
+.error-mark {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: $signal;
+  color: #ffffff;
+  font-size: 20rpx;
+  line-height: 32rpx;
+  text-align: center;
+  margin-right: 12rpx;
+}
+
+.error-text {
+  flex: 1;
+  font-size: $fs-meta;
+  color: $signal;
+}
+
+/* ---------- 结果 ---------- */
+.result {
+  margin-top: $sp-4;
+  padding: $sp-4;
+  background: #f7faf8;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.result-k {
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: $ink-3;
 }
 
 .copy {
-  font-size: 22rpx;
-  color: #0f9d8f;
+  height: 48rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-pill;
+  display: flex;
+  align-items: center;
 }
 
-.section {
+.copy-text {
+  font-size: 20rpx;
+  color: $brand-deep;
+}
+
+.account {
   display: block;
-  font-size: 28rpx;
-  font-weight: 600;
-  margin-bottom: 18rpx;
+  margin-top: 12rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: $ink;
+  word-break: break-all;
 }
 
+.kv {
+  padding: $sp-3 0;
+  border-top: 1rpx solid $paper-2;
+}
+
+.kv--last {
+  padding-bottom: 0;
+}
+
+.kv-k {
+  display: block;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: $ink-4;
+}
+
+.kv-v {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: $ink-2;
+  word-break: break-all;
+}
+
+.placeholder {
+  margin-top: $sp-4;
+  padding: $sp-6 $sp-3;
+  border: 1rpx dashed $paper-3;
+  border-radius: $r-control;
+  text-align: center;
+}
+
+.placeholder-mark {
+  display: block;
+  font-size: 40rpx;
+  color: $ink-4;
+}
+
+.placeholder-text {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  letter-spacing: 3rpx;
+  color: $ink-4;
+}
+
+.placeholder-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $fs-micro;
+  color: $ink-3;
+}
+
+/* ---------- 说明 ---------- */
 .explain {
-  margin-top: 24rpx;
+  margin-top: $sp-3;
+  padding: $sp-4;
+}
+
+.explain-title {
+  display: block;
+  margin-top: 12rpx;
+  font-family: $font-display;
+  font-size: $fs-h2;
+  font-weight: 600;
+  color: $ink;
 }
 
 .explain-row {
-  padding: 16rpx 0;
-  border-bottom: 1rpx dashed #e2e8f0;
+  padding: $sp-3 0;
+  border-bottom: 1rpx solid $paper-2;
 }
 
-.explain-row:last-child {
+.explain-row--last {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .explain-name {
   display: block;
-  font-size: 26rpx;
+  font-family: $font-display;
+  font-size: 30rpx;
   font-weight: 600;
-  margin-bottom: 6rpx;
+  color: $ink;
 }
 
 .explain-desc {
   display: block;
-  font-size: 23rpx;
-  color: #64748b;
-  line-height: 1.6;
+  margin-top: 8rpx;
+  font-size: $fs-micro;
+  line-height: 1.7;
+  color: $ink-3;
+}
+
+.foot {
+  display: block;
+  margin-top: $sp-6;
+  text-align: center;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+  color: $ink-4;
 }
 </style>
