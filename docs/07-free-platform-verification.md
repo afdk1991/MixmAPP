@@ -344,3 +344,64 @@ PG 侧是 `update products set stock = stock + $2 where id = $1`）。
 2. 设置 `ADMIN_TOKEN`，管理接口才会从 404 变成可用。
 
 填好后两种切法等效：`sudo bash /opt/mixmapp/deploy/db-target.sh cloudbase`，或带令牌调 `POST /api/v1/admin/db/switch`（后者不重启进程）。
+## 14. 下单幂等、超时取消、管理面启用（2026-11-12）
+
+### 14.1 下单幂等：同一 Idempotency-Key 只落一张单
+
+客户端在 `POST /api/v1/mall/orders` 带上 `Idempotency-Key` 头。服务端流程是
+**抢占 → 落单 → 回写**：先往 `order_requests(user_id, key)` 插一行占位，插不进去说明这个键
+已被用过——若已有 `order_no` 就直接返回那张单，若还没有（并发请求正在处理）返回 409 让客户端稍后重试。
+下单本身失败时释放占位，允许用同一个键重试；成功则把 `order_no` 回写进占位行。
+因为扣库存发生在「抢占成功之后」，所以重试不会重复扣库存。
+
+迁移：`infra/sql/0004_order_requests.sql`（建表 + `orders(status, created_at)` 索引）。
+两套库都已落下：VPS 自建 PG 由 `RUN_MIGRATIONS=1` 自动执行；CloudBase 云 PG 走
+`applyMigration`（版本 `20261112141000`，任务 `task-abf52e109daa48bf`，Status=Succeed），
+复核 `information_schema.tables` 显示 `mixmapp` 下 **11 张表**，`order_requests` 已在列。
+
+### 14.2 待支付订单超时取消
+
+`ORDER_TTL_MINUTES`（默认 30，0 表示关闭）。API 进程内每分钟扫一次：取 `status=pending`
+且 `created_at` 早于 TTL 的订单，用**条件状态流转**（`update ... where id=$1 and status=$2`）
+把 pending 改成 cancelled，只有真正改成功的那张才按 `order_items` 逐行归还库存。
+条件流转保证「刚好在这一秒支付成功」的订单不会被误取消。
+
+管理面提供手动触发：`POST /api/v1/admin/orders/sweep`（同样需要 `x-admin-token`），返回本次取消的订单号。
+
+### 14.3 管理面已启用（不再是 404）
+
+`ADMIN_TOKEN` 已写入服务器 `/etc/mixmapp/api.env`（令牌只保存在服务器与本机
+`%USERPROFILE%\.mixmapp\admin_token.txt`，**不进仓库、不写文档**），服务重启后生效：
+
+```
+GET /api/v1/admin/db  (带 x-admin-token)
+→ {"data":{"target":"cloudbase","driver":"postgres","host":"127.0.0.1:5432","source":"DATABASE_URL",
+          "available":{"cloudbase":{"configured":false,"host":"none"},"server":{"configured":false,"host":"none"}}}}
+GET /admin/db（错误令牌）→ 404
+POST /admin/db/switch {"target":"cloudbase"} → 409 "cloudbase 还没有配置连接串，先写入环境变量再切换"
+```
+
+`available.cloudbase.configured=false` 就是「云 PG 连接串还没填」的机器可读证据。
+
+### 14.4 线上验收 18/18
+
+```
+✓ 商品列表可读                 count=6
+✓ 购物车加入 + 下单成功         orderNo=MOMWDMMSX8948481 status=201
+✓ 同一幂等键重试返回同一单       retry=MOMWDMMSX8948481
+✓ 下单后库存只减 1（重试未重复扣） before=118 after=117
+✓ 管理面可读数据库落点           target=cloudbase host=127.0.0.1:5432 source=DATABASE_URL
+✓ 管理面错误令牌被拒             status=404
+✓ 限流触发（第 36 次请求）
+合计：18/18 通过
+```
+
+单元测试同步扩到 62 例（新增：同键重试同单且库存只扣一次、不同键两笔独立单、超时取消后状态为
+cancelled 且库存归位）。
+
+### 14.5 仍然缺的一件（不是代码）
+
+`DATABASE_URL_CLOUDBASE` 仍为空。云 PG 侧 schema 已经和代码对齐（11 张表、4 条迁移），
+但连接串只在 CloudBase 控制台可见，MCP 不回传。填进 `api.env` 后，带令牌调
+`POST /admin/db/switch {"target":"cloudbase"}` 即可热切，切成功判据是 `/healthz` 的
+`dbSource` 变成 `DATABASE_URL_CLOUDBASE`、`dbHost` 变成云 PG 地址。
