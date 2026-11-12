@@ -1,6 +1,7 @@
 import type { Config, DbTarget } from '../config.js';
+import { createGatewayPool } from './gateway.js';
 import { MemoryStore } from './memory.js';
-import { createStore } from './postgres.js';
+import { createStore, PgStore } from './postgres.js';
 import type { Store } from './types.js';
 
 /**
@@ -27,7 +28,16 @@ const urlOf = (config: Config, target: DbTarget): string =>
 
 export function createStoreSwitcher(config: Config, makeStore: (url: string) => Store = createStore): StoreSwitcher {
   let currentUrl = config.databaseUrl;
-  let current: Store = currentUrl ? makeStore(currentUrl) : new MemoryStore();
+  // 线上默认走 CloudBase PG HTTP 网关（没有可直连的 TCP 连接串）
+  const gatewayPool =
+    config.pgGateway.url && config.pgGateway.apiKey
+      ? createGatewayPool(config.pgGateway.url, config.pgGateway.apiKey, config.pgGateway.schema)
+      : null;
+  let current: Store = gatewayPool
+    ? new PgStore(gatewayPool)
+    : currentUrl
+      ? makeStore(currentUrl)
+      : new MemoryStore();
 
   // 顶层代理：每次取属性都读 current，方法调用仍然是原对象上的方法
   const proxy = new Proxy({} as Store, {

@@ -1,4 +1,5 @@
 import pg from 'pg';
+import type { Queryable } from './gateway.js';
 import type {
   BindingRecord,
   CartItemRecord,
@@ -16,6 +17,17 @@ import type {
 const { Pool } = pg;
 
 type Row = Record<string, unknown>;
+
+type QueryOutcome = { rows: Row[]; rowCount: number | null };
+type PoolClientLike = {
+  query(sql: string, params?: unknown[]): Promise<QueryOutcome>;
+  release(): void;
+};
+/** pg.Pool 与 CloudBase PG 网关客户端共用的最小接口。 */
+type PoolLike = Queryable & {
+  connect?: () => Promise<PoolClientLike>;
+  end?: () => Promise<void>;
+};
 
 const toDate = (v: unknown): Date => (v instanceof Date ? v : new Date(v as string));
 const toDateOrNull = (v: unknown): Date | null => (v == null ? null : toDate(v));
@@ -57,15 +69,19 @@ function mapBinding(row: Row): BindingRecord {
 /** PostgreSQL 驱动：生产环境唯一使用的持久化实现。 */
 export class PgStore implements Store {
   readonly driver = 'postgres' as const;
-  private readonly pool: pg.Pool;
+  private readonly pool: PoolLike;
 
-  constructor(connectionString: string) {
-    this.pool = new Pool({
-      connectionString,
-      max: Number(process.env['PG_POOL_MAX'] ?? 10),
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-    });
+  constructor(connection: string | PoolLike) {
+    if (typeof connection === 'string') {
+      this.pool = new Pool({
+        connectionString: connection,
+        max: Number(process.env['PG_POOL_MAX'] ?? 10),
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 5_000,
+      });
+    } else {
+      this.pool = connection;
+    }
   }
 
   async ping(): Promise<boolean> {
@@ -74,7 +90,7 @@ export class PgStore implements Store {
   }
 
   async close(): Promise<void> {
-    await this.pool.end();
+    await this.pool.end?.();
   }
 
   users = {
@@ -492,6 +508,39 @@ export class PgStore implements Store {
     },
     orders: {
       insert: async (order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord> => {
+        // 网关模式没有跨语句事务，订单与明细必须在单条语句里原子落库：
+        // 走 0005_place_order.sql 里的 plpgsql 函数。
+        if (!this.pool.connect) {
+          await this.pool.query(
+            `select place_order($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+            [
+              order.id,
+              order.orderNo,
+              order.userId,
+              order.status,
+              order.totalFen,
+              order.receiverName,
+              order.receiverPhone,
+              order.address,
+              order.remark,
+              order.createdAt,
+              order.paidAt,
+              JSON.stringify(
+                items.map((item) => ({
+                  id: item.id,
+                  order_id: item.orderId,
+                  product_id: item.productId,
+                  title: item.title,
+                  price_fen: item.priceFen,
+                  quantity: item.quantity,
+                  subtotal_fen: item.subtotalFen,
+                })),
+              ),
+            ],
+          );
+          return order;
+        }
+
         const client = await this.pool.connect();
         try {
           await client.query('begin');

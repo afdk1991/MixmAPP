@@ -65,6 +65,11 @@ export type Config = {
   databaseUrlSource: string;
   /** 两套库的连接串（可同时存在），后台切换时从这里取。 */
   dbUrls: { cloudbase: string; server: string };
+  /**
+   * CloudBase PG 的 HTTP 网关（线上默认落点）：没有 TCP 连接串时用
+   * `CLOUDBASE_PG_GATEWAY` + `CLOUDBASE_PG_API_KEY` 调 public.mix_exec SQL 桥。
+   */
+  pgGateway: { url: string; apiKey: string; schema: string };
   /** 管理接口令牌；未设置时 /admin/* 一律 404，不暴露管理面。 */
   adminToken: string;
   /** 仅当显式设置 ALLOW_MEMORY_STORE=1 时才允许无 DATABASE_URL 启动，默认拒绝。 */
@@ -167,6 +172,11 @@ export function loadConfig(): Config {
     databaseUrl,
     databaseUrlSource,
     dbUrls: { cloudbase: cloudUrl, server: serverUrl },
+    pgGateway: {
+      url: str('CLOUDBASE_PG_GATEWAY'),
+      apiKey: str('CLOUDBASE_PG_API_KEY'),
+      schema: str('CLOUDBASE_PG_SCHEMA') || 'mixmapp',
+    },
     adminToken: str('ADMIN_TOKEN'),
     allowMemoryStore: bool('ALLOW_MEMORY_STORE'),
     jwt: {
