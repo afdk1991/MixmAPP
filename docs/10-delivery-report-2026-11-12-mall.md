@@ -45,8 +45,9 @@
 
 ### GitHub Pages
 
-- Pages 工作流在 `186914b` 上 **success**，产物仓 `afdk1991/mixmapp-h5` 同步最新单文件构建。
-- 站点：`https://afdk1991.github.io/mixmapp-h5/`（公开产物仓，源码仓私有）。
+- 主仓直接托管（`pages.yml`，产物为单文件 H5）：`https://afdk1991.github.io/MixmAPP/`
+- `a1a6b14` 的 Pages run **success**；实测 **200 / 411,525 B**，内容含 `MixmAPP 商城`、`pages/cart/index`、`data-page`
+- 旧地址 `https://afdk1991.github.io/mixmapp-h5/` 为历史产物仓，停留在大促前的 356 KB 版本，已非当前发布源
 
 ### 镜像 / Android
 
