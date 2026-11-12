@@ -58,6 +58,20 @@ function writeText(relativePath, content) {
   writeFileSync(join(root, relativePath), content, 'utf8');
 }
 
+/** 统一成 LF 再比较：Windows 检出是 CRLF、Linux CI 是 LF，不能因此误判不一致 */
+function lf(text) {
+  return text.replace(/\r\n/g, '\n');
+}
+
+function eolOf(text) {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+/** 把按 LF 拼出来的内容换成目标文件既有的换行风格 */
+function applyEol(text, eol) {
+  return eol === '\n' ? text : text.split('\n').join(eol);
+}
+
 function loadState() {
   if (!existsSync(VERSION_FILE)) fail('缺少 version.json');
   const state = JSON.parse(readFileSync(VERSION_FILE, 'utf8'));
@@ -173,8 +187,9 @@ function sync() {
   }
 
   const versionModule = appVersionFile(state);
-  if (!existsSync(join(root, APP_VERSION_FILE)) || readText(APP_VERSION_FILE) !== versionModule) {
-    writeText(APP_VERSION_FILE, versionModule);
+  const versionModuleNow = existsSync(join(root, APP_VERSION_FILE)) ? readText(APP_VERSION_FILE) : '';
+  if (lf(versionModuleNow) !== lf(versionModule)) {
+    writeText(APP_VERSION_FILE, applyEol(versionModule, eolOf(versionModuleNow)));
     console.log(`  · ${APP_VERSION_FILE} → ${displayVersion(state)}`);
   }
 
@@ -198,7 +213,7 @@ function sync() {
   }
 
   const readme = readText(README_FILE);
-  const block = readmeBlock(state);
+  const block = applyEol(readmeBlock(state), eolOf(readme));
   if (readme.includes(BEGIN) && readme.includes(END)) {
     const replaced = readme.replace(
       new RegExp(`${BEGIN}[\\s\\S]*?${END}`, 'm'),
@@ -235,7 +250,8 @@ function check() {
     problems.push(`${CONFIG_FILE} 的 APP_VERSION 默认值不是 ${displayVersion(state)}`);
   }
 
-  if (!existsSync(join(root, APP_VERSION_FILE)) || readText(APP_VERSION_FILE) !== appVersionFile(state)) {
+  const versionNow = existsSync(join(root, APP_VERSION_FILE)) ? readText(APP_VERSION_FILE) : '';
+  if (lf(versionNow) !== lf(appVersionFile(state))) {
     problems.push(`${APP_VERSION_FILE} 的 APP_VERSION 不是 ${displayVersion(state)}（该文件由脚本生成，勿手改）`);
   }
 
@@ -260,7 +276,7 @@ function check() {
   }
 
   const readme = readText(README_FILE);
-  if (!readme.includes(readmeBlock(state))) {
+  if (!lf(readme).includes(lf(readmeBlock(state)))) {
     problems.push(`${README_FILE} 的版本块与 version.json 不同步（当前应为 ${publicVersion(state)}）`);
   }
 
