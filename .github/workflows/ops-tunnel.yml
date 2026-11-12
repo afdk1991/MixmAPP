@@ -1,0 +1,42 @@
+name: ops-tunnel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tunnel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 建立临时隧道
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20 "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<'EOS'
+          set -e
+          ARCH=$(uname -m); case "$ARCH" in x86_64) A=amd64;; aarch64) A=arm64;; *) A=amd64;; esac
+          if [ ! -x /usr/local/bin/cloudflared ]; then
+            sudo curl -fsSL -o /usr/local/bin/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$A"
+            sudo chmod +x /usr/local/bin/cloudflared
+          fi
+          /usr/local/bin/cloudflared --version
+          pkill -f 'cloudflared tunnel' || true
+          sleep 2
+          sudo mkdir -p /var/log/mixmapp
+          sudo rm -f /var/log/mixmapp/tunnel.log
+          sudo setsid nohup /usr/local/bin/cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate > /tmp/cf.log 2>&1 &
+          for i in $(seq 1 30); do
+            if grep -q 'trycloudflare.com' /tmp/cf.log 2>/dev/null; then break; fi
+            sleep 1
+          done
+          URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf.log | head -1)
+          echo "TUNNEL_URL=$URL"
+          echo "$URL" > /tmp/tunnel_url.txt
+          sleep 3
+          curl -sS -o /dev/null -w 'local_meta=%{http_code}\n' -m 10 "http://127.0.0.1:8080/api/v1/meta"
+          curl -sS -o /dev/null -w 'tunnel_meta=%{http_code}\n' -m 15 "$URL/api/v1/meta"
+          EOS
