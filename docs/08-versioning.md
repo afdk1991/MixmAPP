@@ -74,13 +74,20 @@ README 显示「当前构建版本 V0.0.1-preview / 已发布版本 V0.0.0」。
 
 ## 5. 覆盖的文件
 
-| 文件 | 字段 | 由脚本写入 |
-|---|---|---|
-| `version.json` | `next` / `channel` / `released` | ✅ |
-| `package.json`、`apps/*/package.json`、`services/*/package.json`、`packages/*/package.json` | `version` | ✅ |
-| `.env.example` | `APP_VERSION` | ✅ |
-| `services/api/src/config.ts` | `str('APP_VERSION', '…')` 默认值 | ✅ |
-| `README.md` | `<!-- version:begin -->` 与 `<!-- version:end -->` 之间 | ✅ |
+| 文件 | 字段 | 写法 | 由脚本写入 |
+|---|---|---|---|
+| `version.json` | `next` / `channel` / `released` | — | ✅ |
+| `package.json`、`apps/*/package.json`、`services/*/package.json`、`packages/*/package.json` | `version` | 裸 `X.Y.Z` | ✅ |
+| `.env.example` | `APP_VERSION` | `X.Y.Z-preview` | ✅ |
+| `services/api/src/config.ts` | `str('APP_VERSION', '…')` 默认值 | `X.Y.Z-preview` | ✅ |
+| `apps/app/src/version.ts` | `APP_VERSION`（页面展示兜底） | `X.Y.Z-preview` | ✅（整文件生成，勿手改） |
+| `apps/app/src/manifest.json` | `versionName` | 裸 `X.Y.Z` | ✅（只改该字段，保留原格式） |
+| `apps/mobile/android/app/build.gradle` | `versionName` | 裸 `X.Y.Z` | ✅（只改该字段） |
+| `README.md` | `<!-- version:begin -->` 与 `<!-- version:end -->` 之间 | 带 `V` 前缀 | ✅ |
+
+两类写法不能混：**构建元数据用裸版本号**（npm、`manifest.versionName`、Android `versionName`——应用商店与 Gradle 只认数字形态），**展示层带 `-preview`**（README、API `APP_VERSION`、前端 `version.ts`、关于页/首页）。页面不再手写版本字面量，统一 `import { APP_VERSION } from '../../version'`。
+
+`versionCode`（`manifest.json` 的 `100`、Android 的 `1`）是构建号不是版本号，每次发版才递增，暂未纳入本脚本统一；发版时两处需手工对齐。
 
 新增工作区包时，把它的 `package.json` 路径补进 `scripts/version.mjs` 的 `PKG_FILES`，否则 `version:check` 不会覆盖它。
 

@@ -11,7 +11,7 @@
  * 命令：
  *   node scripts/version.mjs show      打印当前版本（含展示形式）
  *   node scripts/version.mjs check     校验全部版本位是否一致（CI 门禁用）
- *   node scripts/version.mjs sync      把 version.json 同步到各处（包、env、config、README）
+ *   node scripts/version.mjs sync      把 version.json 同步到各处（包、env、config、manifest、gradle、前端常量、README）
  *   node scripts/version.mjs bump      递增补丁号（只允许在上一版已发布之后）
  *   node scripts/version.mjs release   正式发布：占用当前号、打 tag 提示、推进到下一个 preview
  */
@@ -36,6 +36,12 @@ const PKG_FILES = [
 const ENV_FILE = '.env.example';
 const CONFIG_FILE = join('services', 'api', 'src', 'config.ts');
 const README_FILE = 'README.md';
+/** 前端构建元数据：uni-app 应用清单 */
+const MANIFEST_FILE = join('apps', 'app', 'src', 'manifest.json');
+/** 原生端构建元数据：Capacitor Android 工程 */
+const GRADLE_FILE = join('apps', 'mobile', 'android', 'app', 'build.gradle');
+/** 前端展示兜底常量（由本脚本生成，禁止手改） */
+const APP_VERSION_FILE = join('apps', 'app', 'src', 'version.ts');
 const BEGIN = '<!-- version:begin -->';
 const END = '<!-- version:end -->';
 
@@ -107,6 +113,22 @@ function expectedEnvLine(state) {
   return `APP_VERSION=${displayVersion(state)}`;
 }
 
+/** 前端兜底常量：页面在 API 不可达时展示的版本 */
+function appVersionFile(state) {
+  return [
+    '// 由 scripts/version.mjs 生成，禁止手工修改。',
+    '// 单一事实源：version.json —— 改版本请跑 pnpm version:sync / version:release。',
+    `export const APP_VERSION = '${displayVersion(state)}';`,
+    '',
+  ].join('\n');
+}
+
+
+/** 用正则只改目标字段，保留 manifest / gradle 原有格式与注释 */
+function replaceField(text, pattern, value) {
+  return text.replace(pattern, (_all, prefix, _old, suffix) => `${prefix}${value}${suffix}`);
+}
+
 function sync() {
   const state = loadState();
 
@@ -132,6 +154,30 @@ function sync() {
     if (!/str\('APP_VERSION'/.test(configNext)) fail(`${CONFIG_FILE} 里找不到 APP_VERSION 默认值`);
     writeText(CONFIG_FILE, configNext);
     console.log(`  · ${CONFIG_FILE} → ${displayVersion(state)}`);
+  }
+
+  const versionModule = appVersionFile(state);
+  if (!existsSync(join(root, APP_VERSION_FILE)) || readText(APP_VERSION_FILE) !== versionModule) {
+    writeText(APP_VERSION_FILE, versionModule);
+    console.log(`  · ${APP_VERSION_FILE} → ${displayVersion(state)}`);
+  }
+
+  const manifest = readText(MANIFEST_FILE);
+  const manifestNext = replaceField(
+    manifest,
+    /("versionName"\s*:\s*")([^"]*)(")/,
+    state.next,
+  );
+  if (manifestNext !== manifest) {
+    writeText(MANIFEST_FILE, manifestNext);
+    console.log(`  · ${MANIFEST_FILE} → ${state.next}`);
+  }
+
+  const gradle = readText(GRADLE_FILE);
+  const gradleNext = replaceField(gradle, /(versionName\s+")([^"]*)(")/, state.next);
+  if (gradleNext !== gradle) {
+    writeText(GRADLE_FILE, gradleNext);
+    console.log(`  · ${GRADLE_FILE} → ${state.next}`);
   }
 
   const readme = readText(README_FILE);
@@ -172,6 +218,22 @@ function check() {
     problems.push(`${CONFIG_FILE} 的 APP_VERSION 默认值不是 ${displayVersion(state)}`);
   }
 
+  if (!existsSync(join(root, APP_VERSION_FILE)) || readText(APP_VERSION_FILE) !== appVersionFile(state)) {
+    problems.push(`${APP_VERSION_FILE} 的 APP_VERSION 不是 ${displayVersion(state)}（该文件由脚本生成，勿手改）`);
+  }
+
+  const manifest = readText(MANIFEST_FILE);
+  const manifestName = /"versionName"\s*:\s*"([^"]*)"/.exec(manifest)?.[1];
+  if (manifestName !== state.next) {
+    problems.push(`${MANIFEST_FILE} 的 versionName=${manifestName}，应为 ${state.next}（构建元数据用裸版本号，展示层才带 -preview）`);
+  }
+
+  const gradle = readText(GRADLE_FILE);
+  const gradleName = /versionName\s+"([^"]*)"/.exec(gradle)?.[1];
+  if (gradleName !== state.next) {
+    problems.push(`${GRADLE_FILE} 的 versionName=${gradleName}，应为 ${state.next}`);
+  }
+
   const readme = readText(README_FILE);
   if (!readme.includes(readmeBlock(state))) {
     problems.push(`${README_FILE} 的版本块与 version.json 不同步（当前应为 ${publicVersion(state)}）`);
@@ -192,7 +254,7 @@ function check() {
     problems.forEach((p) => console.error(`✗ ${p}`));
     process.exit(1);
   }
-  console.log(`✓ 版本一致：${publicVersion(state)}（包 ${PKG_FILES.length} 个、env、config、README、tag 均已核对）`);
+  console.log(`✓ 版本一致：${publicVersion(state)}（包 ${PKG_FILES.length} 个、env、config、manifest、gradle、前端常量、README、tag 均已核对）`);
 }
 
 function bump() {
