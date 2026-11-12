@@ -154,7 +154,27 @@ export class MallService {
     return this.getCart(userId);
   }
 
-  async createOrder(userId: string, input: OrderCreateInput): Promise<OrderDto> {
+  async createOrder(userId: string, input: OrderCreateInput, idempotencyKey?: string): Promise<OrderDto> {
+    // 幂等：先抢占键再落单，重试拿回同一张订单，不会重复扣库存
+    if (idempotencyKey) {
+      const claim = await this.store.mall.orderRequests.claim(userId, idempotencyKey);
+      if (!claim.claimed) {
+        if (!claim.orderNo) throw AppError.conflict('同一请求正在处理中，请稍后重试');
+        return this.getOrder(userId, claim.orderNo);
+      }
+      try {
+        const order = await this.placeOrder(userId, input);
+        await this.store.mall.orderRequests.attach(userId, idempotencyKey, order.orderNo);
+        return order;
+      } catch (error) {
+        await this.store.mall.orderRequests.release(userId, idempotencyKey);
+        throw error;
+      }
+    }
+    return this.placeOrder(userId, input);
+  }
+
+  private async placeOrder(userId: string, input: OrderCreateInput): Promise<OrderDto> {
     const fromCart = !input.items;
     const requested =
       input.items ??
@@ -216,6 +236,24 @@ export class MallService {
     await this.store.mall.orders.insert(order, items);
     if (fromCart) await this.store.mall.carts.clear(userId);
     return this.toOrderDto(order, items);
+  }
+
+  /** 超时取消：待支付且超过 TTL 的订单转为 cancelled，并把库存还回去。 */
+  async sweepExpiredOrders(ttlMinutes: number, now: Date = new Date()): Promise<string[]> {
+    const before = new Date(now.getTime() - ttlMinutes * 60_000);
+    const expired = await this.store.mall.orders.listExpiredPending(before);
+    const cancelled: string[] = [];
+    for (const order of expired) {
+      // 条件流转：只有 still pending 的才改，避免和「刚好支付成功」抢
+      const ok = await this.store.mall.orders.transitionStatus(order.id, 'pending', 'cancelled');
+      if (!ok) continue;
+      const items = await this.store.mall.orders.itemsByOrder(order.id);
+      for (const item of items) {
+        await this.store.mall.products.restoreStock(item.productId, item.quantity);
+      }
+      cancelled.push(order.orderNo);
+    }
+    return cancelled;
   }
 
   async listOrders(userId: string): Promise<OrderDto[]> {

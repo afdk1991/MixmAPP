@@ -109,19 +109,42 @@ async function main() {
   if (firstProduct) {
     const stockBefore = firstProduct.stock;
     const cartAdd = await req('POST', `${api}/mall/cart`, { token: tokens?.accessToken, body: { productId: firstProduct.id, quantity: 1 } });
+    const idemKey = `acc-${Date.now().toString(36)}`;
+    const orderPayload = {
+      receiverName: '验收收货人',
+      receiverPhone: '13800000999',
+      address: '浙江省宁波市验收路 1 号',
+    };
     const order = await req('POST', `${api}/mall/orders`, {
       token: tokens?.accessToken,
-      body: {
-        receiverName: '验收收货人',
-        receiverPhone: '13800000999',
-        address: '浙江省宁波市验收路 1 号',
-      },
+      body: orderPayload,
+      headers: { 'idempotency-key': idemKey },
+    });
+    const orderRetry = await req('POST', `${api}/mall/orders`, {
+      token: tokens?.accessToken,
+      body: orderPayload,
+      headers: { 'idempotency-key': idemKey },
     });
     const orderOk = order.status === 201 && Boolean(order.json?.data?.orderNo);
+    const sameOrder = orderRetry.json?.data?.orderNo === order.json?.data?.orderNo;
     const after = await req('GET', `${api}/mall/products/${firstProduct.id}`);
     const decremented = after.json?.data?.stock === stockBefore - 1;
     record('购物车加入 + 下单成功', cartAdd.status === 200 && orderOk, `orderNo=${order.json?.data?.orderNo} status=${order.status}`);
-    record('下单后库存真的减少 1', decremented, `before=${stockBefore} after=${after.json?.data?.stock}`);
+    record('同一幂等键重试返回同一单', sameOrder && orderRetry.status === 201, `retry=${orderRetry.json?.data?.orderNo}`);
+    record('下单后库存只减 1（重试未重复扣）', decremented, `before=${stockBefore} after=${after.json?.data?.stock}`);
+  }
+
+  // 管理面：只在显式提供 ADMIN_TOKEN 时验证（默认 404 属预期）
+  const adminToken = process.env.ADMIN_TOKEN;
+  if (adminToken) {
+    const admin = await req('GET', `${api}/admin/db`, { headers: { 'x-admin-token': adminToken } });
+    record(
+      '管理面可读数据库落点',
+      admin.status === 200 && Boolean(admin.json?.data?.target),
+      `target=${admin.json?.data?.target} host=${admin.json?.data?.host} source=${admin.json?.data?.source}`,
+    );
+    const bad = await req('GET', `${api}/admin/db`, { headers: { 'x-admin-token': 'wrong-token' } });
+    record('管理面错误令牌被拒', bad.status === 404, `status=${bad.status}`);
   }
 
   // 10. 限流（放最后，会把自己的配额打满）

@@ -50,7 +50,13 @@ export async function mallRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/mall/orders', { preHandler: app.requireAuth }, async (request, reply) => {
     const body = parse(orderCreateSchema, request.body);
-    const order = await app.mall.createOrder(request.userId as string, body);
+    const rawKey = request.headers['idempotency-key'];
+    const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+    const order = await app.mall.createOrder(
+      request.userId as string,
+      body,
+      key && key.trim() ? key.trim().slice(0, 128) : undefined,
+    );
     return reply.status(201).send({ data: order });
   });
 

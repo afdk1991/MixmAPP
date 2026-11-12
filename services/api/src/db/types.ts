@@ -185,6 +185,18 @@ export type Store = {
       findByOrderNo(orderNo: string): Promise<OrderRecord | null>;
       listByUser(userId: string): Promise<OrderRecord[]>;
       itemsByOrder(orderId: string): Promise<OrderItemRecord[]>;
+      /** 待支付且创建时间早于 before 的订单（超时取消扫描用） */
+      listExpiredPending(before: Date): Promise<OrderRecord[]>;
+      /** 条件状态流转：只有当前状态等于 from 才改成 to，返回是否真的改了（并发安全） */
+      transitionStatus(orderId: string, from: OrderRecord['status'], to: OrderRecord['status']): Promise<boolean>;
+    };
+    /** 下单幂等表：claim 占位 → attach 回写 order_no，并发重试不会重复扣库存 */
+    orderRequests: {
+      /** 抢占幂等键：插入成功返回 claimed；已存在返回 exists 与已有 orderNo（可能还没回写） */
+      claim(userId: string, key: string): Promise<{ claimed: boolean; orderNo: string | null }>;
+      attach(userId: string, key: string, orderNo: string): Promise<void>;
+      /** 下单失败时释放占位，允许客户端用同一个键重试 */
+      release(userId: string, key: string): Promise<void>;
     };
   };
 };

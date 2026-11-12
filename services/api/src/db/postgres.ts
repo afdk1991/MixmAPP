@@ -544,8 +544,55 @@ export class PgStore implements Store {
         const res = await this.pool.query('select * from order_items where order_id = $1', [orderId]);
         return res.rows.map((row) => mapOrderItem(row as Row));
       },
+      listExpiredPending: async (before: Date): Promise<OrderRecord[]> => {
+        const res = await this.pool.query(
+          'select * from orders where status = $1 and created_at < $2 order by created_at asc limit 200',
+          ['pending', before],
+        );
+        return res.rows.map((row) => mapOrder(row as Row));
+      },
+      transitionStatus: async (
+        orderId: string,
+        from: OrderRecord['status'],
+        to: OrderRecord['status'],
+      ): Promise<boolean> => {
+        const res = await this.pool.query(
+          'update orders set status = $3 where id = $1 and status = $2 returning id',
+          [orderId, from, to],
+        );
+        return res.rowCount === 1;
+      },
+    },
+    orderRequests: {
+      claim: async (userId: string, key: string) => {
+        try {
+          await this.pool.query('insert into order_requests (user_id, key) values ($1, $2)', [userId, key]);
+          return { claimed: true, orderNo: null };
+        } catch (error) {
+          if (!isUniqueViolation(error)) throw error;
+          const res = await this.pool.query(
+            'select order_no from order_requests where user_id = $1 and key = $2 limit 1',
+            [userId, key],
+          );
+          return { claimed: false, orderNo: (res.rows[0]?.['order_no'] as string | null) ?? null };
+        }
+      },
+      attach: async (userId: string, key: string, orderNo: string): Promise<void> => {
+        await this.pool.query(
+          'update order_requests set order_no = $3, updated_at = now() where user_id = $1 and key = $2',
+          [userId, key, orderNo],
+        );
+      },
+      release: async (userId: string, key: string): Promise<void> => {
+        await this.pool.query('delete from order_requests where user_id = $1 and key = $2', [userId, key]);
+      },
     },
   };
+}
+
+/** 唯一约束冲突（PG 23505）：并发抢占时用它区分「别人已经写了」和真失败 */
+function isUniqueViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && (error as { code?: string }).code === '23505');
 }
 
 function mapProduct(row: Row): ProductRecord {

@@ -39,6 +39,19 @@ async function main(): Promise<void> {
 
   await app.listen({ host: config.host, port: config.port });
   app.log.info(`${config.appName} API 已启动：http://${config.host}:${config.port}`);
+
+  // 待支付超时取消：每分钟扫一次；ORDER_TTL_MINUTES=0 可关闭
+  if (config.orderTtlMinutes > 0) {
+    const timer = setInterval(() => {
+      void app.mall
+        .sweepExpiredOrders(config.orderTtlMinutes)
+        .then((cancelled) => {
+          if (cancelled.length) app.log.info({ count: cancelled.length }, '超时订单已取消并归还库存');
+        })
+        .catch((error) => app.log.error({ err: error }, '超时取消扫描失败'));
+    }, 60_000);
+    timer.unref();
+  }
 }
 
 main().catch((error) => {

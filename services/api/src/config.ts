@@ -124,6 +124,8 @@ export type Config = {
     model: string;
   };
   rateLimit: { perMinute: number };
+  /** 待支付订单超时分钟数：超过就取消并归还库存（0 表示关闭自动取消） */
+  orderTtlMinutes: number;
   /** 用户名合规词库：运营方按监管要求补充，逗号/空白分隔 */
   usernameDenylist: string[];
 };
@@ -250,6 +252,7 @@ export function loadConfig(): Config {
       model: str('AI_MODEL', 'doubao-pro-32k'),
     },
     rateLimit: { perMinute: num('RATE_LIMIT_PER_MINUTE', 60) },
+    orderTtlMinutes: num('ORDER_TTL_MINUTES', 30),
     usernameDenylist: str('USERNAME_DENYLIST')
       .split(/[,，、\s]+/)
       .map((item) => item.trim())

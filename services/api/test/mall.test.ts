@@ -226,3 +226,91 @@ describe('商城：商品 / 购物车 / 订单', () => {
     expect(b.json().data.stock).toBe(1);
   });
 });
+
+describe('下单幂等与超时取消', () => {
+  it('同一 Idempotency-Key 重试只落一张订单，库存只扣一次', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-idem-1', title: '徽章', stock: 3, priceFen: 2900 }));
+    const token = await register(app, '13800002106');
+    const body = {
+      receiverName: '赵六',
+      receiverPhone: '13800002106',
+      address: '浙江省宁波市江北区一条路 4 号',
+      items: [{ productId: 'mix-idem-1', quantity: 1 }],
+    };
+    const headers = { ...auth(token), 'idempotency-key': 'req-abc-123' };
+
+    const first = await app.inject({ method: 'POST', url: '/api/v1/mall/orders', headers, payload: body });
+    const second = await app.inject({ method: 'POST', url: '/api/v1/mall/orders', headers, payload: body });
+    expect(first.statusCode).toBe(201);
+    expect(second.statusCode).toBe(201);
+    expect(second.json().data.orderNo).toBe(first.json().data.orderNo);
+
+    const after = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-idem-1' });
+    expect(after.json().data.stock).toBe(2);
+
+    const orders = await app.inject({ method: 'GET', url: '/api/v1/mall/orders', headers: auth(token) });
+    expect(orders.json().data).toHaveLength(1);
+  });
+
+  it('不同 Idempotency-Key 是两笔独立订单', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-idem-2', title: '贴纸', stock: 5, priceFen: 1900 }));
+    const token = await register(app, '13800002107');
+    const body = {
+      receiverName: '钱七',
+      receiverPhone: '13800002107',
+      address: '浙江省宁波市北仑区一条路 5 号',
+      items: [{ productId: 'mix-idem-2', quantity: 1 }],
+    };
+    const a = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: { ...auth(token), 'idempotency-key': 'k1' },
+      payload: body,
+    });
+    const b = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: { ...auth(token), 'idempotency-key': 'k2' },
+      payload: body,
+    });
+    expect(a.json().data.orderNo).not.toBe(b.json().data.orderNo);
+    const after = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-idem-2' });
+    expect(after.json().data.stock).toBe(3);
+  });
+
+  it('超时未支付订单被取消并把库存还回去', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-ttl-1', title: '帆布袋', stock: 2, priceFen: 5900 }));
+    const token = await register(app, '13800002108');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '孙八',
+        receiverPhone: '13800002108',
+        address: '浙江省宁波市镇海区一条路 6 号',
+        items: [{ productId: 'mix-ttl-1', quantity: 2 }],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const orderNo = res.json().data.orderNo as string;
+
+    const stockAfterOrder = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-ttl-1' });
+    expect(stockAfterOrder.json().data.stock).toBe(0);
+
+    const later = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const cancelled = await ctx.app.mall.sweepExpiredOrders(30, later);
+    expect(cancelled).toContain(orderNo);
+
+    const order = await app.inject({ method: 'GET', url: `/api/v1/mall/orders/${orderNo}`, headers: auth(token) });
+    expect(order.json().data.status).toBe('cancelled');
+    const stockRestored = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-ttl-1' });
+    expect(stockRestored.json().data.stock).toBe(2);
+  });
+});

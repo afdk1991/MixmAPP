@@ -34,6 +34,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return { data: snapshot() };
   });
 
+  app.post('/admin/orders/sweep', async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    const cancelled = await app.mall.sweepExpiredOrders(app.cfg.orderTtlMinutes);
+    return { data: { ttlMinutes: app.cfg.orderTtlMinutes, cancelled, count: cancelled.length } };
+  });
+
   app.post('/admin/db/switch', async (request, reply) => {
     await guard(request as unknown as { headers: Record<string, unknown> });
     const body = (request.body ?? {}) as { target?: string };

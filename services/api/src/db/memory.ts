@@ -28,6 +28,7 @@ export class MemoryStore implements Store {
   private cartList: CartItemRecord[] = [];
   private orderList: OrderRecord[] = [];
   private orderItemList: OrderItemRecord[] = [];
+  private orderRequestMap = new Map<string, { orderNo: string | null }>();
 
   async ping(): Promise<boolean> {
     return true;
@@ -251,6 +252,32 @@ export class MemoryStore implements Store {
           .map(clone),
       itemsByOrder: async (orderId: string): Promise<OrderItemRecord[]> =>
         this.orderItemList.filter((i) => i.orderId === orderId).map(clone),
+      listExpiredPending: async (before: Date): Promise<OrderRecord[]> =>
+        this.orderList.filter((o) => o.status === 'pending' && o.createdAt.getTime() < before.getTime()).map(clone),
+      transitionStatus: async (
+        orderId: string,
+        from: OrderRecord['status'],
+        to: OrderRecord['status'],
+      ): Promise<boolean> => {
+        const found = this.orderList.find((o) => o.id === orderId);
+        if (!found || found.status !== from) return false;
+        found.status = to;
+        return true;
+      },
+    },
+    orderRequests: {
+      claim: async (userId: string, key: string) => {
+        const existing = this.orderRequestMap.get(`${userId}:${key}`);
+        if (existing) return { claimed: false, orderNo: existing.orderNo };
+        this.orderRequestMap.set(`${userId}:${key}`, { orderNo: null });
+        return { claimed: true, orderNo: null };
+      },
+      attach: async (userId: string, key: string, orderNo: string) => {
+        this.orderRequestMap.set(`${userId}:${key}`, { orderNo });
+      },
+      release: async (userId: string, key: string) => {
+        this.orderRequestMap.delete(`${userId}:${key}`);
+      },
     },
   };
 }
