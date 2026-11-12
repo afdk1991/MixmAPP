@@ -10,7 +10,7 @@
 | GitHub Pages | 静态端公网 | ✅ | **主仓直接托管**：<https://afdk1991.github.io/MixmAPP/>（`pages.yml` run 43194503748，HTTP 200，DOM 含 `data-page`） |
 | GitHub Packages（ghcr） | 镜像仓库 | ✅ | `ghcr.io/afdk1991/mixmapp:latest`（`image.yml` run 43194504120，镜像内真起容器跑迁移 + `/api/v1/readyz`） |
 | 腾讯云 EdgeOne Pages | 单文件静态托管 | ⏳ 受平台接口限制 | `deploy-html` 只接受**内联 HTML 正文**，本仓单文件产物 348 KB 需整段塞进调用参数，实际不可行；单文件产物本身已产出（`release/mixmapp-h5-single.html`），改由 CloudBase 静态托管上线 |
-| 腾讯云 CloudBase 静态托管 | H5 公网 | ✅ | <https://mixmapp-h5-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com>（HTTP 200，356,739 字节，DOM 含 `data-page`，标题 `MixmAPP`）；构建 `buildId 2612267461` 状态 `SUCCESS`，链路 `getUploadUrl → PUT zip → deployApp` |
+| 腾讯云 CloudBase 静态托管 | H5 公网 | ✅ | 项目名 `MixmAPP`：<https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com>（HTTP 200，411,774 字节）；构建 `buildId 2612270861` 状态 `SUCCESS`，链路 `getUploadUrl → PUT zip → deployApp`。旧名 `mixmapp-h5` 应用已删除，旧域名返回 404 |
 | Cloudflare Pages / Workers | 静态端 + Worker | ⏳ | 需 `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`；`deploy.yml` 对应 job 现为显式 SKIP |
 | Cloudflare `_worker.js` 同源入口 | 静态 + API 同源 | ⏳ | 同上；还需把 `/api/*` 反代到 API 源（`infra/nginx/mixmapp-api.conf` 可作蓝本） |
 | Vercel | 静态端 / Serverless | ⏳ | 需 `VERCEL_TOKEN`（及 `VERCEL_ORG_ID`/`PROJECT_ID`） |
@@ -27,7 +27,16 @@
 | GitHub 仓库 | `MixmAPP` | 由 `mixmapp` 改名而来，旧地址自动 301 跳转 |
 | GitHub Pages | 挂在 `MixmAPP` 主仓 | 私有仓不支持免费 Pages（API 返回 422），只能让主仓公开后直接托管；原先的 `mixmapp-h5` 产物仓已废弃 |
 | GitHub Packages | `mixmapp` | OCI 规范要求镜像名全小写，无法写成 `MixmAPP`，这是平台硬限制 |
+| 腾讯云 CloudBase | `MixmAPP` | 服务名已统一；控制台域名由平台小写化为 `mixmapp-cs-1-…`，DNS 本身不区分大小写。旧 `mixmapp-h5` 应用已删除 |
 | 其余平台 | `MixmAPP` | 尚未创建，创建时统一使用该名称 |
+
+待删（`gh` token 缺 `delete_repo` / `delete:packages`，需补授权后执行）：
+
+```bash
+gh auth refresh -h github.com -s delete_repo,delete:packages
+gh repo delete afdk1991/mixmapp-h5 --yes
+gh api -X DELETE user/packages/container/mixmapp-api
+```
 
 ## 域名映射（待确认）
 
