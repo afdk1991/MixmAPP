@@ -32,6 +32,7 @@ COPY --from=builder /repo/infra ./infra
 EXPOSE 8080
 # 未配置 DATABASE_URL 时进程会 fail-fast 退出，健康检查同样覆盖这种情况
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- "http://127.0.0.1:${PORT}/readyz" >/dev/null 2>&1 || exit 1
+  CMD wget -qO- "http://127.0.0.1:${PORT}/api/v1/readyz" >/dev/null 2>&1 || exit 1
 
 CMD ["node", "dist/index.js"]
+
