@@ -158,3 +158,24 @@ uuid_v7   01a1cf5d-d614-74cf-9309-309d8cd1366b
 仍未接上：Fastify API 还没连到这个云库——CloudBase PG 的连接串只在控制台可见，MCP 不返回。
 拿到连接串后即可把 `DATABASE_URL` 指过去跑 `db:migrate` 与 4 个 PG 集成测试（`REQUIRE_DATABASE_URL=1`），
 那就是「云平台侧真库 + 真 API」的闭环取证。
+## 9. 线上路由与页面取证（GitHub Pages）
+
+H5 是 history 模式（`manifest.json` 的 `h5.router.mode=history`），而 Pages 只有一份 `index.html`，
+所以 `/MixmAPP/pages/auth/register` 这类深链接在没有兜底页时直接 404，页面打不开。
+
+修法：`pages.yml` 在组装 `_site` 时把同一份单文件再复制成 `404.html`（提交 `83eda73`，run `43205130469` 绿）。
+验证结果：
+
+| 地址 | HTTP | 渲染 |
+|---|---|---|
+| <https://afdk1991.github.io/MixmAPP/> | 200 | 首页（hero / 未连上 API 提示 / 四宫格） |
+| `/MixmAPP/pages/auth/register` | 404（Pages 用 404.html 兜底） | 创建账号页正常：手机号/邮箱/用户名/一键登录分段、验证码、游客身份进入 |
+| `/MixmAPP/pages/tools/ids` | 404 | ID 试算器 |
+| `/MixmAPP/pages/mall/index` | 404 | 商城页壳正常，但商品区显示「请求失败(404)」——因为没有部署 API |
+
+截图：`docs/screenshots/live-home.png`、`live-register.png`、`live-ids.png`、`live-mall.png`。
+
+注意：深链接的状态码仍是 404（内容由 `404.html` 提供），浏览器能正常渲染，但爬虫/监测会看到 404。
+要 200 语义，得换到支持 SPA rewrite 的宿主（Cloudflare Pages 的 `_redirects`、CloudBase 的路由规则、nginx 的 `try_files`）。
+
+商城页那条「请求失败(404)」就是 API 缺位的直接证据，和本文第 8 节的结论一致：库有了，服务还没上。
