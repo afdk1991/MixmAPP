@@ -9,7 +9,8 @@
 | Gitee 仓库（码云镜像） | 国内镜像 | ⏳ | 需 Gitee 账号的私人令牌；`.gitee/pipeline.yml` 已就绪 |
 | GitHub Pages | 静态端公网 | ✅ | 产物仓 <https://afdk1991.github.io/mixmapp-h5/>；未绑自定义域名（绑域名需仓库加 `CNAME` + DNS CNAME 记录） |
 | GitHub Packages（ghcr） | 镜像仓库 | ✅ | `ghcr.io/afdk1991/mixmapp-api:latest`（`image.yml` run 43192779036，镜像内真起容器跑迁移 + `readyz`） |
-| 腾讯云 EdgeOne Pages | 单文件静态托管 | ⏳ 可部署待确认 | 平台只提供 `deploy-html`（单 HTML → 公网 URL）；`release/mixmapp-h5-single.html`（348 KB）已产出，部署即公开 UI |
+| 腾讯云 EdgeOne Pages | 单文件静态托管 | ⏳ 受平台接口限制 | `deploy-html` 只接受**内联 HTML 正文**，本仓单文件产物 348 KB 需整段塞进调用参数，实际不可行；单文件产物本身已产出（`release/mixmapp-h5-single.html`），改由 CloudBase 静态托管上线 |
+| 腾讯云 CloudBase 静态托管 | H5 公网 | ✅ | <https://mixmapp-h5-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com>（HTTP 200，356,739 字节，DOM 含 `data-page`，标题 `MixmAPP`）；构建 `buildId 2612267461` 状态 `SUCCESS`，链路 `getUploadUrl → PUT zip → deployApp` |
 | Cloudflare Pages / Workers | 静态端 + Worker | ⏳ | 需 `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`；`deploy.yml` 对应 job 现为显式 SKIP |
 | Cloudflare `_worker.js` 同源入口 | 静态 + API 同源 | ⏳ | 同上；还需把 `/api/*` 反代到 API 源（`infra/nginx/mixmapp-api.conf` 可作蓝本） |
 | Vercel | 静态端 / Serverless | ⏳ | 需 `VERCEL_TOKEN`（及 `VERCEL_ORG_ID`/`PROJECT_ID`） |
