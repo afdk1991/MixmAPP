@@ -62,6 +62,9 @@ function loadState() {
   if (!existsSync(VERSION_FILE)) fail('缺少 version.json');
   const state = JSON.parse(readFileSync(VERSION_FILE, 'utf8'));
   if (!SEMVER.test(state.next ?? '')) fail(`version.json next 不是合法 X.Y.Z：${state.next}`);
+  if (!Number.isInteger(state.build) || state.build < 1) {
+    fail(`version.json build 必须是 >= 1 的整数：${state.build}`);
+  }
   if (state.channel !== 'preview' && state.channel !== 'release') {
     fail(`version.json channel 只能是 preview 或 release：${state.channel}`);
   }
@@ -86,6 +89,19 @@ function publicVersion(state) {
 function bumpPatch(version) {
   const [major, minor, patch] = version.split('.').map(Number);
   return `${major}.${minor}.${patch + 1}`;
+}
+
+/** 查询某个 tag 是否存在；返回 null 表示当前环境没有可用的 git 仓库 */
+function gitTag(tag) {
+  try {
+    return execFileSync('git', ['tag', '--list', tag], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
 }
 
 function readmeBlock(state) {
@@ -167,17 +183,18 @@ function sync() {
     manifest,
     /("versionName"\s*:\s*")([^"]*)(")/,
     state.next,
-  );
+  ).replace(/"versionCode"\s*:\s*"([^"]*)"/, `"versionCode": "${state.build}"`);
   if (manifestNext !== manifest) {
     writeText(MANIFEST_FILE, manifestNext);
-    console.log(`  · ${MANIFEST_FILE} → ${state.next}`);
+    console.log(`  · ${MANIFEST_FILE} → ${state.next} / build ${state.build}`);
   }
 
   const gradle = readText(GRADLE_FILE);
-  const gradleNext = replaceField(gradle, /(versionName\s+")([^"]*)(")/, state.next);
+  const gradleNext = replaceField(gradle, /(versionName\s+")([^"]*)(")/, state.next)
+    .replace(/versionCode\s+(\d+)/, `versionCode ${state.build}`);
   if (gradleNext !== gradle) {
     writeText(GRADLE_FILE, gradleNext);
-    console.log(`  · ${GRADLE_FILE} → ${state.next}`);
+    console.log(`  · ${GRADLE_FILE} → ${state.next} / build ${state.build}`);
   }
 
   const readme = readText(README_FILE);
@@ -227,11 +244,19 @@ function check() {
   if (manifestName !== state.next) {
     problems.push(`${MANIFEST_FILE} 的 versionName=${manifestName}，应为 ${state.next}（构建元数据用裸版本号，展示层才带 -preview）`);
   }
+  const manifestBuild = /"versionCode"\s*:\s*"([^"]*)"/.exec(manifest)?.[1];
+  if (manifestBuild !== String(state.build)) {
+    problems.push(`${MANIFEST_FILE} 的 versionCode=${manifestBuild}，应为 ${state.build}`);
+  }
 
   const gradle = readText(GRADLE_FILE);
   const gradleName = /versionName\s+"([^"]*)"/.exec(gradle)?.[1];
   if (gradleName !== state.next) {
     problems.push(`${GRADLE_FILE} 的 versionName=${gradleName}，应为 ${state.next}`);
+  }
+  const gradleBuild = /versionCode\s+(\d+)/.exec(gradle)?.[1];
+  if (gradleBuild !== String(state.build)) {
+    problems.push(`${GRADLE_FILE} 的 versionCode=${gradleBuild}，应为 ${state.build}`);
   }
 
   const readme = readText(README_FILE);
@@ -241,12 +266,7 @@ function check() {
 
   // 发布前不得占用正式版本号：未发布的号不允许存在同名 tag
   if (state.channel === 'preview') {
-    let tags = '';
-    try {
-      tags = execFileSync('git', ['tag', '--list', `v${state.next}`], { cwd: root, encoding: 'utf8' }).trim();
-    } catch {
-      tags = '';
-    }
+    const tags = gitTag(`v${state.next}`) ?? '';
     if (tags) problems.push(`tag ${tags} 已存在，但 ${state.next} 尚未发布（不得提前占用）`);
   }
 
@@ -276,15 +296,25 @@ function release() {
     fail(`${state.next} 已经是发布状态，无需重复发布`);
   }
   const tag = `v${state.next}`;
-  try {
-    const existing = execFileSync('git', ['tag', '--list', tag], { cwd: root, encoding: 'utf8' }).trim();
-    if (existing) fail(`tag ${tag} 已存在，不能重复发布`);
-  } catch (error) {
-    if (String(error?.message ?? '').includes('不能重复发布')) throw error;
+  const existing = gitTag(tag);
+  if (existing) fail(`tag ${tag} 已存在，不能重复发布`);
+
+  // 上一个已登记的号必须真的打上 tag（即真的发布过），否则不允许继续占用下一个号
+  const lastReleased = state.released[state.released.length - 1];
+  if (lastReleased) {
+    const lastTag = `v${lastReleased}`;
+    const lastTagExists = gitTag(lastTag);
+    if (lastTagExists === null) {
+      fail('当前环境没有可用的 git 仓库，无法确认上一版是否真的发布，拒绝占用新版本号');
+    }
+    if (!lastTagExists) {
+      fail(`上一版 V${lastReleased} 还没打 tag ${lastTag}（说明并未真正发布），不能先占用 ${state.next}`);
+    }
   }
 
   const releasedVersion = state.next;
   state.released.push(releasedVersion);
+  state.build += 1;
   state.channel = 'preview';
   state.next = bumpPatch(releasedVersion);
   saveState(state);
@@ -295,7 +325,7 @@ function release() {
   console.log(`  下一步（由发布流程执行，脚本不自动打 tag，避免误触发上线）：`);
   console.log(`    git add -A && git commit -m "release: V${releasedVersion}"`);
   console.log(`    git tag -a ${tag} -m "MixmAPP ${releasedVersion}" && git push origin main ${tag}`);
-  console.log(`  当前工作版本：${publicVersion(state)}`);
+  console.log(`  当前工作版本：${publicVersion(state)} / build ${state.build}`);
 }
 
 const command = process.argv[2];
