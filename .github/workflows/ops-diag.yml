@@ -1,0 +1,34 @@
+name: ops-diag
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: '在 API 生产机上执行的 bash 脚本（base64 编码）'
+        required: true
+        type: string
+
+jobs:
+  run:
+    name: 生产机诊断
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: 写部署私钥
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 执行
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          SCRIPT_B64: ${{ inputs.script }}
+        run: |
+          printf '%s' "$SCRIPT_B64" | base64 -d > /tmp/ops.sh
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' < /tmp/ops.sh
