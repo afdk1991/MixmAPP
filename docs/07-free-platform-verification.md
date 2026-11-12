@@ -208,3 +208,71 @@ H5 是 history 模式（`manifest.json` 的 `h5.router.mode=history`），而 Pa
 尚未真实接入的第三方（`/api/v1/meta` 里仍是 dev/console/off）：短信 `console`、一键登录 `dev`、
 微信/QQ/GitHub/Apple OAuth `off`、微信支付/支付宝 `off`、地图/存储/推送/AI `dev`。
 这些改成 `on` 需要各平台商户号与密钥，属于外部凭据缺口，不是代码缺口。
+## 11. 最小闭环：数据库落点开关 + 线上验收 12/12
+
+### 11.1 数据库落点可切换（云 PG 权威 / 本机 PG 自由开关）
+
+`services/api/src/config.ts` 新增 `DB_TARGET`：
+
+| 环境变量 | 作用 |
+|---|---|
+| `DB_TARGET=cloudbase`（默认） | 权威库：取 `DATABASE_URL_CLOUDBASE` |
+| `DB_TARGET=local` | 备援：取 `DATABASE_URL_LOCAL` |
+| `DATABASE_URL` | 上面两个都没配时的兜底，保持旧部署兼容 |
+
+两个连接串可同时存在于 `/etc/mixmapp/api.env`，切换只改一个变量，不用动 GitHub secrets。
+`/healthz` 现在如实报出落点，避免「以为在云库、其实连本机」：
+
+```json
+{"status":"ok","checks":{"db":"postgres","dbTarget":"cloudbase","dbHost":"127.0.0.1:5432","dbSource":"DATABASE_URL"}}
+```
+
+服务器侧开关脚本 `deploy/db-target.sh`（随发布包落在 `/opt/mixmapp/deploy/`）：
+
+```bash
+sudo bash /opt/mixmapp/deploy/db-target.sh status      # 看当前落点与两个连接串是否就绪
+sudo bash /opt/mixmapp/deploy/db-target.sh cloudbase   # 切云 PG
+sudo bash /opt/mixmapp/deploy/db-target.sh local       # 切本机 PG
+```
+
+行为：改 `DB_TARGET` 前先备份 `api.env`，重启服务后轮询 `/healthz` 25 秒，
+只有报出对应 `dbTarget` 才算成功；不通过则自动回退到上一个落点并重启，避免把线上切成不可用状态。
+
+现状如实说明：`dbTarget=cloudbase` 但 `dbHost=127.0.0.1:5432`、`dbSource=DATABASE_URL`，
+说明 `DATABASE_URL_CLOUDBASE` 还没填，当前实际仍跑在本机 PG 上。填上云连接串后再执行 `db-target.sh cloudbase` 才算真正切过去。
+
+### 11.2 并发重名从 500 改判 409（线上验收抓出的真 bug）
+
+首轮线上验收里「8 个同名并发注册」的结果是 `201=1 / 409=0 / 其他=7`——先查后插在并发下漏判，
+数据库唯一约束的 `23505` 直接冒到 Fastify，变成 500。修法：`createUser` 兜住 `23505`，
+按约束名映射成 409（用户名/邮箱/手机号/账号号段各给一句人话），其余错误照旧抛出。
+同时在 `services/api/test/postgres.integration.test.ts` 加了 6 并发同名注册的回归测试（CI 的真 PG service 上跑）。
+修复后线上复测：`201=1 409=7 其他=0`。
+
+### 11.3 线上验收脚本与结果
+
+`scripts/acceptance.mjs`（任何一套已部署的 API 都能跑）：
+
+```bash
+node scripts/acceptance.mjs https://cloud.mixm.top/mixmapp
+```
+
+覆盖 5 条核心路由的边界：真库连通、能力矩阵、并发重名只成功一次、注册自动分配 ID、
+密码登录、`/me` 一致、令牌有效期、伪造令牌 401、刷新轮换、旧令牌重放 401、游客注册幂等、限流触发。
+
+2026-11-12 修复后线上结果：**12/12 通过**
+
+```
+✓ 健康检查与真库连通      db=postgres dbTarget=cloudbase dbHost=127.0.0.1:5432
+✓ Meta 能力矩阵          appName=MixmAPP
+✓ 并发重名只成功一次      201=1 409=7 其他=0
+✓ 注册自动分配 ID         id=114355518453055488 accountNo=MixmAPP-035J-5QKV-R000-0
+✓ 密码登录              isNewUser=false
+✓ /me 与注册一致
+✓ access token 有效期     exp-iat=900s
+✓ 伪造令牌被拒            401
+✓ 刷新换发新令牌          200
+✓ 旧 refreshToken 重放    401
+✓ 游客注册幂等            同一 deviceId 两次同号
+✓ 限流触发               第 45 次请求
+```
