@@ -405,3 +405,75 @@ cancelled 且库存归位）。
 但连接串只在 CloudBase 控制台可见，MCP 不回传。填进 `api.env` 后，带令牌调
 `POST /admin/db/switch {"target":"cloudbase"}` 即可热切，切成功判据是 `/healthz` 的
 `dbSource` 变成 `DATABASE_URL_CLOUDBASE`、`dbHost` 变成云 PG 地址。
+## 15. 超时取消的线上实证 + APP 内管理后台（2026-11-12）
+
+### 15.1 为什么还要专门跑一次
+
+14 章的超时取消只被单元测试覆盖（内存 Store，把 `now` 往后拨）。生产上真正危险的是
+「扫描和支付同时发生」和「库存归还重复执行」，这两点在内存测试里看不出来。所以临时把
+线上 TTL 压到 1 分钟，跑真实链路，跑完立刻恢复默认 30。
+
+### 15.2 做法与结果
+
+1. `api.env` 追加 `ORDER_TTL_MINUTES=1`，`systemctl restart mixmapp-api`；
+2. 探针脚本：注册新账号 → 读商品库存 → 下单 1 件 → 等 70s → `POST /api/v1/admin/orders/sweep`
+   → 读订单状态与库存；
+3. 取证（订单号 `MOMWDN2Q1E798913`）：
+
+```text
+[1] 商品 MixmAPP 首发限定礼盒 库存 before=120
+[2] 注册成功 accountNo=MixmAPP-035J-JMK3-R000-0
+[3] 下单 MOMWDN2Q1E798913 后库存 after=119（比 before 少 1）
+[5] sweep → ttlMinutes=1 取消 1 单：["MOMWDN2Q1E798913"]
+[6] 订单状态 status=cancelled
+[7] 库存：sweep 前 119 → sweep 后 120（本单取消 +1）
+✓ TTL 取消 + 库存归还 在线上成立（+1 与本单取消数量一致）
+```
+
+4. 随后删掉 `ORDER_TTL_MINUTES` 行、重启，`/healthz` 恢复 `dbTarget=cloudbase` / `dbHost=127.0.0.1:5432`，
+   线上 TTL 回到默认 30 分钟。
+
+### 15.3 两条真实的判定经验（写进脚本，避免下次误判）
+
+- **不能断言「库存回到下单前」**。库里还躺着历史遗留的待支付订单（历次验收只下单不付款），
+  它们会被同一轮扫描批量取消，库存一次多补好几件，看起来像「归还错了」。
+  正确判据是：`sweep` 返回的 `cancelled` 里含本单，且库存增量 = 本单取消的数量（±1 核对）。
+- **第一次跑真的踩到了**：before=117、下单后 116、sweep 后 120。多出来的 3 件正是三轮历史
+  验收遗留的 pending 单被同一扫描顺带取消。行为是对的，断言是错的。
+
+### 15.4 APP 内管理后台
+
+`apps/app/src/pages/admin/index`（`pages.json` 已注册，`pages/settings/about` 有入口）：
+
+| 能力 | 实现 |
+| --- | --- |
+| 令牌 | 输入后只存本机 `mixmapp:adminToken`；服务端 `ADMIN_TOKEN` 才是权威 |
+| 读落点 | `GET /admin/db`，展示 target / host / source / 云 PG 是否已配置 |
+| 热切换 | `POST /admin/db/switch`，两个按钮切 cloudbase / server |
+| 手动扫单 | `POST /admin/orders/sweep`，显示本次取消数量与 TTL |
+
+`apiRequest` 增加 `headers` 入参承载 `x-admin-token`；页面样式不依赖全局 SCSS 令牌（写死字面量），
+避免被其他分支的设计令牌改动牵连。
+
+线上取证（GitHub Pages，`/MixmAPP/pages/admin/index`，390×844 手机视口）：
+
+```text
+titles: 管理令牌 / CloudBase 云 PG（权威） / 切换落点 / 超时订单扫描
+rows:   驱动 postgres ｜ 实际主机 127.0.0.1:5432 ｜ 连接串来源 DATABASE_URL ｜ 云 PG 已配置：未配置连接串
+```
+
+这与 `/healthz` 完全一致：权威落点已声明为 cloudbase，但 `DATABASE_URL_CLOUDBASE` 仍缺值，
+所以实际仍落在云服务器自建 PG。管理页把这个「声明与实际」的差异直接摆在界面上，不需要再 SSH 查。
+
+### 15.5 顺手修掉的一个预览坑
+
+`scripts/serve-h5.mjs` 的代理原来用 `new URL(req.url, API_ORIGIN)`，当 `API_ORIGIN` 带路径前缀
+（线上是 `https://cloud.mixm.top/mixmapp`）时前缀会被丢掉，请求打到 `https://cloud.mixm.top/api/v1/...`
+而不是 `/mixmapp/api/v1/...`。已改为拼接 `base + req.url`，本地预览可直接打线上 API。
+
+### 15.6 截图法的一个坑（避免再次误判成 CSS 溢出）
+
+Edge 无头模式的 `--window-size=430,932` 会被钳制到约 492 CSS px 宽，但 `--screenshot` 仍按 430 裁图，
+于是页面右侧看起来「被截断」，很容易误判成布局溢出。用 CDP 的
+`Emulation.setDeviceMetricsOverride` 精确设视口（390×844、DPR=2）再 `Page.captureScreenshot`，
+量出来的 `innerWidth` 与页面元素 `getBoundingClientRect()` 才是可信的。
