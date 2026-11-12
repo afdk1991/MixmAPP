@@ -1,126 +1,46 @@
-'use strict';
-
-/**
- * MixmAPP API 中转云函数（HTTP 云函数 / WEB_SCF）
- *
- * 背景：cloud.mix.top 当前挂在 AWS Global Accelerator 上，国内网络 TLS 握手被拒
- * （unrecognized_name / alert 112），前端拿不到 /meta 就显示 OFFLINE。
- * 源站 nginx 与 API 本身健康（生产机内部 HTTPS 直连 /mixmapp/api/v1/meta 返回 200）。
- *
- * 本函数把请求原样转发到源站 IP，SNI 固定为 cloud.mix.top，Host 头固定为 cloud.mix.top，
- * 因此不依赖坏掉的加速节点与 DNS；对外通过 CloudBase 网关域名（国内可直连、证书有效）暴露。
- */
-
-const https = require('https');
-
-const ORIGIN_HOST = process.env.MIXMAPP_ORIGIN_HOST || '115.159.159.11';
-const ORIGIN_PORT = Number(process.env.MIXMAPP_ORIGIN_PORT || 443);
-const ORIGIN_SNI = process.env.MIXMAPP_ORIGIN_SNI || 'cloud.mix.top';
-const ORIGIN_HOST_HEADER = process.env.MIXMAPP_ORIGIN_HOST_HEADER || 'cloud.mix.top';
-const TIMEOUT_MS = Number(process.env.MIXMAPP_ORIGIN_TIMEOUT_MS || 15000);
-
-const PASS_HEADERS = [
-  'content-type',
-  'accept',
-  'authorization',
-  'idempotency-key',
-  'x-request-id',
-  'x-mixmapp-client',
-  'accept-language',
+const http=require('http');const https=require('https');
+const PORT=process.env.PORT||9000;
+const EPS=[
+ {proto:'http',host:'115.159.159.11',port:80,hostHeader:'cloud.mix.top'},
+ {proto:'https',host:'115.159.159.11',port:443,hostHeader:'cloud.mix.top',sni:'cloud.mix.top'}
 ];
-
-function corsHeaders(extra) {
-  const base = {
-    'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS',
-    'access-control-allow-headers':
-      'authorization,content-type,idempotency-key,x-request-id,x-mixmapp-client,accept,accept-language',
-    'access-control-max-age': '86400',
-    'cache-control': 'no-store',
-  };
-  return Object.assign(base, extra || {});
-}
-
-function buildQuery(event) {
-  const raw =
-    event.rawQueryString ||
-    event.queryString ||
-    (event.queryStringParameters
-      ? Object.entries(event.queryStringParameters)
-          .filter(([, v]) => v !== undefined && v !== null)
-          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-          .join('&')
-      : '');
-  return raw ? `?${raw}` : '';
-}
-
-function forward(method, path, headers, body) {
-  return new Promise((resolve) => {
-    const req = https.request(
-      {
-        host: ORIGIN_HOST,
-        port: ORIGIN_PORT,
-        servername: ORIGIN_SNI,
-        rejectUnauthorized: false,
-        method,
-        path,
-        headers,
-        timeout: TIMEOUT_MS,
-      },
-      (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          resolve({
-            statusCode: res.statusCode || 502,
-            headers: corsHeaders({
-              'content-type': res.headers['content-type'] || 'application/json; charset=utf-8',
-            }),
-            body: Buffer.concat(chunks).toString('utf8'),
-          });
-        });
-      },
-    );
-    req.on('timeout', () => req.destroy(new Error('upstream timeout')));
-    req.on('error', (err) => {
-      resolve({
-        statusCode: 502,
-        headers: corsHeaders({ 'content-type': 'application/json; charset=utf-8' }),
-        body: JSON.stringify({
-          error: { code: 'UPSTREAM_UNREACHABLE', message: err.message },
-        }),
-      });
-    });
-    if (body) req.write(body);
-    req.end();
+const PASS=['content-type','accept','authorization','idempotency-key','x-request-id','x-mixmapp-client','accept-language'];
+const CORS={'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS','access-control-allow-headers':'authorization,content-type,idempotency-key,x-request-id,x-mixmapp-client,accept,accept-language','access-control-max-age':'86400','cache-control':'no-store'};
+function call(ep,method,url,headers,body){return new Promise((resolve)=>{
+  const mod=ep.proto==='https'?https:http;
+  const opt={host:ep.host,port:ep.port,method:method,path:url,headers:headers,timeout:15000};
+  if(ep.sni)opt.servername=ep.sni;
+  if(ep.proto==='https')opt.rejectUnauthorized=false;
+  const req=mod.request(opt,(r)=>{
+    const b=[];r.on('data',c=>b.push(c));
+    r.on('end',()=>resolve({status:r.statusCode,type:r.headers['content-type']||'',loc:r.headers.location||'',buf:Buffer.concat(b)}));
   });
-}
-
-exports.main = async (event) => {
-  const method = (event.httpMethod || event.requestContext?.httpMethod || 'GET').toUpperCase();
-  if (method === 'OPTIONS') {
-    return { statusCode: 204, headers: corsHeaders(), body: '' };
+  req.on('timeout',()=>req.destroy(new Error('timeout')));
+  req.on('error',(e)=>resolve({status:0,type:'',loc:'',buf:Buffer.from(e.message)}));
+  if(body&&body.length)req.write(body);
+  req.end();
+});}
+http.createServer(async (req,res)=>{
+  if(req.method==='OPTIONS'){res.writeHead(204,CORS);res.end('');return;}
+  const url=req.url||'/';
+  if(url.indexOf('/mixmapp')!==0){res.writeHead(404,CORS);res.end('{"error":{"code":"NOT_FOUND"}}');return;}
+  const chunks=[];req.on('data',c=>chunks.push(c));
+  await new Promise((r)=>req.on('end',r));
+  const body=Buffer.concat(chunks);
+  const trace=[];
+  let best=null;
+  for(const ep of EPS){
+    const headers={host:ep.hostHeader};
+    for(const n of PASS){if(req.headers[n])headers[n]=req.headers[n];}
+    const r=await call(ep,req.method,url,headers,body);
+    trace.push({ep:ep.proto+'://'+ep.host+':'+ep.port,status:r.status,type:r.type,loc:r.loc,head:r.buf.toString('utf8').slice(0,120)});
+    if(r.status>=200&&r.status<400&&r.type.indexOf('json')>=0){best=r;break;}
+    if(!best||(best.status===0&&r.status>0))best=r;
   }
-
-  const path = event.path || event.rawPath || '/';
-  if (!path.startsWith('/mixmapp')) {
-    return {
-      statusCode: 404,
-      headers: corsHeaders({ 'content-type': 'application/json; charset=utf-8' }),
-      body: JSON.stringify({ error: { code: 'NOT_FOUND', message: 'only /mixmapp is proxied' } }),
-    };
+  if(best&&best.type.indexOf('json')>=0&&best.status<400){
+    const out=Object.assign({},CORS,{'content-type':best.type||'application/json; charset=utf-8'});
+    res.writeHead(best.status,out);res.end(best.buf);return;
   }
-
-  const incoming = Object.assign({}, event.headers || {});
-  const outHeaders = { host: ORIGIN_HOST_HEADER };
-  for (const name of PASS_HEADERS) {
-    const value = incoming[name] || incoming[name.toLowerCase()];
-    if (value) outHeaders[name] = value;
-  }
-
-  const body = event.isBase64Encoded
-    ? Buffer.from(event.body || '', 'base64').toString('utf8')
-    : event.body || '';
-
-  return forward(method, path + buildQuery(event), outHeaders, body);
-};
+  res.writeHead(502,Object.assign({},CORS,{'content-type':'application/json; charset=utf-8'}));
+  res.end(JSON.stringify({error:{code:'UPSTREAM_UNREACHABLE',message:'no json upstream'},trace:trace}));
+}).listen(PORT,'0.0.0.0');
