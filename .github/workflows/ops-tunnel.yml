@@ -20,7 +20,7 @@ jobs:
           cat > /tmp/remote.sh <<'EOS'
           ARCH=$(uname -m); case "$ARCH" in x86_64) A=amd64;; aarch64) A=arm64;; *) A=amd64;; esac
           if [ ! -x /usr/local/bin/cloudflared ]; then
-            sudo curl -fsSL -o /usr/local/bin/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$A" || exit 1
+            sudo curl --http1.1 -fsSL -o /usr/local/bin/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$A" || exit 1
             sudo chmod +x /usr/local/bin/cloudflared
           fi
           /usr/local/bin/cloudflared --version
