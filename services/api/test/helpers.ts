@@ -2,7 +2,6 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { MemoryStore } from '../src/db/memory.js';
 import type { OAuthProvider, OAuthProfile, OAuthProviderName } from '../src/adapters/oauth.js';
-import type { OneKeyProvider } from '../src/adapters/onekey.js';
 
 process.env['NODE_ENV'] = 'test';
 process.env['JWT_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
@@ -33,4 +32,6 @@ export async function makeApp(options: { oauth?: Partial<Record<OAuthProviderNam
     github: options.oauth?.github ?? new FakeOAuth('github', { openId: 'gh-1', unionId: 'octocat', nickname: 'Octocat', avatarUrl: 'https://avatars.example.com/u/1' }),
     apple: options.oauth?.apple ?? new FakeOAuth('apple', { openId: 'apple-open-1', unionId: null, nickname: 'Apple 测试', avatarUrl: null }),
   };
-  const app = await buildApp({ config: testCo
+  const app = await buildApp({ config: testConfig, store, oauth, logger: false });
+  return { app, store };
+}

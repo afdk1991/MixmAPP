@@ -248,4 +248,6 @@ export function sqlDir(): string {
     resolve(here, '..', 'infra', 'sql'),
     resolve(process.cwd(), 'infra', 'sql'),
   ].filter((item): item is string => Boolean(item));
-  const found = candidates.find((dir)
+  const found = candidates.find((dir) => existsSync(dir));
+  return found ?? candidates[1] ?? join(projectRoot(), 'infra', 'sql');
+}
