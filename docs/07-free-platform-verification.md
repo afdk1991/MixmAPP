@@ -304,3 +304,43 @@ PG 侧是 `update products set stock = stock + $2 where id = $1`）。
 - **支付真实回调**：`modules/pay.ts` 的微信/支付宝适配器只有骨架，回调验签、金额比对、
   重复回调幂等都没有真凭据可验（`/meta` 里 `wechatPay/alipay` 仍是 `off`）。
 - **CloudBase 云 PG 仍未接**：`DATABASE_URL_CLOUDBASE` 缺值，`dbTarget` 是 cloudbase 但实际连本机。
+## 13. 数据库权威落点确认 + 管理后台热切换
+
+### 13.1 结论
+
+- **CloudBase 云 PG 是权威库**：`DB_TARGET` 默认就是 `cloudbase`，不带任何参数启动即按权威库解析连接串。
+- **云服务器自建 PG 是备援**：`DB_TARGET=server`（旧值 `local` 保留为等价别名，线上 env 不用改也不会失效）。
+- 两个连接串可同时存在于 `/etc/mixmapp/api.env`：`DATABASE_URL_CLOUDBASE` 与 `DATABASE_URL_LOCAL`（也接受 `DATABASE_URL_SERVER`）。
+
+### 13.2 管理后台直接切换（不重启、不改文件）
+
+新增管理面接口（挂在 `/api/v1` 下）：
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET | `/admin/db` | 查看当前落点、驱动、host、连接串来源，以及两套库是否已配置（只给 host:port，不回传连接串） |
+| POST | `/admin/db/switch` | body `{"target":"cloudbase"|"server"}`，现场切换 |
+
+鉴权：请求头 `x-admin-token` 必须等于 `ADMIN_TOKEN`。**未设置 `ADMIN_TOKEN` 时整组路由返回 404**，不暴露管理面存在；令牌错误同样 404，不返回 401 去提示“口令存在”。
+
+热切换靠 `db/switchable.ts` 里的一层 Proxy：AuthService / MallService 拿到的 Store 引用不变，
+每次属性访问都落到“当前实现”上；切换时先建新连接池、`ping` 验证通过才原子换指针，然后把旧池异步关闭。
+**新库连不通就不换指针**，旧库继续服务——不存在“切一半把服务切死”的状态。
+
+### 13.3 上线现状与仍缺的东西
+
+服务端脚本仍然保留（`deploy/db-target.sh [status|cloudbase|server|local]`），用于“服务已经起不来”时的兜底，
+它的行为不变：备份 env → 重启 → 轮询 `/healthz` 25 秒确认 `dbTarget` → 失败自动回退。
+
+当前线上仍是：
+
+```json
+{"dbTarget":"cloudbase","dbHost":"127.0.0.1:5432","dbSource":"DATABASE_URL"}
+```
+
+即**权威落点已声明，但权威库连接串还没值**，实际落在云服务器自建 PG。要真正切过去需要两件事，都不是代码工作：
+
+1. 把 CloudBase 控制台里的连接串写进 `api.env` 的 `DATABASE_URL_CLOUDBASE`（控制台可见，MCP 不回传）。
+2. 设置 `ADMIN_TOKEN`，管理接口才会从 404 变成可用。
+
+填好后两种切法等效：`sudo bash /opt/mixmapp/deploy/db-target.sh cloudbase`，或带令牌调 `POST /api/v1/admin/db/switch`（后者不重启进程）。

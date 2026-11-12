@@ -20,6 +20,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     cfg: import('../config.js').Config;
     store: import('../db/types.js').Store;
+    dbSwitcher?: import('../db/switchable.js').StoreSwitcher;
     sms: import('../adapters/sms.js').SmsProvider;
     oauth: Record<string, import('../adapters/oauth.js').OAuthProvider>;
     onekey: import('../adapters/onekey.js').OneKeyProvider;

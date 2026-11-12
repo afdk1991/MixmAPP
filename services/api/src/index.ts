@@ -1,8 +1,7 @@
 import { buildApp } from './app.js';
 import { loadConfig, loadDotEnv } from './config.js';
-import { MemoryStore } from './db/memory.js';
 import { runMigrations } from './db/migrate.js';
-import { createStore } from './db/postgres.js';
+import { createStoreSwitcher } from './db/switchable.js';
 
 async function main(): Promise<void> {
   loadDotEnv();
@@ -17,7 +16,8 @@ async function main(): Promise<void> {
     );
   }
 
-  const store = config.databaseUrl ? createStore(config.databaseUrl) : new MemoryStore();
+  const switcher = createStoreSwitcher(config);
+  const store = switcher.store;
   if (!config.databaseUrl) {
     console.warn('[warn] ALLOW_MEMORY_STORE=1：使用内存存储，重启即丢数据，禁止用于任何验证或演示环境');
   }
@@ -26,12 +26,12 @@ async function main(): Promise<void> {
     console.info(`[db] 迁移完成：${applied.length ? applied.join(', ') : '已是最新'}`);
   }
 
-  const app = await buildApp({ config, store, logger: config.env !== 'test' });
+  const app = await buildApp({ config, store, dbSwitcher: switcher, logger: config.env !== 'test' });
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info(`收到 ${signal}，开始优雅退出`);
     await app.close();
-    await store.close();
+    await switcher.close();
     process.exit(0);
   };
   process.on('SIGTERM', () => void shutdown('SIGTERM'));

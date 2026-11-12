@@ -46,7 +46,7 @@ const bool = (key: string, fallback = false): boolean => {
   return raw === '1' || raw === 'true' || raw === 'yes';
 };
 
-export type DbTarget = 'cloudbase' | 'local';
+export type DbTarget = 'cloudbase' | 'server';
 
 export type Config = {
   env: 'development' | 'test' | 'production';
@@ -56,13 +56,17 @@ export type Config = {
   port: number;
   publicBaseUrl: string;
   /**
-   * 数据库落点开关：cloudbase = 权威库（CloudBase 云 PG），local = 云服务器本机 PG。
-   * 用 DB_TARGET 切换，两个连接串可同时存在，切换不需要改 secrets。
+   * 数据库落点：cloudbase = 权威库（CloudBase 云 PG），server = 云服务器自建 PG。
+   * 旧值 local 会被当成 server 处理，避免线上 env 立刻失效。
    */
   dbTarget: DbTarget;
   databaseUrl: string;
   /** 实际取到连接串的环境变量名，便于确认「现在到底连的哪一个」。 */
   databaseUrlSource: string;
+  /** 两套库的连接串（可同时存在），后台切换时从这里取。 */
+  dbUrls: { cloudbase: string; server: string };
+  /** 管理接口令牌；未设置时 /admin/* 一律 404，不暴露管理面。 */
+  adminToken: string;
   /** 仅当显式设置 ALLOW_MEMORY_STORE=1 时才允许无 DATABASE_URL 启动，默认拒绝。 */
   allowMemoryStore: boolean;
   jwt: { secret: string; accessTtlSec: number; refreshTtlDays: number };
@@ -134,17 +138,21 @@ export function loadConfig(): Config {
   if (!jwtSecret) {
     throw new Error('生产环境必须设置 JWT_SECRET（至少 32 字节随机串）');
   }
-  // 数据库落点：默认 cloudbase（权威库），DB_TARGET=local 时切到云服务器本机 PG。
-  const dbTarget: DbTarget = str('DB_TARGET', 'cloudbase') === 'local' ? 'local' : 'cloudbase';
+  // 数据库落点：默认 cloudbase（权威库），DB_TARGET=server 时切到云服务器自建 PG。
+  // 兼容旧值 local（等价于 server），避免线上 env 立刻失效。
+  const rawTarget = str('DB_TARGET', 'cloudbase');
+  const dbTarget: DbTarget = rawTarget === 'server' || rawTarget === 'local' ? 'server' : 'cloudbase';
   const cloudUrl = str('DATABASE_URL_CLOUDBASE');
-  const localUrl = str('DATABASE_URL_LOCAL');
+  const serverUrl = str('DATABASE_URL_LOCAL') || str('DATABASE_URL_SERVER');
   const genericUrl = str('DATABASE_URL');
-  const primary = dbTarget === 'cloudbase' ? cloudUrl : localUrl;
+  const primary = dbTarget === 'cloudbase' ? cloudUrl : serverUrl;
   const databaseUrl = primary || genericUrl;
   const databaseUrlSource = primary
     ? dbTarget === 'cloudbase'
       ? 'DATABASE_URL_CLOUDBASE'
-      : 'DATABASE_URL_LOCAL'
+      : str('DATABASE_URL_LOCAL')
+        ? 'DATABASE_URL_LOCAL'
+        : 'DATABASE_URL_SERVER'
     : 'DATABASE_URL';
   return {
     env,
@@ -156,6 +164,8 @@ export function loadConfig(): Config {
     dbTarget,
     databaseUrl,
     databaseUrlSource,
+    dbUrls: { cloudbase: cloudUrl, server: serverUrl },
+    adminToken: str('ADMIN_TOKEN'),
     allowMemoryStore: bool('ALLOW_MEMORY_STORE'),
     jwt: {
       secret: jwtSecret,

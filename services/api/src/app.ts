@@ -18,6 +18,7 @@ import { AppError } from './lib/errors.js';
 import { verifyAccessToken } from './lib/jwt.js';
 import { authRoutes } from './routes/auth.js';
 import { mallRoutes } from './routes/mall.js';
+import { adminRoutes } from './routes/admin.js';
 import { meRoutes } from './routes/me.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { metaRoutes } from './routes/meta.js';
@@ -25,6 +26,8 @@ import { metaRoutes } from './routes/meta.js';
 export type AppDeps = {
   config: Config;
   store: Store;
+  /** 有热切换能力时传入；仅内存模式启动时可不传 */
+  dbSwitcher?: import('./db/switchable.js').StoreSwitcher;
   sms?: SmsProvider;
   oauth?: Record<OAuthProviderName, OAuthProvider>;
   onekey?: OneKeyProvider;
@@ -53,6 +56,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.decorate('cfg', deps.config);
   app.decorate('store', deps.store);
+  if (deps.dbSwitcher) app.decorate('dbSwitcher', deps.dbSwitcher);
   app.decorate('sms', deps.sms ?? createSmsProvider(deps.config));
   app.decorate('oauth', deps.oauth ?? createOAuthProviders(deps.config));
   app.decorate('onekey', deps.onekey ?? createOneKeyProvider(deps.config));
@@ -161,6 +165,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await meRoutes(scope);
       await mallRoutes(scope);
       await integrationRoutes(scope);
+      await adminRoutes(scope);
     },
     { prefix: '/api/v1' },
   );

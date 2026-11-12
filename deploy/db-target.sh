@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# 数据库落点开关：cloudbase = 权威云 PG，local = 云服务器本机 PG。
+# 数据库落点开关：cloudbase = 权威云 PG（默认），server = 云服务器自建 PG（旧名 local 仍可用）。
 # 两个连接串同时存在于 api.env，切 DB_TARGET 后重启服务；健康检查不通过会自动切回。
-# 用法：sudo bash deploy/db-target.sh [status|cloudbase|local]
+# 用法：sudo bash deploy/db-target.sh [status|cloudbase|server|local]
 set -euo pipefail
 
 ENV_FILE=${ENV_FILE:-/etc/mixmapp/api.env}
 SERVICE=${SERVICE:-mixmapp-api}
 HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:8080/healthz}
 ACTION=${1:-status}
+[ "$ACTION" = local ] && ACTION=server
 
 current_target() {
   grep -E '^DB_TARGET=' "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || true
@@ -16,6 +17,12 @@ current_target() {
 has_var() {
   local name="$1"
   grep -qE "^${name}=.+" "$ENV_FILE"
+}
+
+has_any_var() {
+  local n
+  for n in "$@"; do has_var "$n" && return 0; done
+  return 1
 }
 
 show_health() {
@@ -33,20 +40,20 @@ case "$ACTION" in
     echo "ENV_FILE=$ENV_FILE"
     echo "DB_TARGET=$(current_target || echo '(未设置，代码默认 cloudbase)')"
     if has_var DATABASE_URL_CLOUDBASE; then echo "DATABASE_URL_CLOUDBASE=已配置"; else echo "DATABASE_URL_CLOUDBASE=未配置"; fi
-    if has_var DATABASE_URL_LOCAL; then echo "DATABASE_URL_LOCAL=已配置"; else echo "DATABASE_URL_LOCAL=未配置"; fi
+    if has_any_var DATABASE_URL_LOCAL DATABASE_URL_SERVER; then echo "DATABASE_URL_LOCAL/DATABASE_URL_SERVER=已配置"; else echo "DATABASE_URL_LOCAL/DATABASE_URL_SERVER=未配置"; fi
     if has_var DATABASE_URL; then echo "DATABASE_URL=已配置（兜底）"; else echo "DATABASE_URL=未配置"; fi
     echo "--- 当前线上健康检查 ---"
     show_health
     exit 0
     ;;
 
-  cloudbase|local)
+  cloudbase|server)
     if [ "$ACTION" = cloudbase ] && ! has_var DATABASE_URL_CLOUDBASE; then
       echo "✗ DATABASE_URL_CLOUDBASE 未配置，无法切到云 PG。先写入 $ENV_FILE 再重试。"
       exit 1
     fi
-    if [ "$ACTION" = local ] && ! has_var DATABASE_URL_LOCAL; then
-      echo "✗ DATABASE_URL_LOCAL 未配置，无法切到本机 PG。先写入 $ENV_FILE 再重试。"
+    if [ "$ACTION" = server ] && ! has_any_var DATABASE_URL_LOCAL DATABASE_URL_SERVER; then
+      echo "✗ DATABASE_URL_LOCAL / DATABASE_URL_SERVER 未配置，无法切到云服务器 PG。先写入 $ENV_FILE 再重试。"
       exit 1
     fi
 
@@ -84,7 +91,7 @@ case "$ACTION" in
     ;;
 
   *)
-    echo "用法：sudo bash deploy/db-target.sh [status|cloudbase|local]"
+    echo "用法：sudo bash deploy/db-target.sh [status|cloudbase|server|local]"
     exit 2
     ;;
 esac
