@@ -117,6 +117,21 @@ async function reload(): Promise<void> {
   }
 }
 
+async function upgradeGuest(): Promise<void> {
+  if (upgrading.value) return;
+  upError.value = '';
+  upgrading.value = true;
+  try {
+    await meApi.bindUsername(upUsername.value.trim(), upPassword.value);
+    await refreshProfile();
+    uni.showToast({ title: '已升级为正式账号', icon: 'none' });
+  } catch (e) {
+    upError.value = e instanceof ApiError ? e.message : '设置失败，请稍后重试';
+  } finally {
+    upgrading.value = false;
+  }
+}
+
 async function doLogout(): Promise<void> {
   await logout();
   uni.showToast({ title: '已退出', icon: 'none' });
@@ -276,5 +291,12 @@ onShow(() => {
 
 .mt {
   margin-top: 32rpx;
+}
+
+.error {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #dc2626;
 }
 </style>
