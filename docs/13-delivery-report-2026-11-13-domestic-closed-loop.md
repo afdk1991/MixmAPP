@@ -50,6 +50,20 @@
    - **改 DNS**：把 `cloud.mix.top` 从 GA 记录改回腾讯云 EIP 直连（需 `mix.top` 的 DNS 管理权限）；
    - **换托管**：把 API 跑在国内可达的托管（腾讯云 CloudRun / 阿里云 FC 等），并使用该平台的默认域名（需把 `CLOUDBASE_PG_API_KEY` 搬到新环境；该值在 `/etc/mixmapp/api.env` 中，取值只能从生产机读取）。
 
+## 四之二、免凭据方案也试过了：Cloudflare 快速隧道在本机不可行
+
+思路：在生产机上跑 `cloudflared tunnel --url http://127.0.0.1:8080`，拿一个 `*.trycloudflare.com` 的国内可达 HTTPS 域名，前端 `MIXMAPP_API_BASE` 指过去，即可零凭据打通国内访问。
+
+实测阻断点（`.github/workflows/ops-tunnel.yml`，试跑三次后删除）：
+
+| 尝试 | 结果 |
+| --- | --- |
+| 直接 `setsid` 起隧道 | SSH 会话被后台进程持有，`timeout 150` 被杀（exit 124） |
+| 改 `systemd-run` 脱离会话 | 下载步骤先失败：`curl: (28) Failed to connect to github.com port 443 after 130611 ms: Connection timed out` |
+| 强制 `--http1.1` 重试 | 同样超时 |
+
+结论：**生产机出网到 GitHub 被阻断**，cloudflared 二进制无法下载，隧道方案在本机资料条件下不成立。
+
 ## 五、未做但已记录的风险（不留暗账）
 
 - CloudBase 中继函数当前是「双上游回退 + trace」形态，属于诊断态。若后续接上可达源站，需把上游固定为该源站并去掉 trace 输出。
