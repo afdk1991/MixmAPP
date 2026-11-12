@@ -134,7 +134,19 @@ export class AuthService {
       createdAt: now,
       updatedAt: now,
     };
-    return this.store.users.insert(user);
+    return this.store.users.insert(user).catch((error: unknown) => {
+      // 并发注册时「先查后插」会漏；这里兜住数据库唯一约束，转成 409 而不是 500。
+      const code = (error as { code?: string } | null)?.code;
+      if (code === '23505' || /duplicate key|UNIQUE constraint/i.test(String(error))) {
+        const detail = String((error as { constraint?: string }).constraint ?? (error as Error).message ?? '');
+        if (detail.includes('username')) throw AppError.conflict('该用户名已被占用，请换一个');
+        if (detail.includes('email')) throw AppError.conflict('该邮箱已注册，请直接登录');
+        if (detail.includes('phone')) throw AppError.conflict('该手机号已注册，请直接登录');
+        if (detail.includes('account_no')) throw AppError.conflict('账号号段分配冲突，请重试');
+        throw AppError.conflict('该账号已存在，请直接登录');
+      }
+      throw error;
+    });
   }
 
   async registerByPhone(input: {

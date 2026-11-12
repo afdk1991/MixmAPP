@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { ID_STRATEGIES } from '@mixmapp/ids';
-import { capabilitySnapshot } from '../config.js';
+import { capabilitySnapshot, dbHostOf } from '../config.js';
 
 export async function metaRoutes(app: FastifyInstance): Promise<void> {
   app.get('/meta', async () => ({
@@ -31,6 +31,9 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
     }
     const checks: Record<string, string> = {
       db,
+      dbTarget: app.cfg.dbTarget,
+      dbHost: dbHostOf(app.cfg.databaseUrl),
+      dbSource: app.cfg.databaseUrlSource,
       sms: app.cfg.sms.provider,
       pay:
         capabilitySnapshot(app.cfg)['wechatPay'] === 'on' ||

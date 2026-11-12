@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import type { Config } from './config.js';
+import { dbHostOf } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
 import { MallService } from './modules/mall.js';
@@ -138,7 +139,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     health: '/healthz',
   }));
   app.get('/healthz', async (_request, reply) => {
-    const checks: Record<string, string> = { db: deps.store.driver };
+    const checks: Record<string, string> = {
+      db: deps.store.driver,
+      dbTarget: deps.config.dbTarget,
+      dbHost: dbHostOf(deps.config.databaseUrl),
+      dbSource: deps.config.databaseUrlSource,
+    };
     return reply.send({
       status: 'ok',
       version: deps.config.version,

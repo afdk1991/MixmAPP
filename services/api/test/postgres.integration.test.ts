@@ -32,6 +32,7 @@ const stamp = Date.now().toString().slice(-9);
 const phone = `139${stamp}`.slice(0, 11);
 const email = `pg-${stamp}@mixmapp.test`;
 const password = 'PgTest!2026';
+const concurrentUsername = `pg_conc_${stamp.slice(-6)}`;
 
 suite('PostgreSQL 驱动（真实库）', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
@@ -51,6 +52,7 @@ suite('PostgreSQL 驱动（真实库）', () => {
     await client.connect();
     try {
       await client.query('delete from users where email = $1 or phone = $1', [email]);
+      await client.query('delete from users where username = $1', [concurrentUsername]);
       await client.query('delete from sms_codes where phone = $1', [phone]);
       await client.query("delete from products where id like 'pg-p-%'");
     } finally {
@@ -81,6 +83,25 @@ suite('PostgreSQL 驱动（真实库）', () => {
     expect(row?.ulid).toHaveLength(26);
     expect(row?.snowflake).toMatch(/^\d+$/);
     expect(row?.passwordHash).not.toBeNull();
+  });
+
+  it('并发同名注册：只成功一个，其余收到 409 而不是 500', async () => {
+    const calls = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/register/username',
+          payload: { username: concurrentUsername, password },
+        }),
+      ),
+    );
+    const created = calls.filter((r) => r.statusCode === 201);
+    const conflicts = calls.filter((r) => r.statusCode === 409);
+    expect(created).toHaveLength(1);
+    expect(conflicts).toHaveLength(5);
+    // 唯一约束兜底：库里只能有一行
+    const rows = await store.users.findByUsername(concurrentUsername);
+    expect(rows?.username).toBe(concurrentUsername);
   });
 
   it('账号密码登录可以在新连接上读到刚写入的用户', async () => {

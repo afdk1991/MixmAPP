@@ -46,6 +46,8 @@ const bool = (key: string, fallback = false): boolean => {
   return raw === '1' || raw === 'true' || raw === 'yes';
 };
 
+export type DbTarget = 'cloudbase' | 'local';
+
 export type Config = {
   env: 'development' | 'test' | 'production';
   appName: string;
@@ -53,7 +55,14 @@ export type Config = {
   host: string;
   port: number;
   publicBaseUrl: string;
+  /**
+   * 数据库落点开关：cloudbase = 权威库（CloudBase 云 PG），local = 云服务器本机 PG。
+   * 用 DB_TARGET 切换，两个连接串可同时存在，切换不需要改 secrets。
+   */
+  dbTarget: DbTarget;
   databaseUrl: string;
+  /** 实际取到连接串的环境变量名，便于确认「现在到底连的哪一个」。 */
+  databaseUrlSource: string;
   /** 仅当显式设置 ALLOW_MEMORY_STORE=1 时才允许无 DATABASE_URL 启动，默认拒绝。 */
   allowMemoryStore: boolean;
   jwt: { secret: string; accessTtlSec: number; refreshTtlDays: number };
@@ -125,6 +134,18 @@ export function loadConfig(): Config {
   if (!jwtSecret) {
     throw new Error('生产环境必须设置 JWT_SECRET（至少 32 字节随机串）');
   }
+  // 数据库落点：默认 cloudbase（权威库），DB_TARGET=local 时切到云服务器本机 PG。
+  const dbTarget: DbTarget = str('DB_TARGET', 'cloudbase') === 'local' ? 'local' : 'cloudbase';
+  const cloudUrl = str('DATABASE_URL_CLOUDBASE');
+  const localUrl = str('DATABASE_URL_LOCAL');
+  const genericUrl = str('DATABASE_URL');
+  const primary = dbTarget === 'cloudbase' ? cloudUrl : localUrl;
+  const databaseUrl = primary || genericUrl;
+  const databaseUrlSource = primary
+    ? dbTarget === 'cloudbase'
+      ? 'DATABASE_URL_CLOUDBASE'
+      : 'DATABASE_URL_LOCAL'
+    : 'DATABASE_URL';
   return {
     env,
     appName: str('APP_NAME', 'MixmAPP'),
@@ -132,7 +153,9 @@ export function loadConfig(): Config {
     host: str('HOST', '0.0.0.0'),
     port: num('PORT', 8080),
     publicBaseUrl: str('PUBLIC_BASE_URL', 'http://localhost:8080'),
-    databaseUrl: str('DATABASE_URL'),
+    dbTarget,
+    databaseUrl,
+    databaseUrlSource,
     allowMemoryStore: bool('ALLOW_MEMORY_STORE'),
     jwt: {
       secret: jwtSecret,
@@ -222,6 +245,17 @@ export function loadConfig(): Config {
       .map((item) => item.trim())
       .filter(Boolean),
   };
+}
+
+/** 健康检查展示用：只给出连接串里的 host:port，绝不带账号密码。 */
+export function dbHostOf(url: string): string {
+  if (!url) return 'none';
+  try {
+    const parsed = new URL(url);
+    return `${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}`;
+  } catch {
+    return 'unparsable';
+  }
 }
 
 /** 给健康检查用的能力快照，绝不外泄密钥。 */
