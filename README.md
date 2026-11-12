@@ -136,18 +136,22 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 ## 状态与边界（事实陈述，2026-11-12）
 
-**本地已验证**：`pnpm install` / `lint` / `typecheck` / 58 例测试（53 单元 + 5 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
+**生产闭环已打通**（前端不是静态壳）：生产 API `https://cloud.mixm.top/mixmapp/api/v1` 的数据层走 CloudBase 云 PG（`public.mix_exec` SQL 桥），公网域名上已完成「用户名注册 → 加购 → 下单 → 同 Idempotency-Key 幂等复放 → 我的订单 → `/me`」API 级取证，以及 Pages 生产站浏览器点击级取证（订单 `MOMWDO6PT5181888`、库存 63→62 均可在云端库回查）。详见 [`docs/11-delivery-report-2026-11-12-prod-closed-loop.md`](docs/11-delivery-report-2026-11-12-prod-closed-loop.md)。
 
-**免费平台已验证（GitHub 云端 runner，非本机）**：
+**本地已验证**：`pnpm install` / `lint` / `typecheck` / **62 例通过（6 例需真库跳过）** / `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
 
-| 工作流 | 结果 | 证明的事 |
+**免费平台已验证**：
+
+| 平台 / 工作流 | 结果 | 证明的事 |
 |---|---|---|
-| `ci` | ✅ 1m18s | 规则/类型/22 例单元测试/**4 例真实 PostgreSQL 集成测试**/API 构建/H5 构建/小程序构建/`dist` 启动后 `readyz` 就绪 |
-| `deploy` | ✅ 1m10s | 独立发布包（`pnpm deploy --prod`）+ H5 打包 + 产物上传；静态端与 SSH 端因无凭据显式 SKIP |
+| 生产 API（云服务器 + CloudBase PG） | ✅ 线上可用 | `cloud.mix.top` 上真实注册、加购、下单、幂等、订单查询、个人中心全通过 |
+| `ci` | ✅ 1m18s | 规则/类型/单元测试/**真实 PostgreSQL 集成测试**/API 构建/H5 构建/小程序构建/`dist` 启动后 `readyz` 就绪 |
+| `deploy` | ✅ 1m10s | 独立发布包（`pnpm deploy --prod`）+ H5 打包 + SSH 原子发布（`/opt/mixmapp/current`） |
 | `Android` | ✅ 3m18s | H5 → `cap sync` → `assembleDebug`，产出 `mixmapp-debug-apk`（3.91 MB） |
-| GitHub Pages | ✅ 已上线 | 静态端真实公网地址 <https://afdk1991.github.io/MixmAPP/>（主仓直接托管） |
+| GitHub Pages | ✅ 已上线 | <https://afdk1991.github.io/MixmAPP/>，单文件 H5 注入生产 API 源，run `43240472661` success |
+| CloudBase 静态托管 | ✅ 已上线 | <https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/>，版本 `MixmAPP-002`（buildId `2612306866`）SUCCESS |
 
-**未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥）、线上 API 部署（需服务器与 SSH 凭据）。
+**未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥；生产手机验证码注册因无短信通道暂不可用，可用用户名密码注册）。
 
 取证细节与每条失败的真实原因见 [`docs/07-free-platform-verification.md`](docs/07-free-platform-verification.md)。
 
