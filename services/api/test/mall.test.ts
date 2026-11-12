@@ -195,4 +195,34 @@ describe('商城：商品 / 购物车 / 订单', () => {
     const orders = await app.inject({ method: 'GET', url: '/api/v1/mall/orders', headers: auth(token) });
     expect(orders.json().data).toHaveLength(0);
   });
+
+  it('多行下单中途失败时，已扣的库存必须归还', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-rollback-a', title: '胸包', stock: 5, priceFen: 8900 }));
+    await ctx.store.mall.products.insert(product({ id: 'mix-rollback-b', title: '水壶', stock: 1, priceFen: 3900 }));
+    const token = await register(app, '13800002105');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '王五',
+        receiverPhone: '13800002105',
+        address: '浙江省宁波市鄞州区某条路 3 号',
+        // 第一行够扣、第二行不够 → 整单失败，第一行必须回滚
+        items: [
+          { productId: 'mix-rollback-a', quantity: 2 },
+          { productId: 'mix-rollback-b', quantity: 2 },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(409);
+
+    const a = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-rollback-a' });
+    const b = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-rollback-b' });
+    expect(a.json().data.stock).toBe(5);
+    expect(b.json().data.stock).toBe(1);
+  });
 });

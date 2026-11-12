@@ -450,6 +450,9 @@ export class PgStore implements Store {
         );
         return res.rowCount === 1;
       },
+      restoreStock: async (id: string, quantity: number): Promise<void> => {
+        await this.pool.query('update products set stock = stock + $2 where id = $1', [id, quantity]);
+      },
     },
     carts: {
       listByUser: async (userId: string): Promise<CartItemRecord[]> => {

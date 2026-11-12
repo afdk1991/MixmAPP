@@ -198,6 +198,10 @@ export class MemoryStore implements Store {
         found.stock -= quantity;
         return true;
       },
+      restoreStock: async (id: string, quantity: number): Promise<void> => {
+        const found = this.productList.find((p) => p.id === id);
+        if (found) found.stock += quantity;
+      },
     },
     carts: {
       listByUser: async (userId: string): Promise<CartItemRecord[]> => {

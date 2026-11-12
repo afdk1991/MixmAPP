@@ -172,10 +172,19 @@ export class MallService {
       lines.push({ product, quantity: line.quantity });
     }
 
-    // 先扣库存再落单：任一失败即整单失败
-    for (const line of lines) {
-      const ok = await this.store.mall.products.decrementStock(line.product.id, line.quantity);
-      if (!ok) throw AppError.conflict(`库存不足：${line.product.title}`);
+    // 先扣库存再落单：任一失败即整单失败；已扣的那几行必须归还，否则库存会凭空消失
+    const deducted: Array<{ product: ProductRecord; quantity: number }> = [];
+    try {
+      for (const line of lines) {
+        const ok = await this.store.mall.products.decrementStock(line.product.id, line.quantity);
+        if (!ok) throw AppError.conflict(`库存不足：${line.product.title}`);
+        deducted.push(line);
+      }
+    } catch (error) {
+      for (const line of deducted) {
+        await this.store.mall.products.restoreStock(line.product.id, line.quantity);
+      }
+      throw error;
     }
 
     const totalFen = lines.reduce((sum, line) => sum + line.product.priceFen * line.quantity, 0);

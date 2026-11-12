@@ -170,6 +170,8 @@ export type Store = {
       findById(id: string): Promise<ProductRecord | null>;
       /** 扣减库存，库存不足返回 false（并发安全由实现侧保证） */
       decrementStock(id: string, quantity: number): Promise<boolean>;
+      /** 归还库存：多行下单中途失败时回滚已扣的库存，避免库存凭空消失 */
+      restoreStock(id: string, quantity: number): Promise<void>;
     };
     carts: {
       listByUser(userId: string): Promise<CartItemRecord[]>;

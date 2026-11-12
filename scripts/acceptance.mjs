@@ -102,7 +102,29 @@ async function main() {
   const sameGuest = g1.json?.data?.user?.accountNo && g1.json?.data?.user?.accountNo === g2.json?.data?.user?.accountNo;
   record('游客注册幂等（同设备同账号）', Boolean(sameGuest), `g1=${g1.json?.data?.user?.accountNo} g2=${g2.json?.data?.user?.accountNo}`);
 
-  // 9. 限流（放最后，会把自己的配额打满）
+  // 9. 商城：商品 → 购物车 → 下单 → 库存真的减少
+  const products = await req('GET', `${api}/mall/products`);
+  const firstProduct = products.json?.data?.[0];
+  record('商品列表可读', products.status === 200 && Array.isArray(products.json?.data), `count=${products.json?.data?.length}`);
+  if (firstProduct) {
+    const stockBefore = firstProduct.stock;
+    const cartAdd = await req('POST', `${api}/mall/cart`, { token: tokens?.accessToken, body: { productId: firstProduct.id, quantity: 1 } });
+    const order = await req('POST', `${api}/mall/orders`, {
+      token: tokens?.accessToken,
+      body: {
+        receiverName: '验收收货人',
+        receiverPhone: '13800000999',
+        address: '浙江省宁波市验收路 1 号',
+      },
+    });
+    const orderOk = order.status === 201 && Boolean(order.json?.data?.orderNo);
+    const after = await req('GET', `${api}/mall/products/${firstProduct.id}`);
+    const decremented = after.json?.data?.stock === stockBefore - 1;
+    record('购物车加入 + 下单成功', cartAdd.status === 200 && orderOk, `orderNo=${order.json?.data?.orderNo} status=${order.status}`);
+    record('下单后库存真的减少 1', decremented, `before=${stockBefore} after=${after.json?.data?.stock}`);
+  }
+
+  // 10. 限流（放最后，会把自己的配额打满）
   if (!skipRateLimit) {
     let got429 = false;
     for (let i = 0; i < 80; i += 1) {
