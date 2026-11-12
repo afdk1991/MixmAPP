@@ -276,3 +276,31 @@ node scripts/acceptance.mjs https://cloud.mixm.top/mixmapp
 ✓ 游客注册幂等            同一 deviceId 两次同号
 ✓ 限流触发               第 45 次请求
 ```
+## 12. 第二批：商城下单链路（含一个库存泄漏真 bug）
+
+### 12.1 库存泄漏：多行下单中途失败，前面扣掉的库存没还
+
+`createOrder` 原先逐行扣库存，任一行失败就整单失败，但**已经扣过的行不回滚**：
+两行商品里第一行够、第二行不够时，第一行的库存就凭空消失了。修法：记录已扣行，
+失败时逐行 `restoreStock` 归还；`Store` 接口新增 `restoreStock`（内存实现与 PG 实现各一份，
+PG 侧是 `update products set stock = stock + $2 where id = $1`）。
+回归测试 `mall.test.ts`：A 库存 5、B 库存 1，下单 A×2 + B×2 得 409，读回 A 仍为 5、B 仍为 1。
+
+### 12.2 线上验收扩到 15 项（新增商城写链路）
+
+`scripts/acceptance.mjs` 增加：商品列表、加入购物车、下单 201、下单后库存真的减少 1。
+2026-11-12 线上结果 **15/15 通过**，其中商城三项：
+
+```
+✓ 商品列表可读           count=6
+✓ 购物车加入 + 下单成功   orderNo=MOMWDLTRHA624705 status=201
+✓ 下单后库存真的减少 1    before=120 after=119
+```
+
+### 12.3 仍然没做到的（明确记账，不算完成）
+
+- **下单幂等**：同一用户网络重试会生成两张订单并重复扣库存。需要给 `POST /mall/orders`
+  加 `Idempotency-Key`，落一张 `order_requests(user_id, key)` 唯一表；目前未做。
+- **支付真实回调**：`modules/pay.ts` 的微信/支付宝适配器只有骨架，回调验签、金额比对、
+  重复回调幂等都没有真凭据可验（`/meta` 里 `wechatPay/alipay` 仍是 `off`）。
+- **CloudBase 云 PG 仍未接**：`DATABASE_URL_CLOUDBASE` 缺值，`dbTarget` 是 cloudbase 但实际连本机。
