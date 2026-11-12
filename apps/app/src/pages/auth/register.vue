@@ -371,21 +371,6 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   font-size: 26rpx;
 }
 
-.guest {
-  margin-top: 24rpx;
-}
-
-.guest-btn {
-  margin-top: 20rpx;
-  height: 84rpx;
-  line-height: 84rpx;
-  text-align: center;
-  border-radius: 16rpx;
-  border: 1rpx dashed #cbd5e1;
-  color: #334155;
-  font-size: 26rpx;
-}
-
 .switch {
   margin-top: 24rpx;
   display: flex;

@@ -21,7 +21,7 @@
 | Android 本地出包 | `apps/mobile`（Capacitor 壳）装载同一份 H5 产物，`gradlew assembleDebug/Release` 直接出 APK/AAB |
 | 微信小程序 | `uni build -p mp-weixin` → `dist/build/mp-weixin` |
 | HarmonyOS | `uni build -p app-harmony` → `dist/build/app-harmony` |
-| 用户体系 | 手机验证码 / 邮箱密码 / 微信·QQ·GitHub OAuth 注册登录，注册即分配全局唯一 MixmAPP 号码 |
+| 用户体系 | 手机验证码 / 邮箱密码 / 用户名密码 / 本机号码一键登录 / 游客账号 / 微信·QQ·GitHub·Apple OAuth 注册登录，注册即分配全局唯一 MixmAPP 号码 |
 | 商城 | 商品列表 / 详情（分类 + 关键词 + 库存），购物车加购·改量·删除，下单扣库存与订单查询；`products / carts / orders / order_items` 四表，Memory 与 PostgreSQL 双驱动，H5 端商城·详情·购物车·订单四页 |
 | 自动分配 ID | 雪花 ID、ULID、UUIDv7 三策略并存，一次发号同时产出主键 + MixmAPP 号码 + 雪花值 + ULID + UUIDv7 |
 | 支付 | 微信支付 APIv3（JSAPI 下单、回调验签、AES-256-GCM 解密）、支付宝 RSA2（下单、异步通知验签） |
@@ -136,7 +136,7 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 ## 状态与边界（事实陈述，2026-11-12）
 
-**本地已验证**：`pnpm install` / `lint` / `typecheck` / 26 例测试（22 单元 + 4 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
+**本地已验证**：`pnpm install` / `lint` / `typecheck` / 41 例测试（37 单元 + 4 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
 
 **免费平台已验证（GitHub 云端 runner，非本机）**：
 
