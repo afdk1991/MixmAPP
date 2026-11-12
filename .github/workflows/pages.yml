@@ -1,0 +1,67 @@
+name: Pages
+
+# GitHub Pages 直接挂在 MixmAPP 主仓库上（项目名 = MixmAPP），发布单文件 H5 产物
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/app/**'
+      - 'packages/**'
+      - 'scripts/build-h5-single.mjs'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: 打单文件 H5（路由 base 对齐子路径 /MixmAPP/）
+        env:
+          MIXMAPP_H5_BASE: /MixmAPP/
+        run: node scripts/build-h5-single.mjs
+
+      - name: 组装站点目录
+        run: |
+          mkdir -p _site
+          cp release/mixmapp-h5-single.html _site/index.html
+          touch _site/.nojekyll
+          ls -l _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: 写地址到 Job Summary
+        run: echo "线上地址：${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"

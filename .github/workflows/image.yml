@@ -14,7 +14,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/mixmapp-api
+  IMAGE: ghcr.io/${{ github.repository_owner }}/mixmapp
   DATABASE_URL: postgres://mixmapp:mixmapp@127.0.0.1:5432/mixmapp_img
 
 jobs:
@@ -92,4 +92,5 @@ jobs:
           echo "镜像：\`$IMAGE:$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "拉取：\`docker pull $IMAGE:latest\`" >> "$GITHUB_STEP_SUMMARY"
+
 
