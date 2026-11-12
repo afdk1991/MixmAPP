@@ -7,6 +7,10 @@ export type UserRecord = {
   nickname: string;
   avatarUrl: string | null;
   bio: string | null;
+  /** 用户名（唯一，可空）；密码登录与用户名注册都依赖它 */
+  username: string | null;
+  /** 游客账号标记；绑定手机号/邮箱/第三方或补设用户名后置 false */
+  guest: boolean;
   phone: string | null;
   email: string | null;
   passwordHash: string | null;
@@ -15,10 +19,12 @@ export type UserRecord = {
   updatedAt: Date;
 };
 
+export type BindingProvider = 'wechat' | 'qq' | 'github' | 'apple' | 'guest';
+
 export type BindingRecord = {
   id: string;
   userId: string;
-  provider: 'wechat' | 'qq' | 'github';
+  provider: BindingProvider;
   openId: string;
   unionId: string | null;
   nickname: string | null;
@@ -69,6 +75,55 @@ export type PushTokenRecord = {
   createdAt: Date;
 };
 
+export type ProductRecord = {
+  id: string;
+  title: string;
+  subtitle: string;
+  priceFen: number;
+  originalPriceFen: number;
+  stock: number;
+  category: string;
+  cover: string;
+  images: string[];
+  tags: string[];
+  description: string;
+  sortNo: number;
+  createdAt: Date;
+};
+
+export type CartItemRecord = {
+  id: string;
+  userId: string;
+  productId: string;
+  quantity: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type OrderItemRecord = {
+  id: string;
+  orderId: string;
+  productId: string;
+  title: string;
+  priceFen: number;
+  quantity: number;
+  subtotalFen: number;
+};
+
+export type OrderRecord = {
+  id: string;
+  orderNo: string;
+  userId: string;
+  status: 'pending' | 'paid' | 'cancelled';
+  totalFen: number;
+  receiverName: string;
+  receiverPhone: string;
+  address: string;
+  remark: string | null;
+  createdAt: Date;
+  paidAt: Date | null;
+};
+
 export type Store = {
   driver: 'memory' | 'postgres';
   ping(): Promise<boolean>;
@@ -79,6 +134,7 @@ export type Store = {
     findById(id: string): Promise<UserRecord | null>;
     findByPhone(phone: string): Promise<UserRecord | null>;
     findByEmail(email: string): Promise<UserRecord | null>;
+    findByUsername(username: string): Promise<UserRecord | null>;
     findByAccountNo(accountNo: string): Promise<UserRecord | null>;
     update(id: string, patch: Partial<UserRecord>): Promise<UserRecord | null>;
   };
@@ -106,5 +162,27 @@ export type Store = {
   pushTokens: {
     upsert(record: PushTokenRecord): Promise<void>;
     listByUser(userId: string): Promise<PushTokenRecord[]>;
+  };
+  mall: {
+    products: {
+      insert(product: ProductRecord): Promise<ProductRecord>;
+      list(filter: { category?: string; keyword?: string; limit: number; offset: number }): Promise<ProductRecord[]>;
+      findById(id: string): Promise<ProductRecord | null>;
+      /** 扣减库存，库存不足返回 false（并发安全由实现侧保证） */
+      decrementStock(id: string, quantity: number): Promise<boolean>;
+    };
+    carts: {
+      listByUser(userId: string): Promise<CartItemRecord[]>;
+      find(userId: string, productId: string): Promise<CartItemRecord | null>;
+      upsert(item: CartItemRecord): Promise<CartItemRecord>;
+      remove(userId: string, productId: string): Promise<void>;
+      clear(userId: string): Promise<void>;
+    };
+    orders: {
+      insert(order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord>;
+      findByOrderNo(orderNo: string): Promise<OrderRecord | null>;
+      listByUser(userId: string): Promise<OrderRecord[]>;
+      itemsByOrder(orderId: string): Promise<OrderItemRecord[]>;
+    };
   };
 };

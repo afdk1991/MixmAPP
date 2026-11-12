@@ -25,9 +25,9 @@
 | 方法 | 路径 | 鉴权 | 请求体 | 说明 |
 |---|---|---|---|---|
 | POST | `/auth/sms/code` | 否 | `{ phone, purpose: register\|login\|bind }` | 发送验证码，60s 限频，返回 `ttlSec`（开发态含 `devCode`） |
-| POST | `/auth/register/phone` | 否 | `{ phone, code, nickname? }` | 注册即分配 MIX 号码，201 |
+| POST | `/auth/register/phone` | 否 | `{ phone, code, nickname? }` | 注册即分配 MixmAPP 号码，201 |
 | POST | `/auth/register/email` | 否 | `{ email, password, nickname? }` | 邮箱注册，201 |
-| POST | `/auth/login/password` | 否 | `{ account, password }`（账号可为手机号/邮箱/MIX 号码） | 密码登录 |
+| POST | `/auth/login/password` | 否 | `{ account, password }`（账号可为手机号/邮箱/MixmAPP 号码） | 密码登录 |
 | POST | `/auth/login/sms` | 否 | `{ phone, code }` | 验证码登录（未注册则自动建号） |
 | POST | `/auth/login/oauth` | 否 | `{ provider: wechat\|qq\|github, code }` | 第三方登录，首次登录自动建号 |
 | POST | `/auth/refresh` | 否 | `{ refreshToken }` | 轮换刷新令牌 |
@@ -36,7 +36,7 @@
 认证成功统一返回：
 
 ```json
-{ "data": { "user": { "id": "…", "accountNo": "MIX-…", … },
+{ "data": { "user": { "id": "…", "accountNo": "MixmAPP-…", … },
             "tokens": { "accessToken": "…", "refreshToken": "…", "expiresIn": 900, "tokenType": "Bearer" },
             "isNewUser": true } }
 ```
@@ -105,4 +105,4 @@ curl -X POST http://127.0.0.1:8080/api/v1/ids/preview -H "content-type: applicat
 curl http://127.0.0.1:8080/api/v1/me -H "Authorization: Bearer <token>"
 ```
 
-响应头里的 `x-account-no` 是当前令牌对应的 MIX 号码，联调时可直接确认账号身份。
+响应头里的 `x-account-no` 是当前令牌对应的 MixmAPP 号码，联调时可直接确认账号身份。

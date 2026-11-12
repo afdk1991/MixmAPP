@@ -68,6 +68,14 @@ export type Config = {
     wechat: { appId: string; appSecret: string };
     qq: { appId: string; appKey: string };
     github: { clientId: string; clientSecret: string };
+    apple: { clientId: string };
+  };
+  /** 一键登录（本机号码认证）网关 */
+  onekey: {
+    provider: 'dev' | 'http';
+    endpoint: string;
+    appId: string;
+    appSecret: string;
   };
   pay: {
     wechat: {
@@ -154,6 +162,13 @@ export function loadConfig(): Config {
         clientId: str('OAUTH_GITHUB_CLIENT_ID'),
         clientSecret: str('OAUTH_GITHUB_CLIENT_SECRET'),
       },
+      apple: { clientId: str('OAUTH_APPLE_CLIENT_ID') },
+    },
+    onekey: {
+      provider: str('ONEKEY_PROVIDER', 'dev') === 'http' ? 'http' : 'dev',
+      endpoint: str('ONEKEY_ENDPOINT'),
+      appId: str('ONEKEY_APP_ID'),
+      appSecret: str('ONEKEY_APP_SECRET'),
     },
     pay: {
       wechat: {
@@ -210,6 +225,8 @@ export function capabilitySnapshot(config: Config): Record<string, string> {
     wechatOauth: config.oauth.wechat.appId ? 'on' : 'off',
     qqOauth: config.oauth.qq.appId ? 'on' : 'off',
     githubOauth: config.oauth.github.clientId ? 'on' : 'off',
+    appleOauth: config.oauth.apple.clientId ? 'on' : 'off',
+    onekey: config.onekey.provider,
     wechatPay: config.pay.wechat.mchId ? 'on' : 'off',
     alipay: config.pay.alipay.appId ? 'on' : 'off',
     map: config.map.provider,
@@ -231,6 +248,4 @@ export function sqlDir(): string {
     resolve(here, '..', 'infra', 'sql'),
     resolve(process.cwd(), 'infra', 'sql'),
   ].filter((item): item is string => Boolean(item));
-  const found = candidates.find((dir) => existsSync(dir));
-  return found ?? candidates[1] ?? join(projectRoot(), 'infra', 'sql');
-}
+  const found = candidates.find((dir)

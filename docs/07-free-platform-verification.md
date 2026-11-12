@@ -3,7 +3,7 @@
 本文只记录**在免费云端平台上真实跑出来的结果**，不记录本机跑通的内容。
 每条都给出可复核的 run id / 产物，以及失败过的真实原因。
 
-仓库：`https://github.com/afdk1991/mixmapp`（当前为私有）
+仓库：`https://github.com/afdk1991/MixmAPP`（公开）
 路线：Windows 本机开发 → 推送到 GitHub → 由 GitHub 提供的免费 runner 执行构建、测试与出包。
 
 ---
@@ -16,7 +16,7 @@
 | GitHub Actions（ubuntu-latest） | 发布包与静态产物打包 | ✅ 通过 | `deploy` run 43080670325，1m10s |
 | GitHub Actions（ubuntu-latest） | Android debug APK | ✅ 通过 | `Android` run 43080670220，3m18s，产物 3.91 MB |
 | GitHub 提供的 PostgreSQL service 容器 | 真库集成测试 | ✅ 通过 | `postgres:16-alpine`，4 例集成测试全绿 |
-| GitHub Pages | H5 静态托管 | ✅ 通过（产物仓） | <https://afdk1991.github.io/mixmapp-h5/> 返回 200、DOM 有 `data-page` |
+| GitHub Pages | H5 静态托管 | ✅ 通过（主仓 Pages） | <https://afdk1991.github.io/MixmAPP/> 返回 200、DOM 有 `data-page` |
 | Cloudflare Pages | H5 静态托管 | ⏸ 未执行 | 缺 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，workflow 显式 SKIP |
 | 远程 API 宿主 | 线上服务 | ⏸ 未执行 | 缺 SSH 凭据与服务器 |
 
@@ -47,7 +47,7 @@ readyz ok (attempt 2)
 
 真库用例覆盖：
 
-1. 邮箱注册后用户落库，`uuidV7` 符合 RFC 9562（第 7 版、variant 10xx），`ulid` 26 位，`snowflake` 纯数字，`accountNo` 为 `MIX-XXXX-XXXX-XXXX-X`。
+1. 邮箱注册后用户落库，`uuidV7` 符合 RFC 9562（第 7 版、variant 10xx），`ulid` 26 位，`snowflake` 纯数字，`accountNo` 为 `MixmAPP-XXXX-XXXX-XXXX-X`。
 2. 新连接上读到刚写入的用户，密码登录成功，`/me` 返回该邮箱。
 3. 刷新令牌轮换后，旧刷新令牌重放返回 401（撤销生效）。
 4. 下单写入 `payments`，同 `outTradeNo` 再下单被拒（唯一约束真实生效）。
@@ -84,19 +84,19 @@ readyz ok (attempt 2)
 
 ---
 
-## 6. GitHub Pages：静态端真实上线（只公开产物）
+## 6. GitHub Pages：静态端真实上线（主仓托管）
 
-私有仓库不能开免费 Pages，所以没有把 `mixmapp` 转公开，而是另建了一个**只放构建产物**的仓库：
+私有仓库不能开免费 Pages（API 返回 422）。按「平台项目名统一为 MixmAPP」的规则，改为把主仓公开、Pages 直接挂在 `MixmAPP` 上，单文件产物由 `pages.yml` 在云端构建后发布：
 
-- 产物仓：`https://github.com/afdk1991/mixmapp-h5`（公开，内容只有 `index.html` / `README.md` / `.nojekyll`）
-- 线上地址：<https://afdk1991.github.io/mixmapp-h5/>（HTTP 200，356,739 字节）
+- 托管方式：主仓 `https://github.com/afdk1991/MixmAPP`（`.github/workflows/pages.yml` 打单文件后发布，源码与产物同仓）
+- 线上地址：<https://afdk1991.github.io/MixmAPP/>（HTTP 200，356,739 字节）
 - 复核方式：浏览器打开即可；`/api` 未连，首页顶部会显示「未连上 API（先启动 services/api）」
 
 怎么生成的（源码仓内两条命令）：
 
 ```bash
 node scripts/build-h5-single.mjs                       # 打进单文件 HTML
-MIXMAPP_H5_BASE=/mixmapp-h5/ node scripts/build-h5-single.mjs   # 子路径托管时对齐路由 base
+MIXMAPP_H5_BASE=/MixmAPP/ node scripts/build-h5-single.mjs   # 子路径托管时对齐路由 base
 ```
 
 产物落在 `release/mixmapp-h5-single.html`（348 KB，JS/CSS 内联、图片转 data URI）。
@@ -106,13 +106,13 @@ MIXMAPP_H5_BASE=/mixmapp-h5/ node scripts/build-h5-single.mjs   # 子路径托�
 原因是 `manifest.json` 的 `h5.router.base` 为 `/`，托管在 `/mixmapp-h5/` 子路径时路由匹配不到任何页面
 （`<uni-app>` 里是空的）。把 `router.base` 对齐到部署子路径后，`data-page` 正常出现、页面渲染完整。
 
-如果不想保留这个公开产物仓，删除即可（`gh repo delete afdk1991/mixmapp-h5`），不影响源码仓。
+产物与源码同在主仓，Pages 走 `pages.yml`。
 
 ## 7. 尚未验证的部分（条件清单，不是结论）
 
 | 项 | 缺什么 | 补齐后怎么验 |
 |---|---|---|
-| GitHub Pages 公网地址 | 已完成：产物仓 `afdk1991/mixmapp-h5` + Pages | 见第 6 节 |
+| GitHub Pages 公网地址 | 已完成：主仓 `afdk1991/MixmAPP` + Pages | 见第 6 节 |
 | Cloudflare Pages | `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID` | 配好 secrets 后 `deploy` 的静态端会自动从 SKIP 转为实际发布 |
 | 免费云 PostgreSQL（Neon/Supabase） | 账号与连接串 | 把 `DATABASE_URL` 指过去，跑 `db:migrate` + 集成测试 |
 | 线上 API | 服务器 + SSH 私钥 + 域名 | 配 `DEPLOY_SSH_KEY`/`DEPLOY_HOST`/`DEPLOY_USER`，`deploy` 的 api job 走原子发布与健康校验 |

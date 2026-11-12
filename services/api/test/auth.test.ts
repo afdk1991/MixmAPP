@@ -20,7 +20,7 @@ async function requestCode(instance: FastifyInstance, phone: string, purpose: st
 }
 
 describe('手机号注册 / 登录', () => {
-  it('注册成功应返回 MIX 号段、令牌与新用户标记', async () => {
+  it('注册成功应返回 MixmAPP 号段、令牌与新用户标记', async () => {
     const ctx = await makeApp();
     app = ctx.app;
     const phone = '13800001111';
@@ -34,7 +34,7 @@ describe('手机号注册 / 登录', () => {
     expect(res.statusCode).toBe(201);
     const data = res.json().data;
     expect(data.isNewUser).toBe(true);
-    expect(data.user.accountNo).toMatch(/^MIX-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
+    expect(data.user.accountNo).toMatch(/^MixmAPP-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
     expect(data.user.nickname).toBe('阿混');
     expect(data.user.phone).toBe('138****1111');
     expect(data.tokens.accessToken).toBeTruthy();
@@ -97,7 +97,7 @@ describe('手机号注册 / 登录', () => {
 });
 
 describe('邮箱注册与密码登录', () => {
-  it('注册后可用邮箱或 MIX 号登录', async () => {
+  it('注册后可用邮箱或 MixmAPP 号登录（号段大小写不敏感）', async () => {
     const ctx = await makeApp();
     app = ctx.app;
     const email = 'tester@mixm.app';
@@ -109,7 +109,7 @@ describe('邮箱注册与密码登录', () => {
     expect(reg.statusCode).toBe(201);
     const accountNo = reg.json().data.user.accountNo as string;
 
-    for (const account of [email, accountNo]) {
+    for (const account of [email, accountNo, accountNo.toLowerCase()]) {
       const login = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/login/password',
@@ -231,7 +231,7 @@ describe('鉴权与发号器', () => {
       });
       expect(res.statusCode).toBe(200);
       const data = res.json().data;
-      expect(data.accountNo).toMatch(/^MIX-/);
+      expect(data.accountNo).toMatch(/^MixmAPP-/);
       if (strategy === 'ulid') expect(data.id).toHaveLength(26);
       if (strategy === 'uuidv7') expect(data.id).toContain('-');
     }

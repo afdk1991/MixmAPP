@@ -21,8 +21,8 @@
 | Android 本地出包 | `apps/mobile`（Capacitor 壳）装载同一份 H5 产物，`gradlew assembleDebug/Release` 直接出 APK/AAB |
 | 微信小程序 | `uni build -p mp-weixin` → `dist/build/mp-weixin` |
 | HarmonyOS | `uni build -p app-harmony` → `dist/build/app-harmony` |
-| 用户体系 | 手机验证码 / 邮箱密码 / 微信·QQ·GitHub OAuth 注册登录，注册即分配全局唯一 MIX 号码 |
-| 自动分配 ID | 雪花 ID、ULID、UUIDv7 三策略并存，一次发号同时产出主键 + MIX 号码 + 雪花值 + ULID + UUIDv7 |
+| 用户体系 | 手机验证码 / 邮箱密码 / 微信·QQ·GitHub OAuth 注册登录，注册即分配全局唯一 MixmAPP 号码 |
+| 自动分配 ID | 雪花 ID、ULID、UUIDv7 三策略并存，一次发号同时产出主键 + MixmAPP 号码 + 雪花值 + ULID + UUIDv7 |
 | 支付 | 微信支付 APIv3（JSAPI 下单、回调验签、AES-256-GCM 解密）、支付宝 RSA2（下单、异步通知验签） |
 | 定位导航 | 高德 Web 服务（逆地理、路径规划）；配置北斗坐标系入参即可直接复用 |
 | 存储 / 推送 / AI | S3 兼容（AWS S3 / R2 / OSS）SigV4 预签名、极光 / FCM 推送、豆包 / OpenAI 兼容 Chat |
@@ -79,7 +79,7 @@ pnpm dev:h5
 | `pnpm ops:health` | 线上健康巡检（可传 base URL） |
 | `pnpm ops:backup` | PostgreSQL 备份（`pg_dump` + gzip + 14 天清理） |
 | `node scripts/serve-h5.mjs` | 本地预览 H5 产物，并把 `/api/*` 反代到 8080 |
-| `node scripts/build-h5-single.mjs` | 把 H5 压成单文件 HTML（`release/mixmapp-h5-single.html`），用于只支持单文件托管的平台；子路径托管加 `MIXMAPP_H5_BASE=/mixmapp-h5/` |
+| `node scripts/build-h5-single.mjs` | 把 H5 压成单文件 HTML（`release/mixmapp-h5-single.html`），用于只支持单文件托管的平台；子路径托管加 `MIXMAPP_H5_BASE=/MixmAPP/` |
 
 ---
 
@@ -92,7 +92,7 @@ MixmAPP/
 │  └─ mobile/              # @mixmapp/mobile：Capacitor 安卓壳（装 H5 产物出 APK/AAB）
 ├─ services/api/           # @mixmapp/api：Fastify 5 + zod + jose + pg
 ├─ packages/
-│  ├─ ids/                 # @mixmapp/ids：雪花 / ULID / UUIDv7 / Crockford MIX 号码
+│  ├─ ids/                 # @mixmapp/ids：雪花 / ULID / UUIDv7 / Crockford MixmAPP 号码
 │  └─ contracts/           # @mixmapp/contracts：zod schema 与 DTO 契约
 ├─ infra/                  # SQL 迁移、Nginx、systemd
 ├─ deploy/                 # 原子发布、回滚脚本
@@ -135,7 +135,7 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 ## 状态与边界（事实陈述，2026-11-12）
 
-**本地已验证**：`pnpm install` / `lint` / `typecheck` / 26 例测试（22 单元 + 4 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MIX 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
+**本地已验证**：`pnpm install` / `lint` / `typecheck` / 26 例测试（22 单元 + 4 真库跳过）/ `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
 
 **免费平台已验证（GitHub 云端 runner，非本机）**：
 
@@ -144,7 +144,7 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 | `ci` | ✅ 1m18s | 规则/类型/22 例单元测试/**4 例真实 PostgreSQL 集成测试**/API 构建/H5 构建/小程序构建/`dist` 启动后 `readyz` 就绪 |
 | `deploy` | ✅ 1m10s | 独立发布包（`pnpm deploy --prod`）+ H5 打包 + 产物上传；静态端与 SSH 端因无凭据显式 SKIP |
 | `Android` | ✅ 3m18s | H5 → `cap sync` → `assembleDebug`，产出 `mixmapp-debug-apk`（3.91 MB） |
-| GitHub Pages | ✅ 已上线 | 静态端真实公网地址 <https://afdk1991.github.io/mixmapp-h5/>（产物仓，源码仍私有） |
+| GitHub Pages | ✅ 已上线 | 静态端真实公网地址 <https://afdk1991.github.io/MixmAPP/>（主仓直接托管） |
 
 **未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥）、线上 API 部署（需服务器与 SSH 凭据）。
 

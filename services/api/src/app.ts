@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import type { Config } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
+import { MallService } from './modules/mall.js';
 import { PayService } from './modules/pay.js';
 import { createSmsProvider, type SmsProvider } from './adapters/sms.js';
 import { createOAuthProviders, type OAuthProvider, type OAuthProviderName } from './adapters/oauth.js';
@@ -14,6 +15,7 @@ import { createAiProvider, type AiProvider } from './adapters/ai.js';
 import { AppError } from './lib/errors.js';
 import { verifyAccessToken } from './lib/jwt.js';
 import { authRoutes } from './routes/auth.js';
+import { mallRoutes } from './routes/mall.js';
 import { meRoutes } from './routes/me.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { metaRoutes } from './routes/meta.js';
@@ -65,6 +67,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }),
   );
   app.decorate('pay', new PayService(deps.config, deps.store));
+  app.decorate('mall', new MallService(deps.config, deps.store));
 
   app.decorate('requireAuth', async (request, reply) => {
     const header = request.headers.authorization;
@@ -146,6 +149,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await metaRoutes(scope);
       await authRoutes(scope);
       await meRoutes(scope);
+      await mallRoutes(scope);
       await integrationRoutes(scope);
     },
     { prefix: '/api/v1' },

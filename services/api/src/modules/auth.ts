@@ -108,7 +108,7 @@ export class AuthService {
     const now = new Date();
     const nickname =
       input.nickname?.trim() ||
-      `MIX用户${generated.accountNo.replace(/[^0-9A-Z]/g, '').slice(-4)}`;
+      `MixmAPP用户${generated.accountNo.replace(/[^0-9A-Z]/g, '').slice(-4)}`;
     const user: UserRecord = {
       id: generated.id,
       accountNo: generated.accountNo,
@@ -162,7 +162,7 @@ export class AuthService {
     const account = input.account.trim();
     const user = account.includes('@')
       ? await this.store.users.findByEmail(account)
-      : await this.store.users.findByAccountNo(account.toUpperCase().replace(/\s/g, ''));
+      : await this.store.users.findByAccountNo(account.replace(/\s/g, ''));
     if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
       throw new AppError('UNAUTHORIZED', '账号或密码不正确');
     }

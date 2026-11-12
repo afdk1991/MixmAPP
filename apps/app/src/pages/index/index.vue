@@ -12,7 +12,7 @@
 
       <text class="headline">一个账号</text>
       <text class="headline">跑通所有端</text>
-      <text class="lede">Web / Android / iOS / 鸿蒙 · 注册即自动分配 MIX 号码</text>
+      <text class="lede">Web / Android / iOS / 鸿蒙 · 注册即自动分配 MixmAPP 号码</text>
 
       <view class="status-row">
         <view class="dot" :class="{ 'dot--down': !online }" />
@@ -33,7 +33,7 @@
         </view>
         <view class="tile" hover-class="tile-hover" @tap="go('/pages/me/index')">
           <text class="tile-title">我的</text>
-          <text class="tile-desc">MIX 号码与绑定</text>
+          <text class="tile-desc">MixmAPP 号码与绑定</text>
         </view>
         <view class="tile" hover-class="tile-hover" @tap="go('/pages/tools/ids')">
           <text class="tile-title">ID 试算器</text>

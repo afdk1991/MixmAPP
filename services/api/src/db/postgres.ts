@@ -1,7 +1,11 @@
 import pg from 'pg';
 import type {
   BindingRecord,
+  CartItemRecord,
+  OrderItemRecord,
+  OrderRecord,
   PaymentRecord,
+  ProductRecord,
   PushTokenRecord,
   RefreshTokenRecord,
   SmsCodeRecord,
@@ -26,6 +30,8 @@ function mapUser(row: Row): UserRecord {
     nickname: row['nickname'] as string,
     avatarUrl: (row['avatar_url'] as string | null) ?? null,
     bio: (row['bio'] as string | null) ?? null,
+    username: (row['username'] as string | null) ?? null,
+    guest: Boolean(row['guest']),
     phone: (row['phone'] as string | null) ?? null,
     email: (row['email'] as string | null) ?? null,
     passwordHash: (row['password_hash'] as string | null) ?? null,
@@ -75,8 +81,8 @@ export class PgStore implements Store {
     insert: async (user: UserRecord): Promise<UserRecord> => {
       const res = await this.pool.query(
         `insert into users (id, account_no, snowflake, ulid, uuid_v7, nickname, avatar_url, bio,
-           phone, email, password_hash, status, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *`,
+           username, guest, phone, email, password_hash, status, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning *`,
         [
           user.id,
           user.accountNo,
@@ -86,6 +92,8 @@ export class PgStore implements Store {
           user.nickname,
           user.avatarUrl,
           user.bio,
+          user.username,
+          user.guest,
           user.phone,
           user.email,
           user.passwordHash,
@@ -111,9 +119,17 @@ export class PgStore implements Store {
       return res.rows[0] ? mapUser(res.rows[0] as Row) : null;
     },
     findByAccountNo: async (accountNo: string): Promise<UserRecord | null> => {
-      const res = await this.pool.query('select * from users where account_no = $1 limit 1', [
-        accountNo,
-      ]);
+      const res = await this.pool.query(
+        'select * from users where upper(account_no) = upper($1) limit 1',
+        [accountNo],
+      );
+      return res.rows[0] ? mapUser(res.rows[0] as Row) : null;
+    },
+    findByUsername: async (username: string): Promise<UserRecord | null> => {
+      const res = await this.pool.query(
+        'select * from users where lower(username) = lower($1) limit 1',
+        [username],
+      );
       return res.rows[0] ? mapUser(res.rows[0] as Row) : null;
     },
     update: async (id: string, patch: Partial<UserRecord>): Promise<UserRecord | null> => {
@@ -126,6 +142,8 @@ export class PgStore implements Store {
         nickname: 'nickname',
         avatarUrl: 'avatar_url',
         bio: 'bio',
+        username: 'username',
+        guest: 'guest',
         phone: 'phone',
         email: 'email',
         passwordHash: 'password_hash',
@@ -369,6 +387,218 @@ export class PgStore implements Store {
         };
       });
     },
+  };
+
+  mall = {
+    products: {
+      insert: async (product: ProductRecord): Promise<ProductRecord> => {
+        const res = await this.pool.query(
+          `insert into products (id, title, subtitle, price_fen, original_price_fen, stock, category,
+             cover, images, tags, description, sort_no, created_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
+          [
+            product.id,
+            product.title,
+            product.subtitle,
+            product.priceFen,
+            product.originalPriceFen,
+            product.stock,
+            product.category,
+            product.cover,
+            JSON.stringify(product.images),
+            JSON.stringify(product.tags),
+            product.description,
+            product.sortNo,
+            product.createdAt,
+          ],
+        );
+        return mapProduct(res.rows[0] as Row);
+      },
+      list: async (filter: {
+        category?: string;
+        keyword?: string;
+        limit: number;
+        offset: number;
+      }): Promise<ProductRecord[]> => {
+        const conditions: string[] = [];
+        const params: unknown[] = [];
+        if (filter.category) {
+          params.push(filter.category);
+          conditions.push(`category = $${params.length}`);
+        }
+        if (filter.keyword) {
+          params.push(`%${filter.keyword}%`);
+          conditions.push(`(title ilike $${params.length} or subtitle ilike $${params.length})`);
+        }
+        const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
+        params.push(filter.limit, filter.offset);
+        const res = await this.pool.query(
+          `select * from products ${where} order by sort_no asc, created_at desc
+           limit $${params.length - 1} offset $${params.length}`,
+          params,
+        );
+        return res.rows.map((row) => mapProduct(row as Row));
+      },
+      findById: async (id: string): Promise<ProductRecord | null> => {
+        const res = await this.pool.query('select * from products where id = $1 limit 1', [id]);
+        return res.rows[0] ? mapProduct(res.rows[0] as Row) : null;
+      },
+      decrementStock: async (id: string, quantity: number): Promise<boolean> => {
+        const res = await this.pool.query(
+          'update products set stock = stock - $2 where id = $1 and stock >= $2 returning id',
+          [id, quantity],
+        );
+        return res.rowCount === 1;
+      },
+    },
+    carts: {
+      listByUser: async (userId: string): Promise<CartItemRecord[]> => {
+        const res = await this.pool.query(
+          'select * from carts where user_id = $1 order by created_at asc',
+          [userId],
+        );
+        return res.rows.map((row) => mapCart(row as Row));
+      },
+      find: async (userId: string, productId: string): Promise<CartItemRecord | null> => {
+        const res = await this.pool.query(
+          'select * from carts where user_id = $1 and product_id = $2 limit 1',
+          [userId, productId],
+        );
+        return res.rows[0] ? mapCart(res.rows[0] as Row) : null;
+      },
+      upsert: async (item: CartItemRecord): Promise<CartItemRecord> => {
+        const res = await this.pool.query(
+          `insert into carts (id, user_id, product_id, quantity, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6)
+           on conflict (user_id, product_id)
+           do update set quantity = excluded.quantity, updated_at = excluded.updated_at
+           returning *`,
+          [item.id, item.userId, item.productId, item.quantity, item.createdAt, item.updatedAt],
+        );
+        return mapCart(res.rows[0] as Row);
+      },
+      remove: async (userId: string, productId: string): Promise<void> => {
+        await this.pool.query('delete from carts where user_id = $1 and product_id = $2', [
+          userId,
+          productId,
+        ]);
+      },
+      clear: async (userId: string): Promise<void> => {
+        await this.pool.query('delete from carts where user_id = $1', [userId]);
+      },
+    },
+    orders: {
+      insert: async (order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord> => {
+        const client = await this.pool.connect();
+        try {
+          await client.query('begin');
+          await client.query(
+            `insert into orders (id, order_no, user_id, status, total_fen, receiver_name,
+               receiver_phone, address, remark, created_at, paid_at)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+            [
+              order.id,
+              order.orderNo,
+              order.userId,
+              order.status,
+              order.totalFen,
+              order.receiverName,
+              order.receiverPhone,
+              order.address,
+              order.remark,
+              order.createdAt,
+              order.paidAt,
+            ],
+          );
+          for (const item of items) {
+            await client.query(
+              `insert into order_items (id, order_id, product_id, title, price_fen, quantity, subtotal_fen)
+               values ($1,$2,$3,$4,$5,$6,$7)`,
+              [item.id, item.orderId, item.productId, item.title, item.priceFen, item.quantity, item.subtotalFen],
+            );
+          }
+          await client.query('commit');
+        } catch (error) {
+          await client.query('rollback');
+          throw error;
+        } finally {
+          client.release();
+        }
+        return order;
+      },
+      findByOrderNo: async (orderNo: string): Promise<OrderRecord | null> => {
+        const res = await this.pool.query('select * from orders where order_no = $1 limit 1', [orderNo]);
+        return res.rows[0] ? mapOrder(res.rows[0] as Row) : null;
+      },
+      listByUser: async (userId: string): Promise<OrderRecord[]> => {
+        const res = await this.pool.query(
+          'select * from orders where user_id = $1 order by created_at desc limit 100',
+          [userId],
+        );
+        return res.rows.map((row) => mapOrder(row as Row));
+      },
+      itemsByOrder: async (orderId: string): Promise<OrderItemRecord[]> => {
+        const res = await this.pool.query('select * from order_items where order_id = $1', [orderId]);
+        return res.rows.map((row) => mapOrderItem(row as Row));
+      },
+    },
+  };
+}
+
+function mapProduct(row: Row): ProductRecord {
+  return {
+    id: row['id'] as string,
+    title: row['title'] as string,
+    subtitle: (row['subtitle'] as string | null) ?? '',
+    priceFen: Number(row['price_fen']),
+    originalPriceFen: Number(row['original_price_fen'] ?? 0),
+    stock: Number(row['stock']),
+    category: row['category'] as string,
+    cover: (row['cover'] as string | null) ?? '#0f9d8f',
+    images: (row['images'] as string[] | null) ?? [],
+    tags: (row['tags'] as string[] | null) ?? [],
+    description: (row['description'] as string | null) ?? '',
+    sortNo: Number(row['sort_no'] ?? 0),
+    createdAt: toDate(row['created_at']),
+  };
+}
+
+function mapCart(row: Row): CartItemRecord {
+  return {
+    id: row['id'] as string,
+    userId: row['user_id'] as string,
+    productId: row['product_id'] as string,
+    quantity: Number(row['quantity']),
+    createdAt: toDate(row['created_at']),
+    updatedAt: toDate(row['updated_at']),
+  };
+}
+
+function mapOrder(row: Row): OrderRecord {
+  return {
+    id: row['id'] as string,
+    orderNo: row['order_no'] as string,
+    userId: row['user_id'] as string,
+    status: row['status'] as OrderRecord['status'],
+    totalFen: Number(row['total_fen']),
+    receiverName: row['receiver_name'] as string,
+    receiverPhone: row['receiver_phone'] as string,
+    address: row['address'] as string,
+    remark: (row['remark'] as string | null) ?? null,
+    createdAt: toDate(row['created_at']),
+    paidAt: toDateOrNull(row['paid_at']),
+  };
+}
+
+function mapOrderItem(row: Row): OrderItemRecord {
+  return {
+    id: row['id'] as string,
+    orderId: row['order_id'] as string,
+    productId: row['product_id'] as string,
+    title: row['title'] as string,
+    priceFen: Number(row['price_fen']),
+    quantity: Number(row['quantity']),
+    subtotalFen: Number(row['subtotal_fen']),
   };
 }
 

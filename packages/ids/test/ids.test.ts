@@ -85,7 +85,7 @@ describe('IdFactory', () => {
     const f = new IdFactory({ strategy: 'snowflake', workerId: 3 });
     const ids = f.next();
     expect(ids.id).toBe(ids.snowflake);
-    expect(ids.accountNo).toMatch(/^MIX-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
+    expect(ids.accountNo).toMatch(/^MixmAPP-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
     expect(isUlid(ids.ulid)).toBe(true);
     expect(isUuidV7(ids.uuidV7)).toBe(true);
   });

@@ -38,7 +38,7 @@ export function decodeBase32(input: string): bigint {
   return result;
 }
 
-/** 8 位分组，方便 UI 展示成 MIX-7K2Q-4X9M。 */
+/** 8 位分组，方便 UI 展示成 MixmAPP-7K2Q-4X9M。 */
 export function groupDisplay(raw: string, size = 4, sep = '-'): string {
   const parts: string[] = [];
   for (let i = 0; i < raw.length; i += size) parts.push(raw.slice(i, i + size));

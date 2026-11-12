@@ -59,7 +59,7 @@ suite('PostgreSQL 驱动（真实库）', () => {
     await store?.close();
   });
 
-  it('注册后用户落库，三套 ID 与 MIX 号码同时写入', async () => {
+  it('注册后用户落库，三套 ID 与 MixmAPP 号码同时写入', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register/email',
@@ -70,7 +70,7 @@ suite('PostgreSQL 驱动（真实库）', () => {
       user: { id: string; accountNo: string };
       tokens: { accessToken: string; refreshToken: string };
     };
-    expect(body.user.accountNo).toMatch(/^MIX-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
+    expect(body.user.accountNo).toMatch(/^MixmAPP-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
 
     const row = await store.users.findByEmail(email);
     expect(row?.id).toBe(body.user.id);

@@ -3,7 +3,7 @@
     <block v-if="user">
       <view class="id-card">
         <view class="id-top">
-          <text class="id-label">我的 MIX 号码</text>
+          <text class="id-label">我的 MixmAPP 号码</text>
           <view class="pill">自动分配</view>
         </view>
         <text class="id-value mono">{{ user.accountNo }}</text>
@@ -41,7 +41,7 @@
     <block v-else>
       <view class="empty">
         <text class="empty-title">还没有登录</text>
-        <text class="hint">注册后即可获得一个专属 MIX 号码，用于全端统一身份。</text>
+        <text class="hint">注册后即可获得一个专属 MixmAPP 号码，用于全端统一身份。</text>
         <view class="btn btn--primary mt" @tap="go('/pages/auth/register')">创建账号</view>
         <view class="btn btn--ghost mt" @tap="go('/pages/auth/login')">已有账号，去登录</view>
       </view>

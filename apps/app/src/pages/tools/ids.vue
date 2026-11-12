@@ -2,7 +2,7 @@
   <view class="page">
     <view class="head">
       <text class="title">ID 试算器</text>
-      <text class="hint">同一个发号器同时产出主键、雪花数值、MIX 号码、ULID 与 UUIDv7；主键形态由服务端 ID_STRATEGY 决定。</text>
+      <text class="hint">同一个发号器同时产出主键、雪花数值、MixmAPP 号码、ULID 与 UUIDv7；主键形态由服务端 ID_STRATEGY 决定。</text>
     </view>
 
     <view class="seg">
@@ -26,7 +26,7 @@
 
       <block v-if="result">
         <view class="result-block">
-          <text class="result-label">MIX 号码（对外展示）</text>
+          <text class="result-label">MixmAPP 号码（对外展示）</text>
           <view class="row">
             <text class="result-mono mono">{{ result.accountNo }}</text>
             <text class="copy" @tap="copy(result.accountNo)">复制</text>

@@ -13,14 +13,14 @@ export function parseIdStrategy(raw: string | undefined, fallback: IdStrategy = 
   return fallback;
 }
 
-export const MIX_ID_PREFIX = 'MIX';
+export const MIXMAPP_ID_PREFIX = 'MixmAPP';
 
 export type GeneratedIds = {
   /** 主键，按策略生成 */
   id: string;
   /** 雪花数值，永远生成，用于分片/排查 */
   snowflake: string;
-  /** 对外展示的账号号段，如 MIX-7K2Q-4X9M-3P5V */
+  /** 对外展示的账号号段，如 MixmAPP-7K2Q-4X9M-3P5V */
   accountNo: string;
   ulid: string;
   uuidV7: string;
@@ -55,7 +55,7 @@ export class IdFactory {
   next(): GeneratedIds {
     const snowflake = this.snowflake.next();
     const accountRaw = encodeBase32(snowflake, 13);
-    const accountNo = `${MIX_ID_PREFIX}-${groupDisplay(accountRaw, 4)}`;
+    const accountNo = `${MIXMAPP_ID_PREFIX}-${groupDisplay(accountRaw, 4)}`;
     const primary =
       this.strategy === 'snowflake'
         ? snowflake.toString()

@@ -1,4 +1,11 @@
-import type { AuthResult, UserDto } from '@mixmapp/contracts';
+import type {
+  AuthResult,
+  CartDto,
+  OrderCreateInput,
+  OrderDto,
+  ProductDto,
+  UserDto,
+} from '@mixmapp/contracts';
 
 /** 统一 API 基址：H5 走同源 /api/v1（开发态由 vite 代理），原生端用 VITE_MIXMAPP_API_BASE。 */
 export const API_BASE: string =
@@ -175,4 +182,32 @@ export const metaApi = {
       thirdParty: Record<string, string>;
       serverTime: string;
     }>('/meta', { auth: false }),
+};
+
+export const mallApi = {
+  listProducts: (query: { category?: string; keyword?: string; page?: number; pageSize?: number } = {}) => {
+    const qs = Object.entries(query)
+      .filter(([, value]) => value !== undefined && value !== '')
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+      .join('&');
+    return apiRequest<ProductDto[]>(`/mall/products${qs ? `?${qs}` : ''}`, { auth: false });
+  },
+  getProduct: (productId: string) =>
+    apiRequest<ProductDto>(`/mall/products/${encodeURIComponent(productId)}`, { auth: false }),
+  getCart: () => apiRequest<CartDto>('/mall/cart'),
+  addToCart: (productId: string, quantity = 1) =>
+    apiRequest<CartDto>('/mall/cart', { method: 'POST', data: { productId, quantity } }),
+  updateCart: (productId: string, quantity: number) =>
+    apiRequest<CartDto>(`/mall/cart/${encodeURIComponent(productId)}`, {
+      method: 'PATCH',
+      data: { quantity },
+    }),
+  removeCart: (productId: string) =>
+    apiRequest<CartDto>(`/mall/cart/${encodeURIComponent(productId)}`, { method: 'DELETE' }),
+  clearCart: () => apiRequest<CartDto>('/mall/cart', { method: 'DELETE' }),
+  createOrder: (input: OrderCreateInput) =>
+    apiRequest<OrderDto>('/mall/orders', { method: 'POST', data: input }),
+  listOrders: () => apiRequest<OrderDto[]>('/mall/orders'),
+  getOrder: (orderNo: string) =>
+    apiRequest<OrderDto>(`/mall/orders/${encodeURIComponent(orderNo)}`),
 };

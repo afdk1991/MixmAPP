@@ -7,7 +7,7 @@
 | 字段 | 形态 | 用途 |
 |---|---|---|
 | `id` | 按 `ID_STRATEGY` 决定（雪花数字串 / ULID / UUIDv7） | 数据库主键、对外 API 标识 |
-| `accountNo` | `MIX-XXXX-XXXX-XXXX-X` | 用户在界面看到的唯一号码，可复制、可展示 |
+| `accountNo` | `MixmAPP-XXXX-XXXX-XXXX-X` | 用户在界面看到的唯一号码，可复制、可展示 |
 | `snowflake` | 19 位十进制 | 分片、排查、日志关联 |
 | `ulid` | 26 位 Crockford Base32 | 可排序、无中心依赖的备用标识 |
 | `uuidV7` | 标准 36 位 UUID | 与外部系统互操作 |
@@ -29,9 +29,9 @@
 
 > 踩坑记录：初版用 JS 32 位位运算处理 48 位随机数，`& 0xffffffff` 在符号位上返回负数，`toString(16)` 带出负号，产出过 `ad83--65aa127d0000` 这种双连字符、末段 13 位的非法值。现版本改为 `BigInt` 全链路（8 字节随机 → 62 位），并由 `isUuidV7()` 在测试里守住格式。
 
-### 1.4 MIX 号码
+### 1.4 MixmAPP 号码
 
-`snowflake`（最大 63 位有效值）转 Crockford Base32，需要 13 个字符（65 位容量），按 `4-4-4-1` 分组，前缀 `MIX`。
+`snowflake`（最大 63 位有效值）转 Crockford Base32，需要 13 个字符（65 位容量），按 `4-4-4-1` 分组，前缀 `MixmAPP`。
 
 > 为什么不是 8 位：8 位 Base32 只有 40 位，装不下 63 位雪花，必然撞号。13 位是能整段装下的最小长度。
 
@@ -77,7 +77,7 @@ POST /api/v1/auth/register/email  { email, password, nickname? }
 POST /api/v1/auth/login/oauth  { provider: "wechat"|"qq"|"github", code }
 ```
 
-- 用 `code` 换 `open_id`；`(provider, open_id)` 命中 `bindings` 则登录，未命中则**自动建号并分配 MIX 号码**。
+- 用 `code` 换 `open_id`；`(provider, open_id)` 命中 `bindings` 则登录，未命中则**自动建号并分配 MixmAPP 号码**。
 - 已登录用户可通过 `POST /api/v1/me/bind/oauth` 把第三方身份挂到现有账号。
 - 未配置对应 OAuth 凭据时，该 provider 在 `/meta` 里显示 `off`，端侧按钮会给出明确提示而不是静默失败。
 
@@ -87,7 +87,7 @@ POST /api/v1/auth/login/oauth  { provider: "wechat"|"qq"|"github", code }
 
 | 令牌 | 形态 | 有效期 | 存储 |
 |---|---|---|---|
-| 访问令牌 | JWT（HS256，claims：`sub`=用户 ID、`acc`=MIX 号码、`typ`=`access`） | 15 分钟（`JWT_ACCESS_TTL_SEC`） | 端侧内存 + 本地持久化 |
+| 访问令牌 | JWT（HS256，claims：`sub`=用户 ID、`acc`=MixmAPP 号码、`typ`=`access`） | 15 分钟（`JWT_ACCESS_TTL_SEC`） | 端侧内存 + 本地持久化 |
 | 刷新令牌 | 32 字节随机串（base64url） | 30 天（`JWT_REFRESH_TTL_DAYS`） | 服务端只存 `sha256` 哈希 |
 
 刷新即轮换：旧令牌置 `revoked=true` 并记录 `replaced_by`，新令牌返回给端侧。重复使用已轮换的令牌会被拒绝，可用于发现令牌泄露。

@@ -5,18 +5,29 @@
 
 | 平台 | 用途 | 状态 | 证据 / 缺口 |
 |---|---|---|---|
-| GitHub 仓库 | 源码权威仓 | ✅ | <https://github.com/afdk1991/mixmapp>（私有，`main` 分支） |
+| GitHub 仓库 | 源码权威仓 | ✅ | <https://github.com/afdk1991/MixmAPP>（公开，`main` 分支；已在仓库里扫过，无密钥文件，只有 `.env.example`） |
 | Gitee 仓库（码云镜像） | 国内镜像 | ⏳ | 需 Gitee 账号的私人令牌；`.gitee/pipeline.yml` 已就绪 |
-| GitHub Pages | 静态端公网 | ✅ | 产物仓 <https://afdk1991.github.io/mixmapp-h5/>；未绑自定义域名（绑域名需仓库加 `CNAME` + DNS CNAME 记录） |
-| GitHub Packages（ghcr） | 镜像仓库 | ✅ | `ghcr.io/afdk1991/mixmapp-api:latest`（`image.yml` run 43192779036，镜像内真起容器跑迁移 + `readyz`） |
+| GitHub Pages | 静态端公网 | ✅ | **主仓直接托管**：<https://afdk1991.github.io/MixmAPP/>（`pages.yml` run 43194503748，HTTP 200，DOM 含 `data-page`） |
+| GitHub Packages（ghcr） | 镜像仓库 | ✅ | `ghcr.io/afdk1991/mixmapp:latest`（`image.yml` run 43194504120，镜像内真起容器跑迁移 + `/api/v1/readyz`） |
 | 腾讯云 EdgeOne Pages | 单文件静态托管 | ⏳ 受平台接口限制 | `deploy-html` 只接受**内联 HTML 正文**，本仓单文件产物 348 KB 需整段塞进调用参数，实际不可行；单文件产物本身已产出（`release/mixmapp-h5-single.html`），改由 CloudBase 静态托管上线 |
 | 腾讯云 CloudBase 静态托管 | H5 公网 | ✅ | <https://mixmapp-h5-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com>（HTTP 200，356,739 字节，DOM 含 `data-page`，标题 `MixmAPP`）；构建 `buildId 2612267461` 状态 `SUCCESS`，链路 `getUploadUrl → PUT zip → deployApp` |
 | Cloudflare Pages / Workers | 静态端 + Worker | ⏳ | 需 `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`；`deploy.yml` 对应 job 现为显式 SKIP |
 | Cloudflare `_worker.js` 同源入口 | 静态 + API 同源 | ⏳ | 同上；还需把 `/api/*` 反代到 API 源（`infra/nginx/mixmapp-api.conf` 可作蓝本） |
 | Vercel | 静态端 / Serverless | ⏳ | 需 `VERCEL_TOKEN`（及 `VERCEL_ORG_ID`/`PROJECT_ID`） |
-| Sealos | 容器化部署 API | ⏳ 镜像已就绪 | 直接拉 `ghcr.io/afdk1991/mixmapp-api:latest`；需 Sealos 账号或部署 token |
+| Sealos | 容器化部署 API | ⏳ 镜像已就绪 | 直接拉 `ghcr.io/afdk1991/mixmapp:latest`；需 Sealos 账号或部署 token |
 | IGA Pages | 静态托管 | ⏳ | 需 `iga` CLI（≥1.1.0）+ 登录态或 AK/SK |
 | 腾讯云自建服务器（生产终点） | API + 静态 | ⏳ | 需 `DEPLOY_SSH_KEY`、`DEPLOY_HOST`、`DEPLOY_USER`；`deploy/atomic-release.sh` 与回滚脚本已就绪 |
+
+## 平台命名规范（本轮统一）
+
+规则：每个平台的**项目名一律为 `MixmAPP`**，名字对不上的项目已删除重建；只有受平台规范硬限制的才允许小写。
+
+| 平台 | 项目名 | 说明 |
+|---|---|---|
+| GitHub 仓库 | `MixmAPP` | 由 `mixmapp` 改名而来，旧地址自动 301 跳转 |
+| GitHub Pages | 挂在 `MixmAPP` 主仓 | 私有仓不支持免费 Pages（API 返回 422），只能让主仓公开后直接托管；原先的 `mixmapp-h5` 产物仓已废弃 |
+| GitHub Packages | `mixmapp` | OCI 规范要求镜像名全小写，无法写成 `MixmAPP`，这是平台硬限制 |
+| 其余平台 | `MixmAPP` | 尚未创建，创建时统一使用该名称 |
 
 ## 域名映射（待确认）
 

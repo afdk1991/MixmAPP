@@ -2,7 +2,7 @@
   <view class="page">
     <view class="head">
       <text class="title">创建 MixmAPP 账号</text>
-      <text class="hint">注册成功后自动分配一个全局唯一的 MIX 号码，可作为登录名与对外展示 ID。</text>
+      <text class="hint">注册成功后自动分配一个全局唯一的 MixmAPP 号码，可作为登录名与对外展示 ID。</text>
     </view>
 
     <view class="tabs">

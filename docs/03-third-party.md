@@ -34,7 +34,7 @@
 
 服务端只接收 `code`：`POST /auth/login/oauth { provider, code }`。端侧负责拉起授权页并回跳，H5 端从 `location.search` 取 `code`（见 `stores/session.ts` 的 `getOAuthCode()`），原生端需在各自 SDK 回调里把 `code` 传进来。
 
-首次登录自动建号并分配 MIX 号码；已登录用户绑定走 `POST /me/bind/oauth`。
+首次登录自动建号并分配 MixmAPP 号码；已登录用户绑定走 `POST /me/bind/oauth`。
 
 ---
 

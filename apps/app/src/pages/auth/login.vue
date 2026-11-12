@@ -2,7 +2,7 @@
   <view class="page">
     <view class="head">
       <text class="title">欢迎回来</text>
-      <text class="hint">支持邮箱、MIX 号码登录；也可用手机验证码免密登录。</text>
+      <text class="hint">支持邮箱、MixmAPP 号码登录；也可用手机验证码免密登录。</text>
     </view>
 
     <view class="tabs">
@@ -13,7 +13,7 @@
     <view class="card form">
       <block v-if="mode === 'password'">
         <text class="label">账号</text>
-        <input class="field" type="text" placeholder="邮箱或 MIX-XXXX-XXXX-XXXX-X" v-model="account" />
+        <input class="field" type="text" placeholder="邮箱或 MixmAPP-XXXX-XXXX-XXXX-X" v-model="account" />
         <text class="label mt">密码</text>
         <input class="field" password placeholder="请输入密码" v-model="password" />
       </block>
