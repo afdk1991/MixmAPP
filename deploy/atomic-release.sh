@@ -8,6 +8,16 @@ ARTIFACT=${ARTIFACT:?缺少 ARTIFACT（node 产物压缩包路径）}
 SERVICE=${SERVICE:-mixmapp-api}
 HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:8080/api/v1/healthz}
 KEEP_RELEASES=${KEEP_RELEASES:-5}
+ENV_FILE=${ENV_FILE:-/etc/mixmapp/api.env}
+
+# 迁移与重启都需要 api.env 里的 DATABASE_URL；systemd 的 EnvironmentFile 不会自动
+# 出现在当前 shell，所以这里显式加载一次。
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
 
 STAMP=$(date +%Y%m%d%H%M%S)
 RELEASE="$APP_DIR/releases/$STAMP"

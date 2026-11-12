@@ -38,7 +38,7 @@ jobs:
         run: pnpm build:h5
 
       - name: 生成独立可运行 API 发布包
-        run: pnpm --filter @mixmapp/api deploy --prod out/api
+        run: pnpm --filter @mixmapp/api deploy --prod "$GITHUB_WORKSPACE/out/api"
 
       - name: 打包 API 产物
         run: |
