@@ -11,7 +11,7 @@
     "dev:h5": "pnpm --filter @mixmapp/app dev:h5",
     "dev:mp-weixin": "pnpm --filter @mixmapp/app dev:mp-weixin",
     "build:api": "pnpm --filter @mixmapp/api build",
-    "build:h5": "pnpm --filter @mixmapp/app build:h5",
+    "build:h5": "node scripts/build-h5.mjs",
     "build:mp-weixin": "pnpm --filter @mixmapp/app build:mp-weixin",
     "build:app": "pnpm --filter @mixmapp/app build:app",
     "build:harmony": "pnpm --filter @mixmapp/app build:harmony",

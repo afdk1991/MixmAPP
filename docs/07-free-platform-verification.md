@@ -91,6 +91,9 @@ readyz ok (attempt 2)
 - 托管方式：主仓 `https://github.com/afdk1991/MixmAPP`（`.github/workflows/pages.yml` 打单文件后发布，源码与产物同仓）
 - 线上地址：<https://afdk1991.github.io/MixmAPP/>（HTTP 200，356,739 字节）
 - 复核方式：浏览器打开即可；`/api` 未连，首页顶部会显示「未连上 API（先启动 services/api）」
+- 原因：静态平台只托管 `index.html`，`/api/v1/...` 会落到平台域名上，平台没有该路由 → **所有接口 404**
+- 接通方式：部署 API 后，用 `MIXMAPP_API_BASE=https://你的API域名 pnpm build:h5`（单文件版用 `MIXMAPP_API_BASE=... node scripts/build-h5-single.mjs`）重新构建；
+  或直接改已部署 HTML 里的 `window.__MIXMAPP_API_BASE__`，无需重新构建
 
 怎么生成的（源码仓内两条命令）：
 

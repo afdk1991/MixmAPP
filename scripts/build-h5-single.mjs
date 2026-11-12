@@ -48,6 +48,8 @@ function dataUri(file) {
 }
 
 const BASE = process.env.MIXMAPP_H5_BASE ?? '/';
+/** 静态托管没有 /api/v1 路由，部署时把 API 源写进单文件，避免所有请求 404。 */
+const API_BASE = (process.env.MIXMAPP_API_BASE ?? '').trim();
 const manifestFile = join(root, 'apps', 'app', 'src', 'manifest.json');
 
 console.info('[single] 构建单文件版 H5…');
@@ -147,6 +149,13 @@ html = html.replace(/<link[^>]+rel="icon"[^>]*href="([^"]+)"[^>]*>/g, (_m, href)
 for (const [p, uri] of assets) {
   const prefixed = BASE === '/' ? p : BASE.replace(/\/$/, '') + p;
   html = html.split(`"${prefixed}"`).join(`"${uri}"`);
+}
+
+// 6. 静态平台没有后端路由：把 API 基址注入运行期全局，前端优先读取它
+if (API_BASE) {
+  const tag = `<script>window.__MIXMAPP_API_BASE__=${JSON.stringify(API_BASE)};</script>`;
+  html = html.includes('<head>') ? html.replace('<head>', `<head>\n    ${tag}`) : `${tag}\n${html}`;
+  console.info(`[single] API 源 = ${API_BASE}`);
 }
 
 mkdirSync(outDir, { recursive: true });

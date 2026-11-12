@@ -40,6 +40,7 @@ jobs:
       - name: 打单文件 H5（路由 base 对齐子路径 /MixmAPP/）
         env:
           MIXMAPP_H5_BASE: /MixmAPP/
+          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE }}
         run: node scripts/build-h5-single.mjs
 
       - name: 组装站点目录

@@ -32,7 +32,10 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build:api
-      - run: pnpm build:h5
+      - name: 构建 H5（静态端需要绝对 API 源，未配置变量时保持同源）
+        env:
+          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE }}
+        run: pnpm build:h5
 
       - name: 生成独立可运行 API 发布包
         run: pnpm --filter @mixmapp/api deploy --prod out/api

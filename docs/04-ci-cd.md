@@ -74,6 +74,11 @@ schedule（每日 02:20）
 | `ANDROID_KEY_PASSWORD` | secret | 签名口令 | 同上 |
 | `CF_PAGES_PROJECT` | var | Pages 项目名（默认 `mixmapp`） | 用默认 |
 | `HEALTH_BASE_URL` | var | 线上健康校验基址 | 跳过校验 |
+| `MIXMAPP_API_BASE` | var | 静态端使用的 API 绝对地址（如 `https://api.mixm.app`） | 构建保持同源 `/api/v1`；静态平台会全量 404 |
+
+> 静态托管平台只发前端文件，没有 `/api/v1` 路由。`MIXMAPP_API_BASE` 会在构建时写入
+> `window.__MIXMAPP_API_BASE__`，前端优先读取它；也可以部署后直接改 HTML 里的这一行，
+> 不必重新构建。API 侧记得把静态站域名加进 `CORS_ORIGINS`（默认 `*` 时无需配置）。
 
 > 私钥一旦带口令，`ssh -i` 在非交互环境无法签名，会表现为「服务端 Accepted 但客户端 Permission denied」；CI 必须用**无口令**私钥。
 

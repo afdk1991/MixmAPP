@@ -6,6 +6,11 @@ const singleFile = process.env.MIXMAPP_SINGLE_FILE === '1';
 
 export default defineConfig({
   plugins: [uni()],
+  // 所有端（H5 / 小程序 / App / Harmony）构建时写入 API 源。
+  // H5 部署到静态平台后，还可以用 window.__MIXMAPP_API_BASE__ 在 HTML 里覆盖，无需重新构建。
+  define: {
+    __MIXMAPP_API_BASE__: JSON.stringify(process.env.MIXMAPP_API_BASE ?? ''),
+  },
   build: singleFile
     ? {
         // 单文件化：把动态 import 合成一个 chunk，小资源直接内联成 data URI

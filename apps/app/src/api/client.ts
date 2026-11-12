@@ -7,10 +7,49 @@ import type {
   UserDto,
 } from '@mixmapp/contracts';
 
-/** 统一 API 基址：H5 走同源 /api/v1（开发态由 vite 代理），原生端用 VITE_MIXMAPP_API_BASE。 */
-export const API_BASE: string =
-  (import.meta.env.VITE_MIXMAPP_API_BASE as string | undefined) ??
-  (import.meta.env.DEV ? 'http://127.0.0.1:8080/api/v1' : '/api/v1');
+/**
+ * 统一 API 基址。优先级：
+ * 1. 运行时注入 `window.__MIXMAPP_API_BASE__`（静态托管平台部署时写进 HTML，改地址不用重新构建）
+ * 2. 本地存储 `mixmapp:apiBase`（调试/应急切换）
+ * 3. 构建变量 `VITE_MIXMAPP_API_BASE`
+ * 4. 开发态指向本机 8080，生产态同源 `/api/v1`
+ *
+ * 注意：静态平台只托管前端，没有 `/api/v1` 路由；部署到这类平台时必须给出 API 源，
+ * 否则所有请求会落到托管域名上并返回 404。
+ */
+function readRuntimeApiBase(): string | undefined {
+  const injected = (globalThis as { __MIXMAPP_API_BASE__?: unknown }).__MIXMAPP_API_BASE__;
+  if (typeof injected === 'string' && injected.trim()) return injected.trim();
+  try {
+    const stored = uni.getStorageSync('mixmapp:apiBase');
+    if (typeof stored === 'string' && stored.trim()) return stored.trim();
+  } catch {
+    // 无 storage 能力的端直接忽略
+  }
+  return undefined;
+}
+
+/** 只给域名时补 `/api/v1`；已经是完整路径的原样保留（去掉尾部斜杠）。 */
+export function normalizeApiBase(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  if (!trimmed) return '/api/v1';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.pathname === '/' || parsed.pathname === '') return `${trimmed}/api/v1`;
+    return trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+/** 由 vite.config 的 define 注入，覆盖 H5 / 小程序 / App / Harmony 所有构建端。 */
+declare const __MIXMAPP_API_BASE__: string;
+const buildApiBase = typeof __MIXMAPP_API_BASE__ === 'undefined' ? '' : __MIXMAPP_API_BASE__.trim();
+
+const env = import.meta.env as unknown as Record<string, string | boolean | undefined>;
+export const API_BASE: string = normalizeApiBase(
+  readRuntimeApiBase() ?? (buildApiBase || undefined) ?? (env.DEV ? 'http://127.0.0.1:8080/api/v1' : '/api/v1'),
+);
 
 export class ApiError extends Error {
   constructor(
