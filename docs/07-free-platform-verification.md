@@ -120,3 +120,41 @@ MIXMAPP_H5_BASE=/MixmAPP/ node scripts/build-h5-single.mjs   # 子路径托管�
 | 免费云 PostgreSQL（Neon/Supabase） | 账号与连接串 | 把 `DATABASE_URL` 指过去，跑 `db:migrate` + 集成测试 |
 | 线上 API | 服务器 + SSH 私钥 + 域名 | 配 `DEPLOY_SSH_KEY`/`DEPLOY_HOST`/`DEPLOY_USER`，`deploy` 的 api job 走原子发布与健康校验 |
 | 真实短信/支付/地图/推送/AI | 各平台商户号与密钥 | 填 `.env` 后 `/api/v1/meta` 对应能力变 `on`，再做真实回调 |
+## 8. 腾讯云 CloudBase 真实 PostgreSQL 取证（免费额度内）
+
+CloudBase 环境 `cs-1-d5g815slocb5a611a` 本身带 PostgreSQL（实例 `cloudbase-pg`，`RuntimeMode=cloudbase-manager`，角色 `cloudbase_postgres`），
+因此「一库到底」不必再找 Neon/Supabase：**库是真库，且已把 MixmAPP 的表建进去了**。
+
+隔离决策：该环境的 `public` 已有另一个项目的 36 张表（`articles`/`posts`/`mall_orders`…），
+所以 MixmAPP 的所有对象都放进独立 schema **`mixmapp`**，不写 `public`。
+
+已应用的迁移（均 `Status=Succeed` 且 `verified=true`，走 `PushPGUserMigrations`）：
+
+| migrationVersion | 名称 | TaskId | 内容 |
+|---|---|---|---|
+| 20261112105000 | `mixmapp_init` | `task-623c2c71e0814a81` | `users`（含 `snowflake`/`ulid`/`uuid_v7`/`account_no`）、`bindings`、`refresh_tokens`、`sms_codes`、`payments`、`push_tokens` |
+| 20261112105500 | `mixmapp_mall` | `task-402b21b6891f46c5` | `products`、`carts`、`orders`、`order_items` + 6 条演示商品 |
+| 20261112105600 | `mixmapp_signup` | `task-61065491dc644ab0` | `users.username`、`users.guest`、用户名小写唯一索引、`bindings(provider,open_id)` 索引 |
+
+复核结果（`queryPgDatabase` 只读 SQL）：`mixmapp` 下 10 张表（`users` 16 列、`orders` 11 列、`payments` 11 列、`products` 13 列…），
+`products=6`、`users=0`。
+
+自动分配 ID 的真实落库验证：用 `packages/ids` 的 `IdFactory({ strategy: 'snowflake', workerId: 1 })` 生成一组号，
+`INSERT` 进 `mixmapp.users` 再读回，四个标识全部一致——
+
+```
+id        114314899022155776
+accountNo MixmAPP-035H-0SE2-C040-0
+ulid      01M77NVNGKTVVNEFTV62YPW2D2
+uuid_v7   01a1cf5d-d614-74cf-9309-309d8cd1366b
+```
+
+验证完立即删除该探针行，库里不留假账号。
+
+第 9 个上云真故障：`managePgDatabase(applyMigration)` 传 `defaultSchema="mixmapp"` **不会**改变迁移任务的 `search_path`，
+首条迁移把 6 张表建进了 `public`。修法是用 `DO $$ BEGIN EXECUTE 'ALTER TABLE public.users SET SCHEMA mixmapp'; … END $$` 逐表搬到 `mixmapp`，
+此后所有 DDL/DML 一律显式写 `mixmapp.` 前缀，不再依赖 `defaultSchema`。
+
+仍未接上：Fastify API 还没连到这个云库——CloudBase PG 的连接串只在控制台可见，MCP 不返回。
+拿到连接串后即可把 `DATABASE_URL` 指过去跑 `db:migrate` 与 4 个 PG 集成测试（`REQUIRE_DATABASE_URL=1`），
+那就是「云平台侧真库 + 真 API」的闭环取证。
