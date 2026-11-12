@@ -28,6 +28,15 @@
       </view>
 
       <view class="card">
+        <text class="section">我的商城</text>
+        <view class="quick">
+          <view class="btn btn--ghost" @tap="go('/pages/mall/index')">去商城</view>
+          <view class="btn btn--ghost" @tap="go('/pages/cart/index')">购物车</view>
+          <view class="btn btn--ghost" @tap="go('/pages/orders/index')">我的订单</view>
+        </view>
+      </view>
+
+      <view class="card">
         <text class="section">快捷入口</text>
         <view class="quick">
           <view class="btn btn--ghost" @tap="go('/pages/tools/ids')">ID 试算器</view>
@@ -124,9 +133,10 @@ onShow(() => {
   display: block;
   margin-top: 22rpx;
   color: #ffffff;
-  font-size: 52rpx;
+  font-size: 40rpx;
   font-weight: 700;
   letter-spacing: 1rpx;
+  word-break: break-all;
 }
 
 .id-actions {

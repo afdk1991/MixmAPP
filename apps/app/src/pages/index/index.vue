@@ -27,6 +27,11 @@
           <text class="tile-title">创建账号</text>
           <text class="tile-desc">手机验证码 / 邮箱密码 / 第三方一键登录</text>
         </view>
+        <view class="tile tile--wide" hover-class="tile-hover" @tap="go('/pages/mall/index')">
+          <text class="tile-kicker">商城</text>
+          <text class="tile-title">MixmAPP 商城</text>
+          <text class="tile-desc">商品 · 购物车 · 订单</text>
+        </view>
         <view class="tile" hover-class="tile-hover" @tap="go('/pages/auth/login')">
           <text class="tile-title">登录</text>
           <text class="tile-desc">密码 · 短信 · OAuth</text>
@@ -65,7 +70,7 @@ import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { metaApi } from '../../api/client';
 
-const version = ref('0.1.0');
+const version = ref('0.0.0-preview');
 const online = ref(false);
 const env = ref('unknown');
 const platforms = ['Web / H5', 'PWA', 'Android', 'iOS', '鸿蒙', '微信小程序'];

@@ -22,6 +22,7 @@
 | 微信小程序 | `uni build -p mp-weixin` → `dist/build/mp-weixin` |
 | HarmonyOS | `uni build -p app-harmony` → `dist/build/app-harmony` |
 | 用户体系 | 手机验证码 / 邮箱密码 / 微信·QQ·GitHub OAuth 注册登录，注册即分配全局唯一 MixmAPP 号码 |
+| 商城 | 商品列表 / 详情（分类 + 关键词 + 库存），购物车加购·改量·删除，下单扣库存与订单查询；`products / carts / orders / order_items` 四表，Memory 与 PostgreSQL 双驱动，H5 端商城·详情·购物车·订单四页 |
 | 自动分配 ID | 雪花 ID、ULID、UUIDv7 三策略并存，一次发号同时产出主键 + MixmAPP 号码 + 雪花值 + ULID + UUIDv7 |
 | 支付 | 微信支付 APIv3（JSAPI 下单、回调验签、AES-256-GCM 解密）、支付宝 RSA2（下单、异步通知验签） |
 | 定位导航 | 高德 Web 服务（逆地理、路径规划）；配置北斗坐标系入参即可直接复用 |
