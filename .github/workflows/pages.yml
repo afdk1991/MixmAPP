@@ -47,6 +47,9 @@ jobs:
         run: |
           mkdir -p _site
           cp release/mixmapp-h5-single.html _site/index.html
+          # 路由是 history 模式（/MixmAPP/pages/auth/register），Pages 没有该路径的文件时
+          # 会用 404.html 兜底，所以把同一份单文件再放一份，深链接才不会断
+          cp release/mixmapp-h5-single.html _site/404.html
           touch _site/.nojekyll
           ls -l _site
 
