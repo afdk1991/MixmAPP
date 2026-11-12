@@ -1,0 +1,15 @@
+# 只让镜像构建看到需要的文件，避免把本机 node_modules / 产物 / 凭据塞进上下文
+node_modules
+**/node_modules
+**/dist
+apps/app/dist
+apps/mobile/android
+apps/mobile/ios
+release
+.git
+.github
+docs
+*.log
+.env
+.env.*
+!.env.example
