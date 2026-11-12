@@ -143,26 +143,22 @@ onLoad(() => {
 </script>
 
 <style scoped lang="scss">
+/* 本页刻意不依赖全局 SCSS 令牌：色值/尺寸写死，保证任何分支都能独立编译 */
 .page {
   box-sizing: border-box;
   overflow-x: hidden;
   min-height: 100vh;
-  background: $paper;
-  padding: $sp-4 $sp-3 $sp-8;
+  background: #f2f5f3;
+  padding: 1rem 0.75rem 2rem;
 }
 
 .head {
   box-sizing: border-box;
-  padding: $sp-5;
+  padding: 1.25rem;
   background:
     radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
     linear-gradient(158deg, #08110f 0%, #0e2925 62%, #14453c 120%);
-  border-radius: $r-shell;
-}
-
-.head-text {
-  flex: 1;
-  min-width: 0;
+  border-radius: 1.75rem;
 }
 
 .head-row {
@@ -171,24 +167,28 @@ onLoad(() => {
 }
 
 .head-mark {
-  width: 88rpx;
-  height: 88rpx;
-  margin-right: $sp-3;
-  border: 1rpx solid rgba(242, 245, 243, 0.24);
-  border-radius: 20rpx;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-right: 0.75rem;
+  border: 1px solid rgba(242, 245, 243, 0.24);
+  border-radius: 0.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26rpx;
+  font-size: 0.8125rem;
   font-weight: 700;
-  letter-spacing: 2rpx;
+  letter-spacing: 0.0625rem;
   color: #f4f8f6;
+}
+
+.head-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .head-title {
   display: block;
-  font-family: $font-display;
-  font-size: 42rpx;
+  font-size: 1.3125rem;
   font-weight: 600;
   color: #f6faf8;
 }
@@ -196,79 +196,78 @@ onLoad(() => {
 .head-sub {
   display: block;
   word-break: break-all;
-  margin-top: 8rpx;
-  font-size: 20rpx;
+  margin-top: 0.25rem;
+  font-size: 0.625rem;
   color: rgba(242, 245, 243, 0.6);
 }
 
 .block {
   box-sizing: border-box;
-  margin-top: $sp-3;
-  padding: $sp-4;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid #dbe3df;
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(13, 25, 23, 0.06);
 }
 
 .block-title {
   display: block;
-  margin-top: 12rpx;
-  font-family: $font-display;
-  font-size: $fs-h2;
+  margin-top: 0.375rem;
+  font-size: 1.125rem;
   font-weight: 600;
-  color: $ink;
+  color: #0d1917;
 }
 
 .input {
   box-sizing: border-box;
   width: 100%;
-  margin-top: $sp-3;
-  padding: 20rpx 24rpx;
-  background: $paper-2;
-  border-radius: $r-card;
-  font-size: 24rpx;
-  color: $ink;
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  background: #e8edeb;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  color: #0d1917;
 }
 
 .btn-row {
   display: flex;
-  margin-top: $sp-3;
-  gap: 16rpx;
+  margin-top: 0.75rem;
+  gap: 0.5rem;
 }
 
 .btn {
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding: 22rpx 0;
-  border-radius: $r-card;
-  border: 1rpx solid $paper-3;
+  padding: 0.6875rem 0;
+  border-radius: 1rem;
+  border: 1px solid #dbe3df;
   background: transparent;
-  font-size: 24rpx;
-  color: $ink-2;
-}
-
-.btn:last-child {
-  margin-right: 0;
+  font-size: 0.75rem;
+  color: #33443f;
 }
 
 .btn--primary {
-  background: $brand;
-  border-color: $brand;
+  background: #0f9d8f;
+  border-color: #0f9d8f;
   color: #f6faf8;
 }
 
 .hint {
   display: block;
-  margin-top: $sp-3;
-  font-size: 22rpx;
+  margin-top: 0.75rem;
+  font-size: 0.6875rem;
   line-height: 1.6;
-  color: $ink-3;
+  color: #697b76;
 }
 
 .row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 20rpx 0;
-  border-bottom: 1rpx solid $paper-2;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid #e8edeb;
 }
 
 .row--last {
@@ -278,44 +277,44 @@ onLoad(() => {
 
 .k {
   flex-shrink: 0;
-  margin-right: $sp-3;
-  font-size: 24rpx;
-  color: $ink-3;
+  margin-right: 0.75rem;
+  font-size: 0.75rem;
+  color: #697b76;
 }
 
 .v {
   flex: 1;
-  font-size: 24rpx;
+  font-size: 0.75rem;
   line-height: 1.5;
-  color: $ink;
+  color: #0d1917;
   text-align: right;
   word-break: break-all;
 }
 
 .warn {
-  color: #b06a1f;
+  color: #a9761a;
 }
 
 .err {
   display: block;
-  margin-top: $sp-3;
-  font-size: 24rpx;
-  color: #b23b3b;
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: #b33a2b;
 }
 
 .notice {
   display: block;
-  margin-top: $sp-2;
-  font-size: 24rpx;
-  color: $brand-deep;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #0a7a70;
 }
 
 .foot {
   display: block;
-  margin-top: $sp-6;
+  margin-top: 1.5rem;
   text-align: center;
-  font-size: 20rpx;
-  letter-spacing: 2rpx;
-  color: $ink-4;
+  font-size: 0.625rem;
+  letter-spacing: 0.0625rem;
+  color: #97a5a1;
 }
 </style>
