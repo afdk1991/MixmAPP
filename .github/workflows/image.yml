@@ -67,6 +67,7 @@ jobs:
         run: |
           docker run --rm --network host \
             -e DATABASE_URL="$DATABASE_URL" \
+            -e JWT_SECRET="$JWT_SECRET" \
             "$IMAGE:$GITHUB_SHA" node dist/db/migrate.js
 
           docker run -d --network host --name api \
