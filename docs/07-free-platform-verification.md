@@ -179,3 +179,32 @@ H5 是 history 模式（`manifest.json` 的 `h5.router.mode=history`），而 Pa
 要 200 语义，得换到支持 SPA rewrite 的宿主（Cloudflare Pages 的 `_redirects`、CloudBase 的路由规则、nginx 的 `try_files`）。
 
 商城页那条「请求失败(404)」就是 API 缺位的直接证据，和本文第 8 节的结论一致：库有了，服务还没上。
+## 10. 线上全链路 E2E 取证（前端 → API → PostgreSQL）
+
+平台接线已完成，链路是：GitHub Pages（单文件 H5）→ `https://cloud.mixm.top/mixmapp/api/v1` → 服务器上的 Fastify API → PostgreSQL。
+部署方式：`deploy.yml` 的 `api` job 走 SSH 原子发布（secrets `DEPLOY_HOST`/`DEPLOY_USER`/`DEPLOY_SSH_KEY_B64`，
+变量 `HEALTH_BASE_URL=https://cloud.mixm.top/mixmapp`、`MIXMAPP_API_BASE=https://cloud.mixm.top/mixmapp/api/v1`）。
+
+用真实 HTTP 请求打线上，结果如下（2026-11-12）：
+
+| 请求 | 结果 |
+|---|---|
+| `GET /healthz` | 200，`{"status":"ok","version":"0.0.0-preview","checks":{"db":"postgres"}}` |
+| `GET /api/v1/meta` | 200，`appName=MixmAPP`，ID 策略 `snowflake`，第三方能力矩阵完整 |
+| `GET /api/v1/mall/products` | 200，6 条商品真实从库里读回（2.1 KB） |
+| `POST /api/v1/auth/register/username` | 201，**自动分配** `id=114341178375143424`、`accountNo=MixmAPP-035H-RP8M-4000-0` |
+| `POST /api/v1/auth/login/password` | 200，返回同一 `accountNo`，`isNewUser=false` |
+| `GET /api/v1/me`（Bearer） | 200，`accountNo/nickname/username` 与注册时一致 |
+| 同用户名再注册 | 409（唯一约束生效，证明是真落库不是内存态） |
+| `POST /api/v1/auth/refresh` | 200，换发新 access/refresh |
+| 旧 refreshToken 重放 | 401（轮换生效，旧令牌立即失效） |
+
+前端侧：商城页已从「请求失败(404)」变为真实渲染 6 件商品（价格 ¥299/¥459/¥89/¥39…），
+说明 `MIXMAPP_API_BASE` 已正确烤进 H5 并跨域可用。截图见 `docs/screenshots/live-mall.png`。
+
+留痕：本次验收在线上库创建了测试账号 `qa_probe_1112`（`accountNo=MixmAPP-035H-RP8M-4000-0`），
+用于证明注册→分配 ID→登录全链路；该账号未删除，需要时可在 `/me` 里改名或后续清理。
+
+尚未真实接入的第三方（`/api/v1/meta` 里仍是 dev/console/off）：短信 `console`、一键登录 `dev`、
+微信/QQ/GitHub/Apple OAuth `off`、微信支付/支付宝 `off`、地图/存储/推送/AI `dev`。
+这些改成 `on` 需要各平台商户号与密钥，属于外部凭据缺口，不是代码缺口。
