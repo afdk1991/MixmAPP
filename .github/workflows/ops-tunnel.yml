@@ -27,7 +27,8 @@ jobs:
           pkill -f 'cloudflared tunnel' >/dev/null 2>&1 || true
           sleep 1
           sudo rm -f /tmp/cf.log
-          sudo setsid /usr/local/bin/cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate </dev/null >/tmp/cf.log 2>&1 &
+          sudo systemctl reset-failed mixmapp-cf >/dev/null 2>&1 || true
+          sudo systemd-run --unit=mixmapp-cf --collect /usr/local/bin/cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate --logfile /tmp/cf.log --loglevel info
           for i in $(seq 1 25); do
             grep -q 'trycloudflare.com' /tmp/cf.log 2>/dev/null && break
             sleep 1
