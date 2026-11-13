@@ -269,3 +269,79 @@ rm -f /etc/nginx/conf.d/zz-mixmapp-rehearsal.conf; nginx -t && systemctl reload 
 rm -rf /opt/mixmapp-rehearsal /root/rehearsal
 sudo -u postgres psql -tAc "drop database if exists mixmapp_rehearsal"; sudo -u postgres psql -tAc "drop role if exists mixmapp_rehearsal"
 ```
+
+
+## 11. 真机从零安装实录（2026-11-14，`115.159.159.11`）
+
+这一节记录的是**真正的空白机器**跑通全过程（不是第 10 节的同机演练）：Ubuntu 22.04.5 / 2 核 2GB / 50G 盘 /
+`/opt` 为空 / 80、443、8080 全空 / 无 node 无 nginx 无 psql。
+
+链路：本机 `node scripts/package-installer.mjs` 出包 → `scp` 上机 → `bash /root/install.sh` 装依赖
+（apt 装 nginx + postgresql + certbot，NodeSource 装 node v22.23.5）→ 解包到
+`/opt/mixmapp/releases/<时间戳>` → 起 `mixmapp-installer.service` 监听 `127.0.0.1:8090`
+→ `ssh -L 18090:127.0.0.1:8090` 映射到本机浏览器（**本机 8090 常被其他预览服务占用，固定用 18090**）
+→ 5 步向导 → 完装。
+
+向导 5 步实测：
+
+| 步骤 | 操作 | 结果 |
+|---|---|---|
+| 1 环境检查 | 点「开始检测」 | 9 项全绿：Linux 5.15、node 22.23.5、uid=0、42G 可用、nginx 1.18.0、psql 14.24、systemd 249、80/443、certbot 1.21.0 |
+| 2 数据库 | 密码 `MxmApp_Db2026`，点「本机建库并测试」 | `角色 mixmapp 与数据库 mixmapp 就绪；连通性：OK` |
+| 3 站点与账号 | `cloud.mixm.top` / `mixowner` / `Mixowner#2026` / `admin@mixm.top`，勾选自动 HTTPS | 校验通过后点「开始安装」 |
+| 4 安装 | 12 个步骤自动跑 | 进度条走完，直接进第 5 步 |
+| 5 完成 | 展示配置摘要 + 「打开站点」 | domain / apiPort 8080 / adminToken / jwtSecret / envFile `/etc/mixmapp/api.env` / webRoot `/var/www/mixmapp-site` / h5Source / nginxConf / service `mixmapp-api` |
+
+这次真机又暴露出 3 个必须修的 bug（都已在 `install/server.mjs`、`scripts/package-installer.mjs` 修掉并提交 `75133b5`）：
+
+1. **发布新 release 时漏拷前端与向导**。安装序列里「发布后端到 `/opt/mixmapp/releases/<时间戳>`」只 `cp -a dist node_modules infra`，
+   然后把 `current` 软链切到新目录；结果新 release 里没有 `index.html`、`install/`、`scripts/`，
+   紧接着的「部署前端单文件 H5」按 `current/index.html` 找不到文件，报「release 里没有单文件 H5」。
+   修法两处：发布时补拷 `index.html` / `install` / `scripts`；`RELEASE_ROOT` 启动时用 `fs.realpathSync` 解析一次，
+   避免软链切换后仍按旧路径找。
+2. **单文件 H5 的 API 基址没注入**。打包时不设 `MIXMAPP_API_BASE`，单文件里没有 `window.__MIXMAPP_API_BASE__`，
+   前端回落到相对 `/api/v1`，而站点的 API 挂在 `/mixmapp/api/v1` → 首页显示「OFFLINE · 未连上 API」。
+   修法：打包脚本默认注入 `MIXMAPP_API_BASE=/mixmapp/api/v1`（可用同名环境变量覆盖）；
+   同时 nginx 模板补一条 `location /api/ { proxy_pass http://127.0.0.1:<apiPort>/api/; }` 兜住旧包。
+3. **完成页把账号对象渲染成 `[object Object]`**。`ui.html` 原来直接 `${v}` 拼对象；改成对象按 `k=v` 展开，
+   并把「打开站点」按 `https` 打开（非预演模式）。
+
+另外把两处「以前靠手工补」的规则写进了 nginx 模板，装完即与线上一致，换机不再丢：
+
+```nginx
+# 已下线的页面（ID 试算器）：直接 410
+location = /pages/tools/ids { return 410; }
+location ^~ /pages/tools/ { return 410; }
+
+# 兼容单文件 H5 内置的相对基址 /api/v1
+location /api/ { proxy_pass http://127.0.0.1:8080/api/; … }
+```
+
+真机验收（公网侧实测）：
+
+| 检查 | 结果 |
+|---|---|
+| `https://cloud.mixm.top/` | 200、372,555 字节，首页显示 `ONLINE · production 环境` |
+| `http://cloud.mixm.top/` | 301 → `https://cloud.mixm.top/` |
+| `/mixmapp/api/v1/healthz` | 200 |
+| `/mixmapp/api/v1/meta` | 200，`env=production`，`ids.current=snowflake`，第三方均 dev/off |
+| `/api/v1/meta`（H5 实际请求的路径） | 200（反代兜底生效） |
+| `/pages/tools/ids` | 410 |
+| `/pages/auth/login` | 200 |
+| `mixmapp-api` / `nginx` | 均 `active`，443 有 Let’s Encrypt 证书（`/etc/letsencrypt/live/cloud.mixm.top/`） |
+
+装完的机器状态（新机删除即等于卸载）：
+
+```bash
+# 服务
+systemctl status mixmapp-api nginx
+# 配置与数据
+/etc/mixmapp/api.env          # 600，含库串 / token / jwt
+/etc/mixmapp/installed.lock   # 装完标记，重复 POST /api/install 返回 409
+/etc/nginx/conf.d/cloud.mixm.top.conf
+/var/www/mixmapp-site/index.html
+/opt/mixmapp/releases/<ts>/   # current 软链指向它
+```
+
+一条运维注意：向导服务 `mixmapp-installer.service` 装完后仍会常驻在 `127.0.0.1:8090`（只有本机可达 + 需要 token），
+如需彻底关闭执行 `systemctl disable --now mixmapp-installer`；重装则 `rm /etc/mixmapp/installed.lock` 后再起。
