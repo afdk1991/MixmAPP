@@ -495,9 +495,7 @@ onShow(() => {
 }
 
 .p-foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: block;
   margin-top: auto;
   padding-top: 16rpx;
 }
@@ -505,6 +503,7 @@ onShow(() => {
 .p-price {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
 }
 
 .p-cur {
@@ -527,6 +526,8 @@ onShow(() => {
 }
 
 .p-stock {
+  display: block;
+  margin-top: 4rpx;
   font-size: 26rpx;
   color: $ink-4;
 }
