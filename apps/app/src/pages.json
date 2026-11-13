@@ -37,10 +37,6 @@
       "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
-      "path": "pages/tools/ids",
-      "style": { "navigationBarTitleText": "MixmAPP" }
-    },
-    {
       "path": "pages/settings/about",
       "style": { "navigationBarTitleText": "MixmAPP" }
     },

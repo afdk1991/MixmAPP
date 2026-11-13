@@ -114,11 +114,6 @@
           <text class="link-desc">下单后可查看进度</text>
           <text class="link-arrow mono">→</text>
         </view>
-        <view class="link-row" hover-class="is-press" @tap="go('/pages/tools/ids')">
-          <text class="link-title">ID 试算器</text>
-          <text class="link-desc">雪花 / ULID / UUIDv7</text>
-          <text class="link-arrow mono">→</text>
-        </view>
         <view class="link-row link-row--last" hover-class="is-press" @tap="go('/pages/settings/about')">
           <text class="link-title">关于与能力</text>
           <text class="link-desc">能力矩阵与版本</text>
@@ -152,11 +147,6 @@
         <view class="link-row" hover-class="is-press" @tap="go('/pages/mall/index')">
           <text class="link-title">去商城</text>
           <text class="link-desc">商品 · 结算 · 订单</text>
-          <text class="link-arrow mono">→</text>
-        </view>
-        <view class="link-row" hover-class="is-press" @tap="go('/pages/tools/ids')">
-          <text class="link-title">ID 试算器</text>
-          <text class="link-desc">雪花 / ULID / UUIDv7</text>
           <text class="link-arrow mono">→</text>
         </view>
         <view class="link-row link-row--last" hover-class="is-press" @tap="go('/pages/settings/about')">

@@ -85,9 +85,6 @@
           <view class="quick-btn" hover-class="is-press" @tap="go('/pages/mall/index')">
             <text class="quick-text">逛商城</text>
           </view>
-          <view class="quick-btn" hover-class="is-press" @tap="go('/pages/tools/ids')">
-            <text class="quick-text">ID 试算</text>
-          </view>
         </view>
 
         <view class="section">
@@ -96,7 +93,7 @@
               <text class="sec-n mono">01</text>
               <text class="sec-title">通行入口</text>
             </view>
-            <text class="sec-meta mono">05 ENTRIES</text>
+            <text class="sec-meta mono">04 ENTRIES</text>
           </view>
 
           <view class="grid">
@@ -190,8 +187,7 @@ const entries = [
   { key: '01', tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: '/pages/mall/index' },
   { key: '02', tag: 'SIGN', title: '登录', desc: '密码 · 短信 · OAuth', url: '/pages/auth/login' },
   { key: '03', tag: 'PASS', title: '我的', desc: '号码与绑定方式', url: '/pages/me/index' },
-  { key: '04', tag: 'IDS', title: 'ID 试算器', desc: '雪花 / ULID / UUIDv7', url: '/pages/tools/ids' },
-  { key: '05', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: '/pages/settings/about' },
+  { key: '04', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: '/pages/settings/about' },
 ];
 
 const signedIn = computed(() => Boolean(session.user));

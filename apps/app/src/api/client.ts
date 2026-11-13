@@ -231,17 +231,6 @@ export const meApi = {
     apiRequest<UserDto>('/me/bind/username', { method: 'POST', data: { username, password } }),
 };
 
-export const idsApi = {
-  preview: (strategy: 'snowflake' | 'ulid' | 'uuidv7') =>
-    apiRequest<{
-      id: string;
-      snowflake: string;
-      accountNo: string;
-      ulid: string;
-      uuidV7: string;
-    }>('/ids/preview', { method: 'POST', data: { strategy }, auth: false }),
-};
-
 export const metaApi = {
   get: () =>
     apiRequest<{
