@@ -21,33 +21,40 @@ import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skipBuild = process.argv.includes('--skip-build');
-const version = JSON.parse(fs.readFileSync(path.join(repo, 'version.json'), 'utf8')).version ?? '0.0.0';
+const version = (() => {
+  const v = JSON.parse(fs.readFileSync(path.join(repo, 'version.json'), 'utf8'));
+  return v.version ?? v.next ?? `0.0.${v.build ?? 0}`;
+})();
 const outDir = path.join(repo, 'release');
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'mixmapp-pkg-'));
 const outFile = path.join(outDir, `mixmapp-install-${version}.tar.gz`);
 
-const run = (cmd, args, cwd = repo) => execFileSync(cmd, args, { cwd, stdio: 'inherit' });
+const isWin = process.platform === 'win32';
+const pnpm = isWin ? 'pnpm.CMD' : 'pnpm';
+const run = (cmd, args, cwd = repo) =>
+  // Windows 上 pnpm 是 .CMD 垫片，node 直接 spawn 会 ENOENT，必须走 shell
+  execFileSync(cmd, args, { cwd, stdio: 'inherit', shell: isWin && cmd === pnpm });
 const copy = (from, to) => fs.cpSync(path.join(repo, from), path.join(stage, to), { recursive: true });
 
 fs.mkdirSync(outDir, { recursive: true });
 
 if (!skipBuild) {
   console.log('[pkg] build api + h5');
-  run('pnpm', ['--filter', '@mixmapp/api', 'build']);
+  run(pnpm, ['--filter', '@mixmapp/api', 'build']);
   run('node', ['scripts/build-h5-single.mjs']);
 }
 
 console.log('[pkg] 收集 API 生产依赖（pnpm deploy --prod）');
 const deployDir = path.join(stage, 'pkg-api');
-run('pnpm', ['--filter', '@mixmapp/api', 'deploy', '--prod', deployDir]);
+run(pnpm, ['--filter', '@mixmapp/api', 'deploy', '--prod', deployDir]);
 
 console.log('[pkg] 组装 stage');
 copy('infra', 'infra');
 copy('install', 'install');
 fs.mkdirSync(path.join(stage, 'scripts'), { recursive: true });
 fs.copyFileSync(path.join(repo, 'scripts/install.sh'), path.join(stage, 'scripts/install.sh'));
-fs.copySync(path.join(deployDir, 'dist'), path.join(stage, 'dist'), { recursive: true });
-fs.copySync(path.join(deployDir, 'node_modules'), path.join(stage, 'node_modules'), { recursive: true });
+fs.cpSync(path.join(deployDir, 'dist'), path.join(stage, 'dist'), { recursive: true });
+fs.cpSync(path.join(deployDir, 'node_modules'), path.join(stage, 'node_modules'), { recursive: true });
 
 const h5 = path.join(repo, 'release/mixmapp-h5-single.html');
 if (!fs.existsSync(h5)) throw new Error('缺少 release/mixmapp-h5-single.html，先跑 build:h5:single');
