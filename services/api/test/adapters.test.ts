@@ -138,6 +138,9 @@ describe('S3 预签名', () => {
     accessKeyId: 'AKIA',
     secretAccessKey: 'SECRET',
     publicBaseUrl: 'https://cdn.mixm.app',
+    localDir: './storage',
+    apiBase: '/mixmapp/api/v1',
+    signSecret: 'test-sign-secret',
   };
 
   it('生成带签名的 PUT 地址', async () => {

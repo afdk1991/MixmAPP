@@ -1,12 +1,12 @@
 <template>
   <view class="page">
-    <nav-back />
+    <mx-bar />
     <view class="head">
       <view class="head-row">
         <view class="head-mark mono">DB</view>
         <view class="head-text">
           <text class="head-title">数据库落点</text>
-          <text class="head-sub mono">CloudBase 云 PG = 权威 · 云服务器 PG = 备援</text>
+          <text class="head-sub mono">云服务器本机 PG = 权威 · CloudBase 云 PG = 可选备援</text>
         </view>
       </view>
     </view>
@@ -30,7 +30,7 @@
 
     <view v-if="status" class="sheet block">
       <text class="eyebrow">CURRENT</text>
-      <text class="block-title">{{ status.target === 'cloudbase' ? 'CloudBase 云 PG（权威）' : '云服务器 PG（备援）' }}</text>
+      <text class="block-title">{{ status.target === 'cloudbase' ? 'CloudBase 云 PG（备援）' : '云服务器本机 PG（权威）' }}</text>
       <view class="row"><text class="k">驱动</text><text class="v mono">{{ status.driver }}</text></view>
       <view class="row"><text class="k">实际主机</text><text class="v mono">{{ status.host }}</text></view>
       <view class="row"><text class="k">连接串来源</text><text class="v mono">{{ status.source }}</text></view>
@@ -47,8 +47,8 @@
       <text class="block-title">切换落点</text>
       <text class="hint">热切换，不重启进程。切换前会先建连接并 ping 验证，连不通就不切，旧库继续服务。</text>
       <view class="btn-row">
-        <button class="btn btn--primary" :loading="loading" @click="switchTo('cloudbase')">切到云 PG（权威）</button>
-        <button class="btn" :loading="loading" @click="switchTo('server')">切到服务器 PG（备援）</button>
+        <button class="btn btn--primary" :loading="loading" @click="switchTo('cloudbase')">切到云 PG（备援）</button>
+        <button class="btn" :loading="loading" @click="switchTo('server')">切到服务器 PG（权威）</button>
       </view>
     </view>
 

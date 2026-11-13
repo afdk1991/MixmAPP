@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { Config } from '../config.js';
 import { AppError } from '../lib/errors.js';
 
@@ -107,6 +107,66 @@ export class DevStorage implements StorageProvider {
   }
 }
 
+/** 本地存储 key 安全校验：只允许按段落的常规字符，拒绝任何 .. */
+export function isSafeStorageKey(key: string): boolean {
+  if (!key || key.length > 512) return false;
+  if (key.includes('..') || key.startsWith('/') || key.includes('\\')) return false;
+  return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(key);
+}
+
+function localSignature(secret: string, key: string, exp: number): string {
+  return createHmac('sha256', secret).update(`${key}|${exp}`).digest('hex');
+}
+
+/** 校验本地上传地址上的签名与过期时间（常数时间比较）。 */
+export function verifyLocalUpload(
+  secret: string,
+  key: string,
+  exp: number,
+  sig: string,
+): { ok: true } | { ok: false; reason: string } {
+  if (!isSafeStorageKey(key)) return { ok: false, reason: 'key 非法' };
+  if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return { ok: false, reason: '上传地址已过期' };
+  const expected = localSignature(secret, key, exp);
+  const given = sig.toLowerCase();
+  if (given.length !== expected.length) return { ok: false, reason: '签名不匹配' };
+  if (!timingSafeEqual(Buffer.from(expected), Buffer.from(given))) {
+    return { ok: false, reason: '签名不匹配' };
+  }
+  return { ok: true };
+}
+
+/**
+ * 服务器本地磁盘存储：文件落在 STORAGE_DIR，公网读取由 nginx 的 /media/ 直出。
+ * 上传地址带 HMAC 签名与过期时间，前端拿地址直接 PUT，不再需要任何外部对象存储。
+ */
+export class LocalStorage implements StorageProvider {
+  readonly name = 'local';
+
+  constructor(private readonly config: Config['storage']) {}
+
+  async presignUpload(key: string, contentType = 'application/octet-stream', expiresIn = 900) {
+    if (!isSafeStorageKey(key)) throw new AppError('BAD_REQUEST', '存储 key 非法');
+    const exp = Math.floor(Date.now() / 1000) + expiresIn;
+    const sig = localSignature(this.config.signSecret, key, exp);
+    const base = this.config.apiBase.replace(/\/$/, '');
+    const url = `${base}/storage/upload?key=${encodeURIComponent(key)}&exp=${exp}&sig=${sig}`;
+    return {
+      url,
+      method: 'PUT' as const,
+      headers: { 'content-type': contentType },
+      expiresAt: new Date(exp * 1000).toISOString(),
+    };
+  }
+
+  publicUrl(key: string): string {
+    return `/media/${key}`;
+  }
+}
+
 export function createStorageProvider(config: Config): StorageProvider {
-  return config.storage.provider === 's3' ? new S3Storage(config.storage) : new DevStorage();
+  const provider = config.storage.provider;
+  if (provider === 's3') return new S3Storage(config.storage);
+  if (provider === 'dev') return new DevStorage();
+  return new LocalStorage(config.storage);
 }

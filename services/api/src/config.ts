@@ -109,13 +109,19 @@ export type Config = {
   };
   map: { provider: 'dev' | 'amap'; amapKey: string };
   storage: {
-    provider: 'dev' | 's3';
+    provider: 'dev' | 's3' | 'local';
     endpoint: string;
     region: string;
     bucket: string;
     accessKeyId: string;
     secretAccessKey: string;
     publicBaseUrl: string;
+    /** 本地磁盘存储根目录（provider=local 时生效） */
+    localDir: string;
+    /** 前端可访问的 API 前缀，用于拼上传地址 */
+    apiBase: string;
+    /** 本地上传地址的签名密钥，默认复用 JWT_SECRET */
+    signSecret: string;
   };
   push: {
     provider: 'dev' | 'jpush' | 'fcm';
@@ -145,9 +151,10 @@ export function loadConfig(): Config {
   if (!jwtSecret) {
     throw new Error('生产环境必须设置 JWT_SECRET（至少 32 字节随机串）');
   }
-  // 数据库落点：默认 cloudbase（权威库），DB_TARGET=server 时切到云服务器自建 PG。
+  // 数据库落点：默认 server（云服务器自建 PG，项目唯一权威库）。
+  // DB_TARGET=cloudbase 时切到 CloudBase 云 PG（仅作为可选备援保留）。
   // 兼容旧值 local（等价于 server），避免线上 env 立刻失效。
-  const rawTarget = str('DB_TARGET', 'cloudbase');
+  const rawTarget = str('DB_TARGET', 'server');
   const dbTarget: DbTarget = rawTarget === 'server' || rawTarget === 'local' ? 'server' : 'cloudbase';
   const cloudUrl = str('DATABASE_URL_CLOUDBASE');
   const serverUrl = str('DATABASE_URL_LOCAL') || str('DATABASE_URL_SERVER');
@@ -239,13 +246,19 @@ export function loadConfig(): Config {
       amapKey: str('AMAP_KEY'),
     },
     storage: {
-      provider: str('STORAGE_PROVIDER', 'dev') === 's3' ? 's3' : 'dev',
+      provider: (() => {
+        const raw = str('STORAGE_PROVIDER', 'local');
+        return raw === 's3' || raw === 'dev' ? raw : 'local';
+      })() as Config['storage']['provider'],
       endpoint: str('S3_ENDPOINT', 'https://s3.amazonaws.com'),
       region: str('S3_REGION', 'auto'),
       bucket: str('S3_BUCKET'),
       accessKeyId: str('S3_ACCESS_KEY_ID'),
       secretAccessKey: str('S3_SECRET_ACCESS_KEY'),
       publicBaseUrl: str('S3_PUBLIC_BASE_URL'),
+      localDir: str('STORAGE_DIR', env === 'production' ? '/var/lib/mixmapp/storage' : './storage'),
+      apiBase: str('STORAGE_API_BASE', '/mixmapp/api/v1'),
+      signSecret: str('STORAGE_SIGN_SECRET', jwtSecret),
     },
     push: {
       provider: (str('PUSH_PROVIDER', 'dev') as Config['push']['provider']) || 'dev',

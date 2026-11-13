@@ -36,7 +36,7 @@ describe('管理面：数据库落点', () => {
       headers: { 'x-admin-token': 'admin-secret' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.target).toBe('cloudbase');
+    expect(res.json().data.target).toBe('server');
     expect(res.json().data.available.cloudbase.configured).toBe(false);
   });
 

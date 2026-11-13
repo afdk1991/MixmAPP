@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import type { Config } from './config.js';
-import { dbHostOf } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
 import { MallService } from './modules/mall.js';
@@ -48,6 +47,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     bodyLimit: 2 * 1024 * 1024,
   });
 
+  // 本地上传通道：二进制请求体按 Buffer 收，单文件上限 25MB（与 nginx client_max_body_size 对齐）。
+  app.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer', bodyLimit: 25 * 1024 * 1024 },
+    (_request, body, done) => done(null, body),
+  );
+
   const origins = deps.config.corsOrigins;
   await app.register(cors, {
     origin: origins.includes('*') ? true : origins,
@@ -90,7 +96,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // 轻量固定窗口限流：单 IP 每分钟，健康检查放行
   const buckets = new Map<string, { windowStart: number; count: number }>();
   app.addHook('preHandler', async (request, reply) => {
-    if (request.url === '/healthz' || request.url === '/readyz') return;
+    const path = request.url.split('?')[0];
+    if (path === '/api/v1/healthz' || path === '/api/v1/readyz') return;
     const now = Date.now();
     const entry = buckets.get(request.ip);
     if (!entry || now - entry.windowStart >= 60_000) {
@@ -137,27 +144,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }),
   );
 
+  // 健康检查只有一套：/api/v1/healthz（存活 + 能力快照）与 /api/v1/readyz（依赖就绪）。
+  // 根路径不再另开一份同名路由，避免「探到的是另一套实现」这种假绿。
   app.get('/', async () => ({
     name: deps.config.appName,
     version: deps.config.version,
     docs: '/api/v1/meta',
-    health: '/healthz',
+    health: '/api/v1/healthz',
+    ready: '/api/v1/readyz',
   }));
-  app.get('/healthz', async (_request, reply) => {
-    const checks: Record<string, string> = {
-      db: deps.store.driver,
-      dbTarget: deps.config.dbTarget,
-      dbHost: dbHostOf(deps.config.databaseUrl),
-      dbSource: deps.config.databaseUrlSource,
-    };
-    return reply.send({
-      status: 'ok',
-      version: deps.config.version,
-      uptimeSec: Math.round(process.uptime()),
-      checks,
-      time: new Date().toISOString(),
-    });
-  });
 
   await app.register(
     async (scope) => {

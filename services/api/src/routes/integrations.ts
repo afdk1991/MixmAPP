@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import {
   aiChatSchema,
   createPaymentSchema,
@@ -9,6 +11,7 @@ import {
 import { z } from 'zod';
 import { parse } from '../lib/validate.js';
 import { AppError } from '../lib/errors.js';
+import { isSafeStorageKey, verifyLocalUpload } from '../adapters/storage.js';
 
 export async function integrationRoutes(app: FastifyInstance): Promise<void> {
   // ---- 支付 ----
@@ -75,6 +78,27 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     const key = `u/${request.userId}/${body.key}`;
     const upload = await app.storage.presignUpload(key, body.contentType, body.expiresIn);
     return { data: { ...upload, key, publicUrl: app.storage.publicUrl(key) } };
+  });
+
+  // 本地上传落盘（provider=local）：签名在 URL 上，不依赖登录 token，便于前端直接 PUT。
+  app.put('/storage/upload', async (request, reply) => {
+    const query = parse(
+      z.object({ key: z.string().min(1), exp: z.coerce.number(), sig: z.string().min(16) }),
+      request.query,
+    );
+    const check = verifyLocalUpload(app.cfg.storage.signSecret, query.key, query.exp, query.sig);
+    if (!check.ok) throw new AppError('FORBIDDEN', check.reason);
+    if (!isSafeStorageKey(query.key)) throw new AppError('BAD_REQUEST', '存储 key 非法');
+
+    const root = resolve(app.cfg.storage.localDir);
+    const target = resolve(join(root, query.key));
+    if (!target.startsWith(`${root}/`)) throw new AppError('BAD_REQUEST', '存储路径越界');
+
+    const body = request.body;
+    if (!Buffer.isBuffer(body)) throw new AppError('BAD_REQUEST', '需要二进制请求体');
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, body);
+    return reply.code(204).send();
   });
 
   // ---- AI ----
