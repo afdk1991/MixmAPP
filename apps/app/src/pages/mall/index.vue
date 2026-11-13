@@ -448,8 +448,8 @@ onShow(() => {
   right: 16rpx;
   bottom: 16rpx;
   z-index: 3;
-  width: 72rpx;
-  height: 72rpx;
+  width: 88rpx;
+  height: 88rpx;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.94);
   display: flex;

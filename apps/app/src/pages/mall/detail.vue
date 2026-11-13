@@ -175,7 +175,7 @@ onLoad((options) => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding-bottom: 240rpx;
+  padding-bottom: calc(240rpx + env(safe-area-inset-bottom));
 }
 
 /* ---------- 主视觉 ---------- */
@@ -385,8 +385,8 @@ onLoad((options) => {
 }
 
 .step {
-  width: 72rpx;
-  height: 72rpx;
+  width: 80rpx;
+  height: 80rpx;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
   background: #f7faf8;

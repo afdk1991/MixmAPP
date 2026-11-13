@@ -280,10 +280,13 @@ onLoad((options) => {
 .item-title {
   flex: 1;
   font-size: 30rpx;
+  line-height: 1.35;
   color: $ink;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .item-qty {

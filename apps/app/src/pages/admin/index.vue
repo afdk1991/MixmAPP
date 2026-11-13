@@ -144,22 +144,23 @@ onLoad(() => {
 </script>
 
 <style scoped lang="scss">
-/* 本页刻意不依赖全局 SCSS 令牌：色值/尺寸写死，保证任何分支都能独立编译 */
+/* 本页刻意不依赖全局 SCSS 令牌：色值/尺寸写死，保证任何分支都能独立编译。
+   尺寸统一用 rpx，避免 rem 在不同端被缩成 10px 级小字，按钮也被压扁。 */
 .page {
   box-sizing: border-box;
   overflow-x: hidden;
   min-height: 100vh;
   background: #f2f5f3;
-  padding: 1rem 0.75rem 2rem;
+  padding: 24rpx 24rpx calc(64rpx + env(safe-area-inset-bottom));
 }
 
 .head {
   box-sizing: border-box;
-  padding: 1.25rem;
+  padding: 40rpx;
   background:
     radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
     linear-gradient(158deg, #0b0f0e 0%, #152622 62%, #17322c 120%);
-  border-radius: 1.75rem;
+  border-radius: 32rpx;
 }
 
 .head-row {
@@ -168,17 +169,17 @@ onLoad(() => {
 }
 
 .head-mark {
-  width: 2.75rem;
-  height: 2.75rem;
-  margin-right: 0.75rem;
-  border: 1px solid rgba(244, 244, 241, 0.24);
-  border-radius: 0.625rem;
+  width: 88rpx;
+  height: 88rpx;
+  margin-right: 24rpx;
+  border: 1rpx solid rgba(244, 244, 241, 0.24);
+  border-radius: 20rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8125rem;
+  font-size: 26rpx;
   font-weight: 700;
-  letter-spacing: 0.0625rem;
+  letter-spacing: 2rpx;
   color: #f4f8f6;
 }
 
@@ -189,77 +190,83 @@ onLoad(() => {
 
 .head-title {
   display: block;
-  font-size: 1.3125rem;
-  font-weight: 600;
+  font-size: 40rpx;
+  font-weight: 700;
+  line-height: 1.25;
   color: #f6faf8;
 }
 
 .head-sub {
   display: block;
   word-break: break-all;
-  margin-top: 0.25rem;
-  font-size: 0.625rem;
-  color: rgba(244, 244, 241, 0.6);
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: rgba(244, 244, 241, 0.62);
 }
 
 .block {
   box-sizing: border-box;
-  margin-top: 0.75rem;
-  padding: 1rem;
+  margin-top: 24rpx;
+  padding: 32rpx;
   background: #ffffff;
-  border: 1px solid #dbe3df;
-  border-radius: 1rem;
-  box-shadow: 0 8px 24px rgba(13, 25, 23, 0.06);
+  border: 1rpx solid #dbe3df;
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(13, 25, 23, 0.06);
 }
 
 .block-title {
   display: block;
-  margin-top: 0.375rem;
-  font-size: 1.125rem;
-  font-weight: 600;
+  margin-top: 12rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 1.3;
   color: #0d1917;
 }
 
 .input {
   box-sizing: border-box;
   width: 100%;
-  margin-top: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  min-height: 84rpx;
+  margin-top: 24rpx;
+  padding: 22rpx 24rpx;
   background: #e8edeb;
-  border-radius: 1rem;
-  font-size: 0.75rem;
+  border-radius: 16rpx;
+  font-size: 26rpx;
   color: #0d1917;
 }
 
 .btn-row {
   display: flex;
-  margin-top: 0.75rem;
-  gap: 0.5rem;
+  margin-top: 24rpx;
+  gap: 16rpx;
 }
 
 .btn {
   flex: 1;
   min-width: 0;
+  min-height: 84rpx;
   margin: 0;
-  padding: 0.6875rem 0;
-  border-radius: 1rem;
-  border: 1px solid #dbe3df;
+  padding: 18rpx 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid #dbe3df;
   background: transparent;
-  font-size: 0.75rem;
+  font-size: 26rpx;
+  line-height: 1.3;
   color: #33443f;
 }
 
 .btn--primary {
-  background: #0f9d8f;
-  border-color: #0f9d8f;
+  background: #0d1917;
+  border-color: #0d1917;
   color: #f6faf8;
 }
 
 .hint {
   display: block;
-  margin-top: 0.75rem;
-  font-size: 0.6875rem;
-  line-height: 1.6;
+  margin-top: 24rpx;
+  font-size: 26rpx;
+  line-height: 1.65;
   color: #697b76;
 }
 
@@ -267,8 +274,8 @@ onLoad(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 0.625rem 0;
-  border-bottom: 1px solid #e8edeb;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #e8edeb;
 }
 
 .row--last {
@@ -278,15 +285,16 @@ onLoad(() => {
 
 .k {
   flex-shrink: 0;
-  margin-right: 0.75rem;
-  font-size: 0.75rem;
+  margin-right: 24rpx;
+  font-size: 26rpx;
   color: #697b76;
 }
 
 .v {
   flex: 1;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  min-width: 0;
+  font-size: 26rpx;
+  line-height: 1.55;
   color: #0d1917;
   text-align: right;
   word-break: break-all;
@@ -298,24 +306,24 @@ onLoad(() => {
 
 .err {
   display: block;
-  margin-top: 0.75rem;
-  font-size: 0.75rem;
+  margin-top: 24rpx;
+  font-size: 26rpx;
   color: #b33a2b;
 }
 
 .notice {
   display: block;
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
+  margin-top: 16rpx;
+  font-size: 26rpx;
   color: #0a7a70;
 }
 
 .foot {
   display: block;
-  margin-top: 1.5rem;
+  margin-top: 48rpx;
   text-align: center;
-  font-size: 0.625rem;
-  letter-spacing: 0.0625rem;
+  font-size: 26rpx;
+  letter-spacing: 2rpx;
   color: #97a5a1;
 }
 </style>

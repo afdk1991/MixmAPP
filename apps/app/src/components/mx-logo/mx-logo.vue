@@ -106,7 +106,7 @@ withDefaults(
   }
 
   .mx-logo-mono {
-    font-size: 22rpx;
+    font-size: 26rpx;
   }
 
   .mx-logo-text {
@@ -118,7 +118,7 @@ withDefaults(
   }
 
   .mx-logo-sub {
-    font-size: 15rpx;
+    font-size: 16rpx;
     margin-top: 5rpx;
   }
 }
@@ -143,7 +143,7 @@ withDefaults(
   }
 
   .mx-logo-sub {
-    font-size: 17rpx;
+    font-size: 18rpx;
     margin-top: 6rpx;
   }
 }
@@ -168,7 +168,7 @@ withDefaults(
   }
 
   .mx-logo-sub {
-    font-size: 20rpx;
+    font-size: 26rpx;
     margin-top: 8rpx;
   }
 }

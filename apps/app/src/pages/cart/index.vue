@@ -260,7 +260,7 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-3 240rpx;
+  padding: 0 $sp-3 calc(200rpx + env(safe-area-inset-bottom));
 }
 
 .head {
@@ -351,9 +351,11 @@ onShow(() => {
   letter-spacing: $ls-tight;
   line-height: 1.35;
   color: $ink;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .remove {
@@ -395,8 +397,8 @@ onShow(() => {
 }
 
 .step {
-  width: 64rpx;
-  height: 64rpx;
+  width: 80rpx;
+  height: 80rpx;
   border: 1rpx solid $paper-3;
   border-radius: 12rpx;
   background: #f7faf8;
@@ -411,7 +413,7 @@ onShow(() => {
 }
 
 .count {
-  width: 76rpx;
+  width: 84rpx;
   text-align: center;
   font-size: 30rpx;
   color: $ink;
