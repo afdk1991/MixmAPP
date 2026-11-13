@@ -49,7 +49,7 @@
 6. **安装向导完成面板**
    - 完成信息长值加 `white-space:pre-wrap; word-break:break-all`，不再横向溢出。
 
-## 五、仍需你决定的项
+## 五、第一轮遗留清单（原始记录）
 
 ### P1
 - **小程序真机**：代码已通过 H5 与编译级验证，但 `project.config.json` 的 appid 仍是 `touristappid`，无法出真机预览码；需要正式 AppID 才能验 rpx 在微信里的实际渲染。
@@ -66,7 +66,37 @@
 - **并行遗留**：`components/nav-back/nav-back.vue` 无页面引用；`docs/screenshots/*.png` 仍是旧图；`release/` 下有 6 份 `index.html` 构建产物，若部署取错会看到旧 UI。
 - **我的页真机顶部**：真机截图里通行证头被品牌栏截掉一截，H5 复测正常，暂判为滚动位置继承；下次真机若复现再按布局 bug 查。
 
-## 六、复现
+## 六、第二轮收口（已执行）
+
+1. **H5 全屏刘海**：`index.html` 视口加 `viewport-fit=cover`；品牌栏与占位块改为
+   `calc(var(--status-h) + 44px + env(safe-area-inset-top))`，并保留无 `env()` 时的旧值兜底。
+   普通浏览器 `env(safe-area-inset-top)=0`，三档复测无新增问题；全屏打开时自动让出刘海。
+   本机只有 Android，iOS 真机确认仍待做。
+2. **原生启动图比例**：新增 `scripts/fit-splash-aspect.py`，10 张 launch 图统一改为
+   竖屏 9:20、横屏 20:9（320×711 到 1080×2400），等比缩放后补底色，不再拉伸。
+3. **Android 12+ 启动屏白闪**：真机冷启动抓帧发现系统启动屏是白底（`Theme.SplashScreen`
+   未配 `windowSplashScreenBackground`）。已补深墨底 `#0B0F0E` + 品牌 MX 图标 +
+   `postSplashScreenTheme`；重新打包安装后抓帧为深底 MX + teal 底线，白闪消失。
+4. **我的页长编号**：定“允许两行”。资料行 `v--mono` 26rpx / 行高 1.45 / 去字距；
+   通行证卡内 `pass-v` 改两行 clamp，不再单行省略。
+5. **详情角标**：`NO. XXXXXXXX` 上移 12rpx，离开卡片圆角切线。
+6. **小程序真机（唯一阻塞）**：源码、配置与 git 历史里都没有 `wx` 开头的 AppID，
+   `manifest.json` 的 mp-weixin `appid` 为空，无法自行生成预览码。只需你给这一串 AppID，
+   其余工程已就绪；填入后执行 `pnpm --filter @mixmapp/app build:mp-weixin` 即可出码。
+
+复测结果不变：390 共 6 条、320 共 6 条、1440 共 0 条，全部为装饰元素；无新增裁切或溢出。
+
+## 七、仍未完成 / 待确认
+
+- **小程序真机**：唯一阻塞是正式 AppID。
+- **iOS 全屏刘海**：代码已处理，需 iPhone「添加到主屏幕」确认。
+- **300px 级超窄屏**：只测到 320（微标 11.1px），不再向下兼容。
+- **我的页通行证卡左右半圆缺口**：装饰性裁切，是否保留由设计定。
+- **首页装饰轨道线**：仍穿过首屏正文，属设计意图；要更稳可再降透明度。
+- **安装向导**：顶部步骤条按并行提交保持移除；只读输入框与可编辑框外观仍一致。
+- **并行遗留**：`nav-back` 无页面引用；`docs/screenshots` 旧图；`release/` 有 6 份构建产物。
+
+## 八、复现
 
 ```powershell
 # 1. 构建并同步隔离快照（mock API 同源）

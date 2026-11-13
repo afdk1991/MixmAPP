@@ -432,13 +432,14 @@ onShow(() => {
 }
 
 .pass-v {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   margin-top: 8rpx;
   font-size: 30rpx;
+  line-height: 1.35;
   color: rgba(240, 247, 255, 0.92);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .pass-actions {
@@ -527,6 +528,8 @@ onShow(() => {
 
 .v--mono {
   font-size: 26rpx;
+  line-height: 1.45;
+  letter-spacing: 0;
   color: $ink-3;
 }
 

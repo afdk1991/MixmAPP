@@ -242,7 +242,7 @@ onLoad((options) => {
 .hero-serial {
   position: absolute;
   right: $sp-4;
-  bottom: $sp-6;
+  bottom: 60rpx;
   z-index: 2;
   font-size: 26rpx;
   letter-spacing: 2rpx;

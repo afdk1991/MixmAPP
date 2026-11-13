@@ -1,7 +1,7 @@
 <template>
-  <view class="mx-bar-wrap">
+  <view class="mx-bar-wrap" :style="{ '--status-h': statusBarHeight + 'px' }">
     <view class="mx-bar" :class="{ 'mx-bar--compact': compact }">
-      <view class="mx-bar-inner" :style="{ paddingTop: statusBarHeight + 'px' }">
+      <view class="mx-bar-inner">
         <view class="mx-bar-row" :class="{ 'mx-bar-row--compact': compact }">
           <view class="mx-back" hover-class="is-press" @tap="goBack">
             <text class="mx-back-chev">‹</text>
@@ -15,12 +15,12 @@
         </view>
       </view>
     </view>
-    <view class="mx-bar-gap" :style="{ height: totalHeight + 'px' }"></view>
+    <view class="mx-bar-gap"></view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { ROUTES } from '../../routes';
 import MxLogo from '../mx-logo/mx-logo.vue';
 
@@ -38,10 +38,6 @@ try {
   statusBarHeight.value = 0;
 }
 // #endif
-
-const BAR_PX = 44;
-
-const totalHeight = computed(() => statusBarHeight.value + BAR_PX);
 
 function goHome(): void {
   uni.reLaunch({ url: ROUTES.home });
@@ -79,6 +75,8 @@ function goBack(): void {
 .mx-bar-inner {
   width: 100%;
   box-sizing: border-box;
+  padding-top: var(--status-h, 0px);
+  padding-top: calc(var(--status-h, 0px) + env(safe-area-inset-top));
 }
 
 .mx-bar-row {
@@ -119,6 +117,8 @@ function goBack(): void {
 
 .mx-bar-gap {
   width: 100%;
+  height: calc(var(--status-h, 0px) + 44px);
+  height: calc(var(--status-h, 0px) + 44px + env(safe-area-inset-top));
 }
 
 .is-press {
