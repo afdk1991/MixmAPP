@@ -32,9 +32,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build:api
-      - name: 构建 H5（静态端需要绝对 API 源，未配置变量时保持同源）
+      # 静态端只发布到腾讯云服务器，H5 与 API 同域：默认 API 前缀 /mixmapp/api/v1。
+      # 需要换域名时用仓库变量 MIXMAPP_API_BASE 覆盖，不必改代码。
+      - name: 构建 H5（同域 + /mixmapp 前缀）
         env:
-          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE }}
+          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || '/mixmapp/api/v1' }}
         run: pnpm build:h5
 
       - name: 生成独立可运行 API 发布包
@@ -59,37 +61,8 @@ jobs:
             api-${{ github.sha }}.tar.gz
             h5-${{ github.sha }}.tar.gz
 
-  static:
-    name: 静态端发布（Cloudflare Pages）
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      # secrets 不能直接出现在 if 表达式里，先在 job 级 env 折算成布尔字符串
-      CF_READY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-bundles
-
-      - name: 解包 H5
-        run: mkdir -p apps/app/dist/build/h5 && tar -xzf h5-${{ github.sha }}.tar.gz -C apps/app/dist/build/h5
-
-      - name: 发布到 Cloudflare Pages
-        if: env.CF_READY == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CF_PAGES_PROJECT: ${{ vars.CF_PAGES_PROJECT || 'mixmapp' }}
-        run: node scripts/deploy-static.mjs
-
-      - name: 无凭据时跳过
-        if: env.CF_READY != 'true'
-        run: echo "SKIP 未配置 Cloudflare 凭据，静态端产物仅保留在 workflow artifact"
-
   api:
-    name: API 原子发布（SSH）
+    name: API + H5 原子发布（腾讯云服务器）
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -123,6 +96,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" 'rm -rf /tmp/mixmapp-deploy'
           scp -i ~/.ssh/deploy_key api-${{ github.sha }}.tar.gz \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/api.tar.gz"
+          scp -i ~/.ssh/deploy_key h5-${{ github.sha }}.tar.gz \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/web.tar.gz"
           scp -i ~/.ssh/deploy_key -r deploy \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/mixmapp-deploy"
 
@@ -134,7 +109,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             'sudo mkdir -p /opt/mixmapp/deploy && sudo cp -r /tmp/mixmapp-deploy/* /opt/mixmapp/deploy/ && \
-             sudo ARTIFACT=/tmp/api.tar.gz bash /opt/mixmapp/deploy/atomic-release.sh'
+             sudo ARTIFACT=/tmp/api.tar.gz WEB_ARTIFACT=/tmp/web.tar.gz bash /opt/mixmapp/deploy/atomic-release.sh'
 
       - name: 线上健康校验
         if: env.SSH_READY == 'true' && vars.HEALTH_BASE_URL != ''

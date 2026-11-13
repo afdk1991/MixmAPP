@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # 原子发布：解包 → 切 symlink → 迁移 → 重启 → 健康检查，失败自动回滚。
-# 用法：ARTIFACT=/tmp/api.tar.gz bash deploy/atomic-release.sh
+# 用法：ARTIFACT=/tmp/api.tar.gz WEB_ARTIFACT=/tmp/web.tar.gz bash deploy/atomic-release.sh
+# WEB_ARTIFACT 可选；给了就把 H5 解到 release/web，由 nginx 直接服务 current/web。
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/opt/mixmapp}
 ARTIFACT=${ARTIFACT:?缺少 ARTIFACT（node 产物压缩包路径）}
+WEB_ARTIFACT=${WEB_ARTIFACT:-}
 SERVICE=${SERVICE:-mixmapp-api}
 HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:8080/api/v1/healthz}
 KEEP_RELEASES=${KEEP_RELEASES:-5}
@@ -30,6 +32,17 @@ tar -xzf "$ARTIFACT" -C "$RELEASE"
 if [ ! -f "$RELEASE/dist/index.js" ]; then
   echo "✗ 产物缺少 dist/index.js"
   exit 1
+fi
+
+# H5 与 API 同版本发布：先解包并校验入口，缺入口就直接失败，不切 symlink。
+if [ -n "$WEB_ARTIFACT" ]; then
+  mkdir -p "$RELEASE/web"
+  tar -xzf "$WEB_ARTIFACT" -C "$RELEASE/web"
+  if [ ! -f "$RELEASE/web/index.html" ]; then
+    echo "✗ H5 产物缺少 web/index.html"
+    exit 1
+  fi
+  echo "▶ H5 已解包到 $RELEASE/web"
 fi
 
 ln -sfn "$RELEASE" "$APP_DIR/current"
