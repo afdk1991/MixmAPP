@@ -48,8 +48,17 @@ const PORT = Number(argOf('port', 8090));
 const DEV = Boolean(argOf('dev', false));
 const PUBLIC = Boolean(argOf('public', false));
 const RELEASE_ROOT = String(argOf('root', REPO_ROOT));
+/**
+ * 同机演练/多站点共存用的沙箱前缀：给了 --prefix 就把 etc/releases/current/web
+ * 全部收在 <prefix> 下，service 名与 nginx 站点文件也另起，避免碰到线上站点。
+ */
+const PREFIX = argOf('prefix', null) === true ? null : argOf('prefix', null);
+const SERVICE_NAME = String(argOf('service-name', 'mixmapp-api'));
+const NGINX_CONF = argOf('nginx-conf', null) === true ? null : argOf('nginx-conf', null);
+const NGINX_LISTEN = argOf('nginx-listen', null) === true ? null : argOf('nginx-listen', null);
+const H5_OVERRIDE = argOf('h5', null) === true ? null : argOf('h5', null);
 
-// ---------- 路径（dev 模式全部落到临时目录，绝不碰真实系统） ----------
+// ---------- 路径（dev / 沙箱前缀 / 正式，三级） ----------
 const PATHS = DEV
   ? {
       etc: path.join(os.tmpdir(), 'mixmapp-install-dev', 'etc'),
@@ -59,14 +68,23 @@ const PATHS = DEV
       current: path.join(os.tmpdir(), 'mixmapp-install-dev', 'opt', 'current'),
       web: path.join(os.tmpdir(), 'mixmapp-install-dev', 'www'),
     }
-  : {
-      etc: '/etc/mixmapp',
-      token: '/etc/mixmapp/install-token',
-      lock: '/etc/mixmapp/installed.lock',
-      releases: '/opt/mixmapp/releases',
-      current: '/opt/mixmapp/current',
-      web: '/var/www/mixmapp-site',
-    };
+  : PREFIX
+    ? {
+        etc: path.join(PREFIX, 'etc'),
+        token: path.join(PREFIX, 'etc', 'install-token'),
+        lock: path.join(PREFIX, 'etc', 'installed.lock'),
+        releases: path.join(PREFIX, 'releases'),
+        current: path.join(PREFIX, 'current'),
+        web: path.join(PREFIX, 'www'),
+      }
+    : {
+        etc: '/etc/mixmapp',
+        token: '/etc/mixmapp/install-token',
+        lock: '/etc/mixmapp/installed.lock',
+        releases: '/opt/mixmapp/releases',
+        current: '/opt/mixmapp/current',
+        web: '/var/www/mixmapp-site',
+      };
 
 // ---------- 小工具 ----------
 const run = async (file, args, opts = {}) => {
@@ -155,21 +173,20 @@ async function provisionLocalDb({ dbName, dbUser, dbPassword }) {
     const start = await sh('systemctl start postgresql 2>/dev/null || service postgresql start 2>/dev/null; sleep 1; pg_isready -q');
     if (!start.ok) return { ok: false, detail: 'PostgreSQL 未运行：systemctl start postgresql 失败' };
   }
-  const sql = `
-    do $$ begin
-      if not exists (select 1 from pg_roles where rolname = '${dbUser}') then
-        create role ${dbUser} login password '${dbPassword.replace(/'/g, "''")}';
-      end if;
-    end $$;
-    select 'role-ok';
-  `;
-  const role = await sh(`sudo -u postgres psql -v ON_ERROR_STOP=1 -c "${sql.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`);
-  if (!role.ok) return { ok: false, detail: `建角色失败：${role.out.slice(-300)}` };
+  // 注意：不要用 PL/pgSQL 的 $$ 包装（经 bash 传参时 $$ 会被展开成 PID），改成先查后建
+  const psqlAsPostgres = (sql) => sh(`cd /tmp && sudo -u postgres psql -v ON_ERROR_STOP=1 -tAc ${JSON.stringify(sql)}`);
 
-  const db = await sh(
-    `sudo -u postgres psql -tc "select 1 from pg_database where datname='${dbName}'" | grep -q 1 || sudo -u postgres createdb -O ${dbUser} ${dbName}`,
-  );
-  if (!db.ok) return { ok: false, detail: `建库失败：${db.out.slice(-300)}` };
+  const roleExists = (await psqlAsPostgres(`select 1 from pg_roles where rolname='${dbUser}'`)).out.includes('1');
+  if (!roleExists) {
+    const created = await psqlAsPostgres(`create role ${dbUser} login password '${dbPassword.replace(/'/g, "''")}'`);
+    if (!created.ok) return { ok: false, detail: `建角色失败：${created.out.slice(-300)}` };
+  }
+
+  const dbExists = (await psqlAsPostgres(`select 1 from pg_database where datname='${dbName}'`)).out.includes('1');
+  if (!dbExists) {
+    const created = await psqlAsPostgres(`create database ${dbName} owner ${dbUser}`);
+    if (!created.ok) return { ok: false, detail: `建库失败：${created.out.slice(-300)}` };
+  }
 
   return {
     ok: true,
@@ -248,8 +265,7 @@ function buildEnvFile(cfg) {
 function nginxConf(cfg) {
   return `# MixmAPP —— 由安装向导生成（${new Date().toISOString()}）
 server {
-    listen 80;
-    listen [::]:80;
+    listen ${cfg.listenLine};
     server_name ${cfg.domain};
 
     client_max_body_size 12m;
@@ -259,7 +275,7 @@ server {
     gzip_min_length 1024;
     gzip_types text/plain text/css application/javascript application/json application/manifest+json image/svg+xml;
 
-    root ${cfg.webRoot};
+    root ${PATHS.web};
     index index.html;
 
     # 入口 HTML 不缓存，发版立即生效
@@ -293,7 +309,7 @@ server {
 }
 
 const systemdUnit = () => `[Unit]
-Description=MixmAPP API
+Description=MixmAPP API${SERVICE_NAME === 'mixmapp-api' ? '' : ` (${SERVICE_NAME})`}
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -303,7 +319,7 @@ User=mixmapp
 Group=mixmapp
 WorkingDirectory=${PATHS.current}
 EnvironmentFile=${PATHS.etc}/api.env
-ExecStart=/usr/bin/node ${PATHS.current}/dist/index.js
+ExecStart=${process.execPath} ${PATHS.current}/dist/index.js
 Restart=always
 RestartSec=3
 KillSignal=SIGTERM
@@ -342,7 +358,7 @@ async function install(cfg, push) {
     await fsp.mkdir(PATHS.web, { recursive: true });
   }
 
-  step('写入运行配置 /etc/mixmapp/api.env');
+  step(`写入运行配置 ${PATHS.etc}/api.env`);
   if (!DEV) {
     await fsp.writeFile(`${PATHS.etc}/api.env`, buildEnvFile(cfg), { mode: 0o600 });
   }
@@ -365,8 +381,8 @@ async function install(cfg, push) {
 
   step('注册 systemd 服务');
   if (!DEV) {
-    await fsp.writeFile('/etc/systemd/system/mixmapp-api.service', systemdUnit(), { mode: 0o644 });
-    await sh('systemctl daemon-reload && systemctl enable --now mixmapp-api');
+    await fsp.writeFile(`/etc/systemd/system/${SERVICE_NAME}.service`, systemdUnit(), { mode: 0o644 });
+    await sh(`systemctl daemon-reload && systemctl enable --now ${SERVICE_NAME}`);
   }
 
   step('等待 API 健康检查');
@@ -386,31 +402,49 @@ async function install(cfg, push) {
   if (!healthy) throw new Error('API 未在 30s 内就绪，请查看 /var/log/mixmapp/api.err.log');
 
   step('部署前端单文件 H5');
-  const h5 = ['release/mixmapp-h5-single.html', 'h5/index.html', 'index.html'].map((p) => path.join(RELEASE_ROOT, p)).find(exists);
+  const h5 =
+    (H5_OVERRIDE && exists(H5_OVERRIDE) ? H5_OVERRIDE : null) ??
+    ['release/mixmapp-h5-single.html', 'h5/index.html', 'index.html']
+      .map((p) => path.join(RELEASE_ROOT, p))
+      .find(exists);
   if (!h5) throw new Error('release 里没有单文件 H5（先跑 node scripts/build-h5-single.mjs 或使用打包好的安装包）');
   if (!DEV) await fsp.copyFile(h5, `${PATHS.web}/index.html`);
 
   step('生成 nginx 站点并 reload');
   if (!DEV) {
-    await fsp.writeFile(`/etc/nginx/conf.d/${cfg.domain}.conf`, nginxConf(cfg), { mode: 0o644 });
+    const confPath = NGINX_CONF || `/etc/nginx/conf.d/${cfg.domain}.conf`;
+    await fsp.writeFile(confPath, nginxConf(cfg), { mode: 0o644 });
     const t = await sh('nginx -t');
     if (!t.ok) throw new Error(`nginx -t 失败：${t.out.slice(-400)}`);
     await sh('systemctl reload nginx');
   }
 
   step('按需签发 HTTPS 证书');
-  if (!DEV && cfg.https) {
+  if (!DEV && cfg.https && !PREFIX) {
     const cert = await sh(`certbot --nginx -n --agree-tos -m ${cfg.adminEmail} -d ${cfg.domain} --redirect`);
     if (!cert.ok) log.push({ title: `certbot 未完成（可稍后手动重试）：${cert.out.slice(-300)}` });
   }
 
   step('创建第一个账号');
+  let account = null;
   if (!DEV) {
     const payload = JSON.stringify({ username: cfg.adminUsername, password: cfg.adminPassword, nickname: cfg.adminUsername });
     const r = await sh(
-      `curl -fsS -X POST http://127.0.0.1:${cfg.apiPort}/api/v1/auth/register/username -H 'content-type: application/json' -d '${payload.replace(/'/g, "'\\''")}'`,
+      `curl -sS -w '\\n%{http_code}' -X POST http://127.0.0.1:${cfg.apiPort}/api/v1/auth/register/username -H 'content-type: application/json' -d '${payload.replace(/'/g, "'\\''")}'`,
     );
-    if (!r.ok) log.push({ title: `账号创建返回异常（可能已存在）：${r.out.slice(-200)}` });
+    const code = Number((r.out.match(/(\d{3})\s*$/) ?? [])[1] ?? 0);
+    if (code === 200 || code === 201) {
+      account = { created: true, username: cfg.adminUsername };
+    } else {
+      // 账号建不起来不算装机失败，但必须把真实原因带出来（例如用户名命中保留词）
+      const body = r.out.replace(/\s\d{3}\s*$/, '').trim();
+      let reason = body.slice(-200);
+      try {
+        reason = JSON.parse(body).message ?? reason;
+      } catch {}
+      account = { created: false, username: cfg.adminUsername, httpCode: code, reason };
+      log.push({ title: `账号未创建（HTTP ${code}）：${reason}` });
+    }
   }
 
   step('写安装完成标记');
@@ -442,6 +476,10 @@ async function install(cfg, push) {
       envFile: `${PATHS.etc}/api.env`,
       webRoot: PATHS.web,
       h5Source: h5,
+      nginxConf: NGINX_CONF || `/etc/nginx/conf.d/${cfg.domain}.conf`,
+      service: SERVICE_NAME,
+      prefix: PREFIX,
+      account,
       preview: DEV,
     },
   };
@@ -531,6 +569,9 @@ const server = createServer(async (req, res) => {
       adminEmail: String(body.adminEmail ?? ''),
       jwtSecret: crypto.randomBytes(32).toString('base64url'),
       adminToken: crypto.randomBytes(24).toString('base64url'),
+      // nginx：正式默认 80 + 443 跳转，同机演练可用 --nginx-listen 127.0.0.1:8099 隔离
+      listenLine: NGINX_LISTEN ?? '80;\n    listen [::]:80',
+      confPath: NGINX_CONF,
     };
     if (!USERNAME_RE.test(cfg.adminUsername)) return json(res, 400, { error: '用户名需 2-20 位字母/数字/中文/下划线/点' });
     if (cfg.adminPassword.length < 8 || !/[a-zA-Z]/.test(cfg.adminPassword)) {

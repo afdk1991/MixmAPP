@@ -25,11 +25,12 @@ Mim 没有 `/` 这个页面，于是访客打开域名根拿到 404 —— 不�
 
 ## 本次改动（可回滚）
 
-1. `mkdir -p /var/www/mixmapp-site`，把 `release/mixmapp-h5-single.html`（当前 461 KB 源 / 472 KB 文件，内嵌 `https://cloud.mixm.top/mixmapp/api/v1`）上传为 `/var/www/mixmapp-site/index.html`。
-2. nginx 的 `server` 级 `root` 指向该目录，剩余路径统一走 SPA 回退（与部署流水线的 `/assets/` 长缓存规则并存）：
+1. `mkdir -p /var/www/mixmapp-site`，把 `release/mixmapp-h5-single.html`（472 KB 单文件）上传为 `/var/www/mixmapp-site/index.html`（**仍保留**，作为不依赖流水线的兜底产物）。
+2. nginx 的 `server` 级 `root` 指向站点产物目录，剩余路径统一走 SPA 回退（与 `/assets/` 长缓存规则并存）。
+   2026-11-13 21:52 起，部署流水线开始产出 `web/`（`assets/ + index.html + static/`），`root` 已切到 `/opt/mixmapp/current/web`；`/var/www/mixmapp-site` 退为兜底：
 
 ```nginx
-root /var/www/mixmapp-site;
+root /opt/mixmapp/current/web;      # 流水线产出的多文件构建
 index index.html;
 
 location /assets/ { expires 1y; add_header Cache-Control "public, immutable" always; try_files $uri =404; }
@@ -46,10 +47,11 @@ location / {
 ```
 
 3. 已下线的页面显式 410（2026-11-13 删除 ID 试算器）：`location = /pages/tools/ids` 与 `location ^~ /pages/tools/` 都 `return 410`，不再回退成空壳。
+   **注意这条会被覆盖**：写 vhost 的另一条会话切 `root` 时整份文件重写过一次，410 规则随之消失（旧链接短暂回到 200 空壳）。已补回并实测 410，改 vhost 的任何人都必须保留这两条。
 4. `nginx -t` 通过 → `systemctl reload nginx`。
 5. 备份：`/root/nginx-backup-20261113/` 下按时间戳保留了 `-selfhost.bak`、`-preq410.bak` 等版本。
 
-> 注意：模板里曾把 `root` 写成 `/opt/mixmapp/current/web`（指望部署流水线产出 H5 目录），但 `deploy` 工作流目前只发布 `dist`（API）与 `release/` 产物，并没有 `web/`，于是整站 404。改成稳定目录 `/var/www/mixmapp-site` 后，发版只需覆盖这一个 `index.html`；若以后流水线真的产出 `web/`，把 `root` 切回去即可。
+> 历史：模板里曾把 `root` 写成 `/opt/mixmapp/current/web`，但那时 `deploy` 只发布 `dist`（API），没有 `web/`，于是整站 404；当时临时改成稳定目录 `/var/www/mixmapp-site`。现在流水线补齐了 `web/`，两套并存：`current/web` 是主路径，`/var/www/mixmapp-site` 是兜底。
 
 
 ## 复核命令（可直接贴）
@@ -113,6 +115,7 @@ CloudBase 与 GitHub Pages 侧没有 410 能力：这两个托管方对未知路
 
 ## 已确认的边界
 
-- `/mixmapp/...`（API）与 `/mixmapp` 的 301 独立于站点回退规则；其余路径只走本站 H5，**不再**转发给 8787 的 Mim 进程。
-- 自托管产物是**单文件 H5**（无外链资源），所以不需要额外的 JS/CSS location 配置。
+- `/mixmapp/...`（API）、`/mixmapp` 的 301、`/media/`（磁盘存储 alias）独立于站点回退规则；其余路径只走本站 H5，**不再**转发给 8787 的 Mim 进程。
+- `/var/www/mixmapp-site/index.html` 是单文件兜底：`current/web` 缺失（流水线失败）时，把 `root` 临时指回去即可恢复访问。
+- 单文件产物无外链资源；多文件产物必须保留 `/assets/` 与 `/static/` 两个目录，否则页面白屏（index.html 只 777 字节，全是引用）。
 - `cloud.mix.top`（少 m）不需要做任何事，也不可能救活：那是别人的停放域名。

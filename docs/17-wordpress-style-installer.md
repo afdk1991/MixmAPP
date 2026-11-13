@@ -215,3 +215,57 @@ psql "$DATABASE_URL" -c "select count(*) from users"                       # ≥
 ```
 
 向导进程若还在跑：`systemctl disable --now mixmapp-installer`（安装器写 lock 后本应自动拒绝写入，但建议停掉）。
+
+---
+
+## 10. 同机演练（已在 115.159.159.11 真机验证）
+
+生产机不能直接装（会重建 `/opt/mixmapp`、覆盖 vhost、抢 8080）。所以安装器支持**沙箱前缀**，在同一台机器上完整跑一遍再拆掉：
+
+```bash
+# ① 上传向导 + 用生产 release 当“安装包”（只读复制，不改动它）
+scp -r install root@<IP>:/root/rehearsal/
+ssh root@<IP>
+# ② 沙箱启动：独立前缀、独立端口、独立 service、独立 nginx 站点（127.0.0.1:8099）
+systemd-run --unit=mixmapp-rehearsal-installer --collect /usr/local/bin/node \
+  /root/rehearsal/install/server.mjs --port 8093 \
+  --prefix /opt/mixmapp-rehearsal \
+  --root /opt/mixmapp/current \
+  --h5 /var/www/mixmapp-site/index.html \
+  --service-name mixmapp-api-rehearsal \
+  --nginx-conf /etc/nginx/conf.d/zz-mixmapp-rehearsal.conf \
+  --nginx-listen 127.0.0.1:8099
+# ③ 浏览器/接口走完 5 步（令牌在 /opt/mixmapp-rehearsal/etc/install-token）
+```
+
+真机实测结果（Ubuntu 22.04 / Node 22.20 / PG 14.24）：
+
+| 检查 | 结果 |
+|---|---|
+| 12 个安装步骤 | 全部 `ok`，无一步失败 |
+| 直连 API `:8095/api/v1/healthz`、`/meta` | 200 / 200 |
+| 经 nginx 测试站 `Host: rehearsal.local` 的 `/` | 200、472,024 字节 |
+| 同一站点的深链接 `/pages/mall/index` | 200（SPA 回退生效） |
+| 同一站点的 `/mixmapp/api/v1/healthz` | 200（反代生效） |
+| 第一个账号 | `{"created":true,"username":"mixowner"}`，`users` 表 1 行 |
+| 装完再 POST `/api/install` | `409 already-installed`（lock 生效） |
+| 线上站点 `https://cloud.mixm.top/` | root 200、`healthz` 200、`/pages/tools/ids` 410，全程未变 |
+
+演练期间发现并已修掉的真机 bug（都很典型，写在这里避免复现）：
+
+1. **`$$` 被 bash 展开**：本机建库原来用 PL/pgSQL 的 `do $$ … end $$`，经 `bash -lc "…"` 传参时 `$$` 变成 PID，SQL 语法错误。改成“先查 `pg_roles` / `pg_database`，不存在再 `create`”。
+2. **`ExecStart` 写死 `/usr/bin/node`**：这台机的 node 在 `/usr/local/bin/node`，服务直接 `203/EXEC` 起不来。改成用运行向导的 `process.execPath`。
+3. **nginx 模板 `root undefined`**：模板引用了 `cfg.webRoot`，但该字段没传进 install()，生成 `root undefined;`，站点 404。改成直接引用 `PATHS.web`。
+
+另外一条不是 bug、但值得写进向导提示的规则：用户名命中保留词会 422（`username-policy` 里含 `admin`），
+所以“第一个账号”不要用 `xxxadmin` 这类名字；安装器现在会把这个 422 的真实原因回显到安装日志，而不是吞掉。
+
+演练清理（已执行，机器上无残留）：
+
+```bash
+systemctl disable --now mixmapp-api-rehearsal; rm -f /etc/systemd/system/mixmapp-api-rehearsal.service
+systemctl stop mixmapp-rehearsal-installer
+rm -f /etc/nginx/conf.d/zz-mixmapp-rehearsal.conf; nginx -t && systemctl reload nginx
+rm -rf /opt/mixmapp-rehearsal /root/rehearsal
+sudo -u postgres psql -tAc "drop database if exists mixmapp_rehearsal"; sudo -u postgres psql -tAc "drop role if exists mixmapp_rehearsal"
+```
