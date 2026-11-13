@@ -136,7 +136,7 @@
       <view class="guest-hero">
         <text class="eyebrow eyebrow--light">NO CREDENTIAL</text>
         <text class="guest-title">登录 / 领取联邦通行证</text>
-        <text class="guest-lede">登录已有通行证，或注册签发一张新的星际联邦通行证，并获得全局唯一的 MixmAPP 公民编号。</text>
+        <text class="guest-lede">登录已有通行证，或注册即签发星际联邦通行证，并分配唯一的 MixmAPP 星际联邦通行证公民编号。</text>
       </view>
 
       <view class="guest-actions">
