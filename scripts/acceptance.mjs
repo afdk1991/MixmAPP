@@ -49,7 +49,7 @@ async function main() {
   console.log(`\n▶ 目标：${api}\n  本次用户：${username}\n`);
 
   // 1. 健康检查 + 真库
-  const health = await req('GET', `${base}/healthz`);
+  const health = await req('GET', `${api}/healthz`);
   const checks = health.json?.checks ?? {};
   const dbOk = health.status === 200 && checks.db === 'postgres';
   record('健康检查与真库连通', dbOk, `status=${health.status} db=${checks.db} dbTarget=${checks.dbTarget ?? '-'} dbHost=${checks.dbHost ?? '-'}`);

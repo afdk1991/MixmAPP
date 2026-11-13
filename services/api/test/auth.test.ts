@@ -479,4 +479,15 @@ describe('鉴权与发号器', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe('ok');
   });
+
+  // 健康检查只有一个地址：根路径不能再有一份同名实现，否则运维探到的是另一套行为
+  it('根路径 /healthz 不再单独注册（唯一实现是 /api/v1/healthz）', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const root = await app.inject({ method: 'GET', url: '/healthz' });
+    expect(root.statusCode).toBe(404);
+    const entry = await app.inject({ method: 'GET', url: '/' });
+    expect(entry.json().health).toBe('/api/v1/healthz');
+    expect(entry.json().ready).toBe('/api/v1/readyz');
+  });
 });

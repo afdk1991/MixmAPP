@@ -6,7 +6,7 @@ set -euo pipefail
 
 ENV_FILE=${ENV_FILE:-/etc/mixmapp/api.env}
 SERVICE=${SERVICE:-mixmapp-api}
-HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:8080/healthz}
+HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:8080/api/v1/healthz}
 ACTION=${1:-status}
 [ "$ACTION" = local ] && ACTION=server
 

@@ -39,7 +39,7 @@ services/api ─┘   └─→ packages/ids（只依赖 node:crypto）
 ## 3. 请求生命周期
 
 1. `uni.request` 发出，`client.ts` 从持久化令牌注入 `Authorization: Bearer …`。
-2. Fastify 全局 `preHandler` 做**单 IP 每分钟固定窗口限流**（`/healthz`、`/readyz` 放行）。
+2. Fastify 全局 `preHandler` 做**单 IP 每分钟固定窗口限流**（`/api/v1/healthz`、`/api/v1/readyz` 放行）。
 3. 路由用 zod 解析入参（`lib/validate.ts` 把校验失败统一转成 `VALIDATION_FAILED` 400）。
 4. 需要登录的路由走 `requireAuth`：校验 HS256 访问令牌，写 `request.userId`，并把 `x-account-no` 回写到响应头。
 5. 业务在 `modules/*` 完成，落到 `Store` 接口或第三方适配器。
