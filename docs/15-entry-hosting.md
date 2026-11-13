@@ -25,19 +25,32 @@ Mim 没有 `/` 这个页面，于是访客打开域名根拿到 404 —— 不�
 
 ## 本次改动（可回滚）
 
-1. `mkdir -p /var/www/mixmapp-site`，把 `release/mixmapp-h5-single.html`（469.8 KB，内嵌 `https://cloud.mixm.top/mixmapp/api/v1`）上传为 `/var/www/mixmapp-site/index.html`。
-2. nginx 增加最小精确匹配，优先于 `location /`：
+1. `mkdir -p /var/www/mixmapp-site`，把 `release/mixmapp-h5-single.html`（当前 461 KB 源 / 472 KB 文件，内嵌 `https://cloud.mixm.top/mixmapp/api/v1`）上传为 `/var/www/mixmapp-site/index.html`。
+2. nginx 的 `server` 级 `root` 指向该目录，剩余路径统一走 SPA 回退（与部署流水线的 `/assets/` 长缓存规则并存）：
 
 ```nginx
-location = / {
-    root /var/www/mixmapp-site;
-    try_files /index.html =404;
-    add_header Cache-Control "public, max-age=300" always;
+root /var/www/mixmapp-site;
+index index.html;
+
+location /assets/ { expires 1y; add_header Cache-Control "public, immutable" always; try_files $uri =404; }
+
+location = /index.html {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+}
+
+# history 路由回退：/pages/mall/index 这类深链接落回 index.html
+location / {
+    add_header Cache-Control "no-cache" always;
+    try_files $uri $uri/ /index.html;
 }
 ```
 
-3. `nginx -t` 通过 → `systemctl reload nginx`。
-4. 备份：`/root/nginx-backup-20261113/cloud-mixmapp.conf.<时间戳>-selfhost.bak`（本次改动前）与更早的 `...conf.<时间戳>.bak`。
+3. 已下线的页面显式 410（2026-11-13 删除 ID 试算器）：`location = /pages/tools/ids` 与 `location ^~ /pages/tools/` 都 `return 410`，不再回退成空壳。
+4. `nginx -t` 通过 → `systemctl reload nginx`。
+5. 备份：`/root/nginx-backup-20261113/` 下按时间戳保留了 `-selfhost.bak`、`-preq410.bak` 等版本。
+
+> 注意：模板里曾把 `root` 写成 `/opt/mixmapp/current/web`（指望部署流水线产出 H5 目录），但 `deploy` 工作流目前只发布 `dist`（API）与 `release/` 产物，并没有 `web/`，于是整站 404。改成稳定目录 `/var/www/mixmapp-site` 后，发版只需覆盖这一个 `index.html`；若以后流水线真的产出 `web/`，把 `root` 切回去即可。
+
 
 ## 复核命令（可直接贴）
 
@@ -74,8 +87,32 @@ scp -i C:\Users\Admin\.ssh\mixmapp_deploy release\mixmapp-h5-single.html root@11
 
 > 注意：CloudBase 的 `serviceName` 必须是 `mixmapp`；误用 `mixmapp-cs-1` 会新建一个应用。
 
+## 已下线的页面：ID 试算器（2026-11-13）
+
+`/pages/tools/ids` 及其全部相关内容已删除，不留死链：
+
+| 位置 | 处理 |
+|---|---|
+| `apps/app/src/pages/tools/ids.vue` | 文件删除（433 行） |
+| `apps/app/src/pages.json` | 路由条目删除 |
+| 首页 | 去掉「ID 试算器」入口卡片与「ID 试算」快捷按钮，入口回到 4 个（2×2 网格），`04 ENTRIES` |
+| 我的页 | 去掉跳转入口 |
+| `POST /api/v1/ids/preview` | 接口与 `AuthService.previewIds` 删除，单测删除（发号器本体保留，注册发号不受影响） |
+| 文档 / README | `02-id-and-auth`、`06-api`、`07-free-platform-verification` 与预览表同步；`docs/screenshots/{ids,live-ids}.png` 删除 |
+| nginx | `/pages/tools/ids` 与 `/pages/tools/*` 返回 **410 Gone**，不再回退成空白壳 |
+
+复核：
+
+```bash
+curl -sS -o /dev/null -w "page=%{http_code}\n" https://cloud.mixm.top/pages/tools/ids        # 410
+curl -sS -o /dev/null -w "api=%{http_code}\n" -X POST https://cloud.mixm.top/mixmapp/api/v1/ids/preview -H "content-type: application/json" -d '{}'   # 404
+```
+
+CloudBase 与 GitHub Pages 侧没有 410 能力：这两个托管方对未知路径会回退到同一份 `index.html`，
+所以旧链接在它们上面表现为「空壳页面」（无任何 ID 试算器内容），不会再有该功能入口。
+
 ## 已确认的边界
 
-- 只改 `location = /` 这一个精确匹配；`/mixmapp/...`（API）、`/mixmapp` 301、其余路径仍按原逻辑走 8787，Mim 站不受影响。
+- `/mixmapp/...`（API）与 `/mixmapp` 的 301 独立于站点回退规则；其余路径只走本站 H5，**不再**转发给 8787 的 Mim 进程。
 - 自托管产物是**单文件 H5**（无外链资源），所以不需要额外的 JS/CSS location 配置。
 - `cloud.mix.top`（少 m）不需要做任何事，也不可能救活：那是别人的停放域名。
