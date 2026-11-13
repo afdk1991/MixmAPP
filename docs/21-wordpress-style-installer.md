@@ -46,25 +46,25 @@ A 是最短路径，也是 B、C 的地基：镜像里跑的其实就是 A。
        └─ 起 mixmapp-installer.service → 只监听 127.0.0.1:8090
              │
              └─ 浏览器（SSH 隧道）打开 http://127.0.0.1:8090/?token=…
-                  1 环境检查   → 9 项体检，红项给修复命令
-                  2 数据库     → 本机代建库/角色 or 填云 PG 连接串，测通
-                  3 站点与账号 → 域名、API 端口、第一个账号、要不要证书
-                  4 安装       → 写 api.env → 发布后端 → 迁移 → systemd → 健康检查
+                  环境检查   → 9 项体检，红项给修复命令
+                  数据库     → 本机代建库/角色 or 填云 PG 连接串，测通
+                  站点与账号 → 域名、API 端口、第一个账号、要不要证书
+                  安装       → 写 api.env → 发布后端 → 迁移 → systemd → 健康检查
                                  → 部署 H5 → nginx 站点 → certbot → 建账号 → 写 lock
-                  5 完成       → 给出 adminToken / 配置路径 / 站点地址
+                  完成       → 给出 adminToken / 配置路径 / 站点地址
 ```
 
 安装器做的每件事都是**幂等且可复跑**的：目录已存在就复用，软链原子切换，`nginx -t` 通过才 reload。
 
 ---
 
-## 3. 向导 5 步具体做什么
+## 3. 向导五段具体做什么
 
-### 第 1 步 · 环境检查
+### 环境检查
 9 项：操作系统、Node 版本、root、磁盘、nginx、psql 客户端、systemd、80/443 占用、certbot。
 红项不是“报错”，而是带上修复命令（`apt install ...`），因为引导脚本已经把这批包装好了。
 
-### 第 2 步 · 数据库
+### 数据库
 两条路：
 
 - **本机 PostgreSQL**：向导执行
@@ -79,14 +79,14 @@ A 是最短路径，也是 B、C 的地基：镜像里跑的其实就是 A。
 > 仓库的 `DB_TARGET` 机制支持两套连接串并存（`DATABASE_URL_CLOUDBASE` / `DATABASE_URL_LOCAL`），
 > 装完还能用 `POST /api/v1/admin/db/switch` 热切换，不用改配置文件。
 
-### 第 3 步 · 站点与账号
+### 站点与账号
 - 域名：必须已解析到本机（`A` 记录）。安装器只信域名，不猜 IP。
 - API 内部端口：默认 8080，只监听 127.0.0.1，不对外暴露。
 - 第一个账号：走真实注册接口 `POST /api/v1/auth/register/username`，因此账号体系、发号器（`accountNo`）、
   JWT 全按线上逻辑生成，不是塞一条假数据进库。
 - HTTPS：勾选则 `certbot --nginx -n --agree-tos -m <邮箱> -d <域名> --redirect`。
 
-### 第 4 步 · 安装（真正的“装”）
+### 安装（真正的“装”）
 顺序固定，任一步失败即中止并返回日志尾部：
 
 1. 写 `/etc/mixmapp/api.env`（600）：随机 `JWT_SECRET`（32B）、随机 `ADMIN_TOKEN`、`DATABASE_URL`、
@@ -103,7 +103,7 @@ A 是最短路径，也是 B、C 的地基：镜像里跑的其实就是 A。
 9. 建第一个账号。
 10. 写 `installed.lock`：`{installedAt, domain, apiPort, dbTarget, webRoot}`。
 
-### 第 5 步 · 完成
+### 完成
 页面输出 `adminToken`、`jwtSecret`、配置路径、站点地址，并提示“安装器已关闭”。
 
 ---
@@ -138,7 +138,7 @@ A 是最短路径，也是 B、C 的地基：镜像里跑的其实就是 A。
 ```
 
 数据库表：`users / bindings / refresh_tokens / sms_codes / payments / push_tokens`（`infra/sql/0001…0005`）。
-对象存储：默认 `STORAGE_PROVIDER=dev`（落磁盘）；接 COS/S3 只需改 `S3_*` 四项，向导第 3 步可手填。
+对象存储：默认 `STORAGE_PROVIDER=dev`（落磁盘）；接 COS/S3 只需改 `S3_*` 四项，向导「站点与账号」可手填。
 
 ---
 
@@ -286,11 +286,11 @@ sudo -u postgres psql -tAc "drop database if exists mixmapp_rehearsal"; sudo -u 
 
 | 步骤 | 操作 | 结果 |
 |---|---|---|
-| 1 环境检查 | 点「开始检测」 | 9 项全绿：Linux 5.15、node 22.23.5、uid=0、42G 可用、nginx 1.18.0、psql 14.24、systemd 249、80/443、certbot 1.21.0 |
-| 2 数据库 | 密码 `MxmApp_Db2026`，点「本机建库并测试」 | `角色 mixmapp 与数据库 mixmapp 就绪；连通性：OK` |
-| 3 站点与账号 | `cloud.mixm.top` / `mixowner` / `Mixowner#2026` / `admin@mixm.top`，勾选自动 HTTPS | 校验通过后点「开始安装」 |
-| 4 安装 | 12 个步骤自动跑 | 进度条走完，直接进第 5 步 |
-| 5 完成 | 展示配置摘要 + 「打开站点」 | domain / apiPort 8080 / adminToken / jwtSecret / envFile `/etc/mixmapp/api.env` / webRoot `/var/www/mixmapp-site` / h5Source / nginxConf / service `mixmapp-api` |
+| 环境检查 | 点「开始检测」 | 9 项全绿：Linux 5.15、node 22.23.5、uid=0、42G 可用、nginx 1.18.0、psql 14.24、systemd 249、80/443、certbot 1.21.0 |
+| 数据库 | 密码 `MxmApp_Db2026`，点「本机建库并测试」 | `角色 mixmapp 与数据库 mixmapp 就绪；连通性：OK` |
+| 站点与账号 | `cloud.mixm.top` / `mixowner` / `Mixowner#2026` / `admin@mixm.top`，勾选自动 HTTPS | 校验通过后点「开始安装」 |
+| 安装 | 12 个步骤自动跑 | 进度条走完，直接进「完成」 |
+| 完成 | 展示配置摘要 + 「打开站点」 | domain / apiPort 8080 / adminToken / jwtSecret / envFile `/etc/mixmapp/api.env` / webRoot `/var/www/mixmapp-site` / h5Source / nginxConf / service `mixmapp-api` |
 
 这次真机又暴露出 3 个必须修的 bug（都已在 `install/server.mjs`、`scripts/package-installer.mjs` 修掉并提交 `75133b5`）：
 
