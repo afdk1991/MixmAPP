@@ -95,9 +95,14 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     if (!target.startsWith(`${root}/`)) throw new AppError('BAD_REQUEST', '存储路径越界');
 
     const body = request.body;
-    if (!Buffer.isBuffer(body)) throw new AppError('BAD_REQUEST', '需要二进制请求体');
+    const payload = Buffer.isBuffer(body)
+      ? body
+      : typeof body === 'string'
+        ? Buffer.from(body)
+        : null;
+    if (!payload) throw new AppError('BAD_REQUEST', '需要二进制请求体');
     await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, body);
+    await writeFile(target, payload);
     return reply.code(204).send();
   });
 
