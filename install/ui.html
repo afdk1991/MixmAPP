@@ -64,14 +64,14 @@
   <div class="steps" id="chips"></div>
 
   <section class="card" id="step-env">
-    <h2>1 · 环境检查</h2>
+    <h2>环境检查</h2>
     <p class="hint">确认这台机器满足最低要求；红项会被安装脚本自动补齐。</p>
     <ul class="checks" id="checks"><li><span class="dot"></span><span>点“开始检测”…</span></li></ul>
     <div class="actions"><button class="btn" id="btn-check">开始检测</button><button class="btn ghost" id="btn-next-config">下一步</button></div>
   </section>
 
   <section class="card" id="step-db" hidden>
-    <h2>2 · 数据库</h2>
+    <h2>数据库</h2>
     <p class="hint">用本机 PostgreSQL（向导可代建库）或直接填腾讯云/Neon 的连接串。</p>
     <div class="row">
       <div>
@@ -98,7 +98,7 @@
   </section>
 
   <section class="card" id="step-site" hidden>
-    <h2>3 · 站点与账号</h2>
+    <h2>站点与账号</h2>
     <p class="hint">域名要已解析到本机 IP；勾选 HTTPS 会调用 certbot（需要邮箱）。</p>
     <div class="row">
       <div><label>站点域名</label><input type="text" id="domain" placeholder="cloud.example.com" /></div>
@@ -117,12 +117,12 @@
   </section>
 
   <section class="card" id="step-run" hidden>
-    <h2>4 · 正在安装<span class="tag" id="run-tag">请勿关闭页面</span></h2>
+    <h2>正在安装<span class="tag" id="run-tag">请勿关闭页面</span></h2>
     <div class="log" id="run-log">准备中…</div>
   </section>
 
   <section class="card" id="step-done" hidden>
-    <h2>5 · 完成</h2>
+    <h2>完成</h2>
     <p class="hint">记下这些值：管理令牌用于 /mixmapp/api/v1/admin/*，配置文件在 /etc/mixmapp/api.env。</p>
     <div class="done" id="done-body"></div>
     <div class="actions"><a class="btn" id="open-site" href="#" target="_blank" rel="noopener">打开站点</a></div>
@@ -148,7 +148,7 @@ const show = (key) => {
   $('chips').innerHTML = CHIPS.map(([k, label], i) => {
     const idx = CHIPS.findIndex(([x]) => x === key);
     const cls = k === key ? 'on' : i < idx ? 'done' : '';
-    return `<span class="chip ${cls}">${i + 1} · ${label}</span>`;
+    return `<span class="chip ${cls}">${label}</span>`;
   }).join('');
 };
 const api = async (path, body) => {
@@ -193,8 +193,10 @@ $('btn-db-local').onclick = async () => {
   try {
     const r = await api('/api/db/provision', { dbName: $('db-name').value, dbUser: $('db-user').value, dbPassword: $('db-pass').value });
     if (!r.ok) return result(r.detail, false);
-    $('db-url').value = r.url;
-    const t = await api('/api/db/test', { url: r.url });
+    // 预演模式不返回真实 url，按填写项回填，避免输入框出现 undefined
+    const url = r.url || `postgres://${$('db-user').value}:${$('db-pass').value}@127.0.0.1:5432/${$('db-name').value}`;
+    $('db-url').value = url;
+    const t = await api('/api/db/test', { url });
     result(`${r.detail}；连通性：${t.ok ? 'OK' : '失败'} ${t.detail}`, t.ok);
   } catch (e) { result(e.message, false); }
 };
