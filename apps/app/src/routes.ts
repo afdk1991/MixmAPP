@@ -5,6 +5,7 @@
  * 1. 任何页面跳转只能引用这里的常量，不许在页面里写 `'/pages/...'` 字面量；
  * 2. 本表必须与 `apps/app/src/pages.json` 注册的页面**一一对应**，多一个、少一个都判红；
  * 3. 同一个页面只能有一个键名，禁止为同一路径起别名。
+ * 带查询参数时只在这张表的路径后面拼 `?k=v`（自己 encodeURIComponent），不再另设第二套拼路径的助手。
  */
 export const ROUTES = {
   home: '/pages/index/index',
@@ -18,16 +19,3 @@ export const ROUTES = {
   about: '/pages/settings/about',
   admin: '/pages/admin/index',
 } as const;
-
-export type RouteKey = keyof typeof ROUTES;
-
-/** 带查询参数跳转时的取值助手，避免各处手拼路径 */
-export function routeWith(key: RouteKey, query?: Record<string, string | number | undefined>): string {
-  const base = ROUTES[key];
-  if (!query) return base;
-  const qs = Object.entries(query)
-    .filter(([, v]) => v !== undefined && v !== '')
-    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
-    .join('&');
-  return qs ? `${base}?${qs}` : base;
-}
