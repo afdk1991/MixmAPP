@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <nav-back />
     <block v-if="user">
       <view class="pass">
         <view class="pass-foil" />

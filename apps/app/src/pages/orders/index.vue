@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <nav-back />
     <view class="head">
       <text class="eyebrow">ORDERS</text>
       <text class="title">我的订单</text>

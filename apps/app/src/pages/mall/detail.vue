@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <nav-back />
     <view v-if="loading" class="loading">
       <view class="sk hero-sk" />
       <view class="loading-body">

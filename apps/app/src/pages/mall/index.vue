@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <nav-back />
     <view class="head">
       <view class="head-top">
         <view class="head-title">

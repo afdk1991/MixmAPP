@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <nav-back />
     <view class="head">
       <view class="head-row">
         <view class="head-mark mono">DB</view>

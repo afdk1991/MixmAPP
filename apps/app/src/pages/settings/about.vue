@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <nav-back />
     <view class="brand">
       <text class="brand-watermark mono">MixmAPP</text>
       <view class="brand-mark mono">MX</view>

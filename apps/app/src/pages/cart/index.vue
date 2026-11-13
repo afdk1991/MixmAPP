@@ -1,5 +1,6 @@
 <template>
   <view class="page">
+    <nav-back />
     <view class="head">
       <text class="eyebrow">BAG</text>
       <text class="title">购物车</text>

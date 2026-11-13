@@ -476,3 +476,26 @@ Edge 无头模式的 `--window-size=430,932` 会被钳制到约 492 CSS px 宽�
 于是页面右侧看起来「被截断」，很容易误判成布局溢出。用 CDP 的
 `Emulation.setDeviceMetricsOverride` 精确设视口（390×844、DPR=2）再 `Page.captureScreenshot`，
 量出来的 `innerWidth` 与页面元素 `getBoundingClientRect()` 才是可信的。
+## §16 商城链路返回闭环（2026-11-13）
+
+**用户报告**：进入商城后无法返回首页。
+
+**代码层事实**（排查时不猜、只读代码与线上 DOM）：
+- 全项目此前没有任何 `navigateBack` / `reLaunch` 调用，所有页面只用 `navigateTo` 往下钻；
+- 首页使用 `navigationStyle: custom`（自绘 hero），商城页虽为默认导航栏，但深度链接进入时栈里只有一页，导航栏不会渲染返回键；
+- 商城页自绘头只有标题与「购物车」，没有页内返回入口；详情、购物车、订单、我的、管理页同理。
+- 结论：返回能力 100% 依赖系统导航栏的历史栈，一旦入口来自深链、分享链接或自定义头覆盖，就没有任何可点的回首页入口。
+
+**修复**：
+- 新增 `apps/app/src/components/nav-back/nav-back.vue`（easycom 组件，样式全字面量，不依赖未提交的 SCSS 令牌）：
+  - 栈内多于一层 → `uni.navigateBack({ delta: 1 })`，失败回落 `reLaunch` 首页；
+  - 栈内只有当前页 → 直接 `reLaunch('/pages/index/index')`；
+  - 文案随栈深切换：「返回」/「首页」。
+- 接入 7 个二级页：`mall/index`、`mall/detail`、`cart/index`、`orders/index`、`me/index`、`admin/index`、`settings/about`。
+
+**验证（本地构建 + CDP 真实点击，390×844）**：
+- 首页点「商城」进入 → `location=/pages/mall/index`，页内控件文案「返回」，点击后回到 `/`；
+- 直接打开 `/pages/mall/index`（模拟深链，栈深 1）→ 控件文案「首页」，点击后 `reLaunch` 到 `/`；
+- `uni build` 通过；`nav-back` 样式进入产物 `nav-back-*.css`。
+
+**顺带记一笔**：本机 4173 端口被并行会话的 Mim 预览占用，`serve-h5` 起来后 `EADDRINUSE` 静默失败，打开的是别人的产物（页面标题「欢迎使用 Mim」、路由 `/marketplace`）。判断「构建产物是不是自己的」不要只看端口活着：先看产物 JS 里有没有本项目标识，再用 `H5_PORT=4199` 另起一份。
