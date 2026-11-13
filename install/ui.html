@@ -227,8 +227,11 @@ $('btn-start').onclick = async () => {
   try {
     const r = await api('/api/install', body);
     $('run-log').textContent = r.log.map((l) => `[ok] ${l.title}`).join('\n');
-    $('done-body').textContent = Object.entries(r.summary).map(([k, v]) => `${k.padEnd(12)} ${v}`).join('\n');
-    $('open-site').href = `http://${r.summary.domain}/`;
+    const fmt = (v) => (v && typeof v === 'object'
+      ? Object.entries(v).map(([k2, v2]) => `${k2}=${v2}`).join(' ')
+      : String(v));
+    $('done-body').textContent = Object.entries(r.summary).map(([k, v]) => `${k.padEnd(12)} ${fmt(v)}`).join('\n');
+    $('open-site').href = `${r.summary.preview ? 'http' : 'https'}://${r.summary.domain}/`;
     $('run-tag').textContent = r.summary.preview ? '预演完成' : '已完成';
     setTimeout(() => show('done'), 900);
   } catch (e) {

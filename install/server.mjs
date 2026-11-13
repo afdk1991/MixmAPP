@@ -47,7 +47,16 @@ const argOf = (name, fallback) => {
 const PORT = Number(argOf('port', 8090));
 const DEV = Boolean(argOf('dev', false));
 const PUBLIC = Boolean(argOf('public', false));
-const RELEASE_ROOT = String(argOf('root', REPO_ROOT));
+const RELEASE_ROOT = (() => {
+  const raw = String(argOf('root', REPO_ROOT));
+  // 安装中途会把 current 软链切到新发布的 release，这里先解析成真实路径，
+  // 否则后面按 current/index.html 找 H5 会指到一个不含前端的新目录。
+  try {
+    return fs.realpathSync(raw);
+  } catch {
+    return raw;
+  }
+})();
 /**
  * 同机演练/多站点共存用的沙箱前缀：给了 --prefix 就把 etc/releases/current/web
  * 全部收在 <prefix> 下，service 名与 nginx 站点文件也另起，避免碰到线上站点。
@@ -289,6 +298,22 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # 已下线的页面（ID 试算器）：直接 410
+    location = /pages/tools/ids { return 410; }
+    location ^~ /pages/tools/ { return 410; }
+
+    # 兼容单文件 H5 内置的相对基址 /api/v1（等价于 /mixmapp/api/v1）
+    location /api/ {
+        proxy_pass http://127.0.0.1:${cfg.apiPort}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+
     # API 反代（前缀 /mixmapp/ 被剥掉）
     location /mixmapp/ {
         proxy_pass http://127.0.0.1:${cfg.apiPort}/;
@@ -370,6 +395,9 @@ async function install(cfg, push) {
     await sh(`mkdir -p ${target} && cp -a ${RELEASE_ROOT}/dist ${target}/ && cp -a ${RELEASE_ROOT}/node_modules ${target}/ 2>/dev/null || true`);
     // infra/sql 必须随 release 一起，迁移脚本按 cwd/infra/sql 查找
     await sh(`cp -a ${RELEASE_ROOT}/infra ${target}/ 2>/dev/null || true`);
+    // 前端与向导也要随 release 一起，否则 current 切过去之后 H5 / 重跑向导都会丢
+    await sh(`cp -a ${RELEASE_ROOT}/index.html ${target}/ 2>/dev/null || true`);
+    await sh(`cp -a ${RELEASE_ROOT}/install ${RELEASE_ROOT}/scripts ${target}/ 2>/dev/null || true`);
     await sh(`ln -sfn ${target} ${PATHS.current}.tmp && mv -Tf ${PATHS.current}.tmp ${PATHS.current}`);
   }
 

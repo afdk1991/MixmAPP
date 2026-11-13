@@ -31,9 +31,9 @@ const outFile = path.join(outDir, `mixmapp-install-${version}.tar.gz`);
 
 const isWin = process.platform === 'win32';
 const pnpm = isWin ? 'pnpm.CMD' : 'pnpm';
-const run = (cmd, args, cwd = repo) =>
+const run = (cmd, args, cwd = repo, env = {}) =>
   // Windows 上 pnpm 是 .CMD 垫片，node 直接 spawn 会 ENOENT，必须走 shell
-  execFileSync(cmd, args, { cwd, stdio: 'inherit', shell: isWin && cmd === pnpm });
+  execFileSync(cmd, args, { cwd, stdio: 'inherit', shell: isWin && cmd === pnpm, env: { ...process.env, ...env } });
 const copy = (from, to) => fs.cpSync(path.join(repo, from), path.join(stage, to), { recursive: true });
 
 fs.mkdirSync(outDir, { recursive: true });
@@ -41,7 +41,10 @@ fs.mkdirSync(outDir, { recursive: true });
 if (!skipBuild) {
   console.log('[pkg] build api + h5');
   run(pnpm, ['--filter', '@mixmapp/api', 'build']);
-  run('node', ['scripts/build-h5-single.mjs']);
+  // 单文件 H5 必须把 API 源钉死，否则回落到相对 /api/v1，装到 /mixmapp/api/v1 的站点会显示离线
+  run('node', ['scripts/build-h5-single.mjs'], repo, {
+    MIXMAPP_API_BASE: process.env.MIXMAPP_API_BASE ?? '/mixmapp/api/v1',
+  });
 }
 
 console.log('[pkg] 收集 API 生产依赖（pnpm deploy --prod）');
