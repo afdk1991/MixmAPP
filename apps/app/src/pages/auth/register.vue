@@ -1,9 +1,9 @@
 <template>
   <view class="page page--auth">
     <view class="head">
-      <text class="eyebrow">NEW PASS</text>
+      <text class="eyebrow">NEW CITIZEN</text>
       <text class="title">创建 MixmAPP 账号</text>
-      <text class="hint">注册成功后自动分配一个全局唯一的 MixmAPP 号码，可作为登录名与对外展示 ID。</text>
+      <text class="hint">注册成功后自动签发星际联邦通行证，并分配一个全局唯一的 MixmAPP 公民编号，可作为登录名与对外展示 ID。</text>
     </view>
 
     <view class="mode">

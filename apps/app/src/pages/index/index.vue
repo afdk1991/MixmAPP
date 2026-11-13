@@ -1,21 +1,23 @@
 <template>
   <view class="halo">
     <view class="page home">
-      <!-- ---------- 通行证 Hero ---------- -->
+      <!-- ---------- 星际联邦通行证 Hero ---------- -->
       <view class="hero">
         <view class="hero-mesh" />
+        <view class="hero-stars" />
+        <view class="hero-orbit" />
         <view class="hero-glow hero-glow--a" />
         <view class="hero-glow hero-glow--b" />
-        <text class="hero-watermark mono">MIXMAPP</text>
+        <text class="hero-watermark mono">STELLAR</text>
 
         <view class="hero-inner">
           <view class="bar-top">
             <view class="emblem">
-              <text class="emblem-text mono">MX</text>
+              <text class="emblem-text mono">IF</text>
             </view>
             <view class="brand">
               <text class="brand-name">MixmAPP</text>
-              <text class="brand-sub mono">MULTI-END IDENTITY</text>
+              <text class="brand-sub mono">INTERSTELLAR FEDERATION</text>
             </view>
             <view class="ver-chip">
               <text class="ver-text mono">{{ version }}</text>
@@ -25,30 +27,30 @@
           <view class="pass-row">
             <view class="pass-chip">
               <view class="pass-dot" :class="{ 'pass-dot--off': !online }" />
-              <text class="pass-chip-text mono">PASS · 通行证</text>
+              <text class="pass-chip-text mono">PASS · 星际联邦通行证</text>
             </view>
             <text class="pass-no mono">NO. AUTO</text>
           </view>
 
           <view class="headline">
-            <text class="hl-line">一个账号</text>
-            <text class="hl-line hl-accent">跑通所有端</text>
+            <text class="hl-line">一张通行证</text>
+            <text class="hl-line hl-accent">通行所有星域</text>
           </view>
-          <text class="lede">Web · Android · iOS · 鸿蒙 —— 注册即分配专属 MixmAPP 号码</text>
+          <text class="lede">Web · Android · iOS · 鸿蒙 —— 注册即签发星际联邦通行证，并分配全局唯一的 MixmAPP 公民编号</text>
 
           <view class="stats">
             <view class="stat">
-              <text class="stat-k mono">覆盖</text>
+              <text class="stat-k mono">终端</text>
               <text class="stat-v mono">6 ENDS</text>
             </view>
             <view class="stat-sep" />
             <view class="stat">
-              <text class="stat-k mono">发号</text>
+              <text class="stat-k mono">编号</text>
               <text class="stat-v mono">AUTO</text>
             </view>
             <view class="stat-sep" />
             <view class="stat">
-              <text class="stat-k mono">状态</text>
+              <text class="stat-k mono">链路</text>
               <view class="stat-status">
                 <view class="status-dot" :class="{ 'status-dot--down': !online }" />
                 <text class="stat-v mono">{{ online ? 'ONLINE' : 'OFFLINE' }}</text>
@@ -57,6 +59,7 @@
           </view>
 
           <view class="barcode" />
+          <view class="hero-holo" />
           <view class="hero-foot">
             <text class="foot mono">{{ statusText }}</text>
             <text class="foot mono">↓ SCROLL</text>
@@ -70,8 +73,8 @@
           <view class="cta-glow" />
           <view class="cta-text">
             <text class="cta-kicker mono">{{ signedIn ? 'SIGNED IN' : 'GET STARTED' }}</text>
-            <text class="cta-title">{{ signedIn ? '回到我的通行证' : '领一枚 MixmAPP 号码' }}</text>
-            <text class="cta-sub">{{ signedIn ? '号码 · 绑定方式 · 账号资料' : '30 秒完成 · 全端通用' }}</text>
+            <text class="cta-title">{{ signedIn ? '查看联邦通行证' : '领取星际联邦通行证' }}</text>
+            <text class="cta-sub">{{ signedIn ? '编号 · 绑定方式 · 账号资料' : '30 秒签发 · 全端通用' }}</text>
           </view>
           <view class="cta-arrow">
             <text class="cta-arrow-text">→</text>
@@ -175,7 +178,7 @@ const primaryUrl = computed(() => (signedIn.value ? ROUTES.me : ROUTES.register)
 const primaryLabel = computed(() => (signedIn.value ? '进入我的' : '创建账号'));
 
 const statusText = computed(() =>
-  online.value ? `服务在线 · ${env.value} 环境` : '未连上 API（先启动 services/api）',
+  online.value ? `联邦网络在线 · ${env.value} 环境` : '联邦网络离线 · 未连上 API',
 );
 
 function go(url: string): void {
@@ -199,8 +202,8 @@ onLoad(async () => {
 .halo {
   min-height: 100vh;
   background:
-    radial-gradient(90% 60% at 50% -10%, rgba(15, 157, 143, 0.16), rgba(15, 157, 143, 0) 62%),
-    linear-gradient(180deg, #e6ecea 0%, #dde5e2 100%);
+    radial-gradient(90% 60% at 50% -10%, rgba(58, 119, 226, 0.18), rgba(58, 119, 226, 0) 62%),
+    linear-gradient(180deg, #e7edf4 0%, #dde6f0 100%);
 }
 
 .home {
@@ -213,9 +216,10 @@ onLoad(async () => {
   overflow: hidden;
   padding: calc(56rpx + var(--status-bar-height, 0px)) $sp-5 60rpx;
   background:
-    radial-gradient(90% 120% at 6% 0%, rgba(15, 157, 143, 0.34), rgba(15, 157, 143, 0) 56%),
-    radial-gradient(70% 90% at 100% 8%, rgba(87, 227, 200, 0.16), rgba(87, 227, 200, 0) 60%),
-    linear-gradient(162deg, #07100e 0%, #0b1d1a 46%, #123b33 100%);
+    radial-gradient(90% 120% at 6% 0%, rgba(40, 96, 226, 0.42), rgba(40, 96, 226, 0) 56%),
+    radial-gradient(70% 90% at 100% 8%, rgba(82, 219, 255, 0.18), rgba(82, 219, 255, 0) 60%),
+    radial-gradient(60% 60% at 82% 100%, rgba(214, 166, 82, 0.16), rgba(214, 166, 82, 0) 72%),
+    linear-gradient(162deg, #05070f 0%, #081128 46%, #14234b 100%);
   border-bottom-left-radius: $r-shell;
   border-bottom-right-radius: $r-shell;
 }
@@ -227,11 +231,43 @@ onLoad(async () => {
   right: 0;
   bottom: 0;
   background-image:
-    linear-gradient(rgba(242, 245, 243, 0.055) 1rpx, transparent 1rpx),
-    linear-gradient(90deg, rgba(242, 245, 243, 0.055) 1rpx, transparent 1rpx);
+    linear-gradient(rgba(170, 210, 255, 0.06) 1rpx, transparent 1rpx),
+    linear-gradient(90deg, rgba(170, 210, 255, 0.06) 1rpx, transparent 1rpx);
   background-size: 64rpx 64rpx;
   -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.25) 78%, transparent 100%);
   mask-image: radial-gradient(120% 90% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.25) 78%, transparent 100%);
+  pointer-events: none;
+}
+
+.hero-stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(2rpx 2rpx at 12% 18%, rgba(255, 255, 255, 0.9), transparent 60%),
+    radial-gradient(2rpx 2rpx at 32% 8%, rgba(160, 219, 255, 0.8), transparent 60%),
+    radial-gradient(2rpx 2rpx at 68% 14%, rgba(255, 240, 200, 0.9), transparent 60%),
+    radial-gradient(2rpx 2rpx at 88% 30%, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(2rpx 2rpx at 22% 48%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(2rpx 2rpx at 54% 36%, rgba(180, 225, 255, 0.7), transparent 60%),
+    radial-gradient(2rpx 2rpx at 76% 58%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(2rpx 2rpx at 44% 76%, rgba(255, 235, 190, 0.6), transparent 60%);
+  opacity: 0.8;
+  animation: twinkle 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.hero-orbit {
+  position: absolute;
+  top: 200rpx;
+  right: -200rpx;
+  width: 560rpx;
+  height: 560rpx;
+  border: 1rpx solid rgba(112, 190, 255, 0.16);
+  border-radius: 50%;
+  transform: rotate(-18deg);
   pointer-events: none;
 }
 
@@ -247,7 +283,7 @@ onLoad(async () => {
   right: -120rpx;
   width: 460rpx;
   height: 460rpx;
-  background: radial-gradient(circle, rgba(64, 224, 196, 0.34), rgba(64, 224, 196, 0) 68%);
+  background: radial-gradient(circle, rgba(82, 207, 255, 0.32), rgba(82, 207, 255, 0) 68%);
 }
 
 .hero-glow--b {
@@ -255,17 +291,17 @@ onLoad(async () => {
   left: -140rpx;
   width: 520rpx;
   height: 520rpx;
-  background: radial-gradient(circle, rgba(15, 157, 143, 0.24), rgba(15, 157, 143, 0) 70%);
+  background: radial-gradient(circle, rgba(215, 169, 86, 0.2), rgba(215, 169, 86, 0) 70%);
 }
 
 .hero-watermark {
   position: absolute;
   right: -6rpx;
   top: 300rpx;
-  font-size: 72rpx;
+  font-size: 64rpx;
   line-height: 1;
-  letter-spacing: 6rpx;
-  color: rgba(242, 245, 243, 0.038);
+  letter-spacing: 8rpx;
+  color: rgba(170, 214, 255, 0.05);
   pointer-events: none;
 }
 
@@ -287,16 +323,21 @@ onLoad(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(150deg, rgba(242, 245, 243, 0.16), rgba(242, 245, 243, 0.04));
-  border: 1rpx solid rgba(242, 245, 243, 0.26);
-  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.22), 0 16rpx 32rpx -20rpx rgba(0, 0, 0, 0.6);
+  background:
+    radial-gradient(120% 120% at 30% 0%, rgba(255, 239, 201, 0.32), rgba(255, 239, 201, 0) 56%),
+    linear-gradient(150deg, rgba(52, 122, 255, 0.38), rgba(10, 24, 58, 0.72));
+  border: 1rpx solid rgba(240, 201, 124, 0.55);
+  box-shadow:
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.32),
+    0 16rpx 32rpx -20rpx rgba(0, 0, 0, 0.7),
+    0 0 24rpx -6rpx rgba(240, 201, 124, 0.35);
 }
 
 .emblem-text {
   font-size: 28rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
-  color: #eafff8;
+  color: #ffefc9;
 }
 
 .brand {
@@ -316,9 +357,9 @@ onLoad(async () => {
 
 .brand-sub {
   margin-top: 6rpx;
-  font-size: 18rpx;
-  letter-spacing: 3rpx;
-  color: rgba(226, 245, 238, 0.5);
+  font-size: 17rpx;
+  letter-spacing: 2.4rpx;
+  color: rgba(255, 226, 171, 0.62);
 }
 
 .ver-chip {
@@ -347,8 +388,8 @@ onLoad(async () => {
   height: 44rpx;
   padding: 0 18rpx;
   border-radius: $r-pill;
-  background: rgba(12, 43, 37, 0.55);
-  border: 1rpx solid rgba(117, 240, 214, 0.28);
+  background: rgba(8, 20, 48, 0.66);
+  border: 1rpx solid rgba(240, 201, 124, 0.38);
 }
 
 .pass-dot {
@@ -356,8 +397,8 @@ onLoad(async () => {
   height: 10rpx;
   border-radius: 50%;
   margin-right: 12rpx;
-  background: #4ff0cd;
-  box-shadow: 0 0 0 6rpx rgba(79, 240, 205, 0.16);
+  background: #64e4ff;
+  box-shadow: 0 0 0 6rpx rgba(100, 228, 255, 0.16);
   animation: pulse 2.4s ease-in-out infinite;
 }
 
@@ -369,8 +410,8 @@ onLoad(async () => {
 
 .pass-chip-text {
   font-size: 18rpx;
-  letter-spacing: 3rpx;
-  color: rgba(198, 255, 240, 0.9);
+  letter-spacing: 2rpx;
+  color: rgba(255, 232, 187, 0.94);
 }
 
 .pass-no {
@@ -395,11 +436,11 @@ onLoad(async () => {
 
 .hl-accent {
   margin-top: 8rpx;
-  background-image: linear-gradient(96deg, #c9ffe9 0%, #55e6c6 44%, #17a898 96%);
+  background-image: linear-gradient(96deg, #ffe6b0 0%, #ffc96b 34%, #7ce6ff 96%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  color: #55e6c6;
+  color: #ffd98a;
 }
 
 .lede {
@@ -408,7 +449,7 @@ onLoad(async () => {
   padding-right: 40rpx;
   font-size: $fs-meta;
   line-height: 1.72;
-  color: rgba(219, 240, 233, 0.66);
+  color: rgba(207, 225, 252, 0.7);
 }
 
 .stats {
@@ -417,8 +458,8 @@ onLoad(async () => {
   margin-top: 40rpx;
   padding: 22rpx 8rpx;
   border-radius: 28rpx;
-  background: rgba(6, 26, 22, 0.5);
-  border: 1rpx solid rgba(242, 245, 243, 0.1);
+  background: rgba(4, 10, 26, 0.56);
+  border: 1rpx solid rgba(140, 190, 255, 0.14);
 }
 
 .stat {
@@ -430,20 +471,20 @@ onLoad(async () => {
 
 .stat-sep {
   width: 1rpx;
-  background: rgba(242, 245, 243, 0.1);
+  background: rgba(160, 205, 255, 0.14);
 }
 
 .stat-k {
   font-size: 18rpx;
   letter-spacing: 3rpx;
-  color: rgba(226, 245, 238, 0.42);
+  color: rgba(184, 211, 255, 0.48);
 }
 
 .stat-v {
   margin-top: 10rpx;
   font-size: 26rpx;
   letter-spacing: 1rpx;
-  color: rgba(236, 252, 246, 0.94);
+  color: rgba(239, 247, 255, 0.94);
 }
 
 .stat-status {
@@ -457,8 +498,8 @@ onLoad(async () => {
   height: 12rpx;
   border-radius: 50%;
   margin-right: 12rpx;
-  background: #4ff0cd;
-  box-shadow: 0 0 0 6rpx rgba(79, 240, 205, 0.15);
+  background: #64e4ff;
+  box-shadow: 0 0 0 6rpx rgba(100, 228, 255, 0.15);
   animation: pulse 2.4s ease-in-out infinite;
 }
 
@@ -474,22 +515,29 @@ onLoad(async () => {
   border-radius: 4rpx;
   background-image: repeating-linear-gradient(
     90deg,
-    rgba(226, 245, 238, 0.34) 0,
-    rgba(226, 245, 238, 0.34) 3rpx,
-    rgba(226, 245, 238, 0) 3rpx,
-    rgba(226, 245, 238, 0) 5rpx,
-    rgba(226, 245, 238, 0.5) 5rpx,
-    rgba(226, 245, 238, 0.5) 7rpx,
-    rgba(226, 245, 238, 0) 7rpx,
-    rgba(226, 245, 238, 0) 12rpx,
-    rgba(226, 245, 238, 0.24) 12rpx,
-    rgba(226, 245, 238, 0.24) 14rpx,
-    rgba(226, 245, 238, 0) 14rpx,
-    rgba(226, 245, 238, 0) 19rpx
+    rgba(205, 229, 255, 0.34) 0,
+    rgba(205, 229, 255, 0.34) 3rpx,
+    rgba(205, 229, 255, 0) 3rpx,
+    rgba(205, 229, 255, 0) 5rpx,
+    rgba(205, 229, 255, 0.5) 5rpx,
+    rgba(205, 229, 255, 0.5) 7rpx,
+    rgba(205, 229, 255, 0) 7rpx,
+    rgba(205, 229, 255, 0) 12rpx,
+    rgba(205, 229, 255, 0.24) 12rpx,
+    rgba(205, 229, 255, 0.24) 14rpx,
+    rgba(205, 229, 255, 0) 14rpx,
+    rgba(205, 229, 255, 0) 19rpx
   );
   opacity: 0.5;
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 96%);
   mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 96%);
+}
+
+.hero-holo {
+  height: 2rpx;
+  margin-top: 18rpx;
+  background: linear-gradient(90deg, rgba(124, 230, 255, 0) 0%, rgba(124, 230, 255, 0.72) 28%, rgba(255, 214, 138, 0.74) 68%, rgba(255, 214, 138, 0) 100%);
+  opacity: 0.8;
 }
 
 .hero-foot {
@@ -518,9 +566,9 @@ onLoad(async () => {
   padding: 36rpx 34rpx;
   border-radius: $r-card;
   background:
-    radial-gradient(120% 140% at 100% 0%, rgba(63, 224, 196, 0.3), rgba(63, 224, 196, 0) 58%),
-    linear-gradient(140deg, #0d1917 0%, #0d2a25 100%);
-  box-shadow: 0 30rpx 60rpx -34rpx rgba(11, 35, 30, 0.55);
+    radial-gradient(120% 140% at 100% 0%, rgba(93, 170, 255, 0.34), rgba(93, 170, 255, 0) 58%),
+    linear-gradient(140deg, #060a18 0%, #0b1836 100%);
+  box-shadow: 0 30rpx 60rpx -34rpx rgba(8, 24, 60, 0.58);
   animation: rise 0.5s ease both;
 }
 
@@ -531,7 +579,7 @@ onLoad(async () => {
   width: 260rpx;
   height: 260rpx;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(79, 240, 205, 0.24), rgba(79, 240, 205, 0) 70%);
+  background: radial-gradient(circle, rgba(120, 210, 255, 0.24), rgba(120, 210, 255, 0) 70%);
   pointer-events: none;
 }
 
@@ -834,6 +882,15 @@ onLoad(async () => {
 
   .tile-title {
     font-size: 32rpx;
+  }
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.95;
   }
 }
 </style>

@@ -4,19 +4,22 @@
     <block v-if="user">
       <view class="pass">
         <view class="pass-foil" />
-        <text class="pass-watermark mono">MX</text>
+        <text class="pass-watermark mono">IF</text>
+        <view class="pass-seal">
+          <text class="pass-seal-text mono">FED</text>
+        </view>
 
         <view class="pass-head">
           <view class="pass-brand">
-            <text class="pass-kicker mono">MIXMAPP PASS</text>
-            <text class="pass-title">通行证</text>
+            <text class="pass-kicker mono">INTERSTELLAR FEDERATION</text>
+            <text class="pass-title">星际联邦通行证</text>
           </view>
           <view class="pass-state" :class="{ 'pass-state--guest': user.isGuest }">
-            <text class="pass-state-text mono">{{ user.isGuest ? 'GUEST' : 'MEMBER' }}</text>
+            <text class="pass-state-text mono">{{ user.isGuest ? 'GUEST' : 'CITIZEN' }}</text>
           </view>
         </view>
 
-        <text class="pass-label mono">账号号码 / ACCOUNT NO.</text>
+        <text class="pass-label mono">公民编号 / CITIZEN NO.</text>
         <text class="pass-no mono">{{ user.accountNo }}</text>
 
         <view class="pass-perf">
@@ -26,28 +29,28 @@
 
         <view class="pass-meta">
           <view class="pass-cell">
-            <text class="pass-k mono">持有者</text>
+            <text class="pass-k mono">持有人</text>
             <text class="pass-v">{{ user.nickname }}</text>
           </view>
           <view class="pass-cell">
-            <text class="pass-k mono">签发日期</text>
+            <text class="pass-k mono">签发星历</text>
             <text class="pass-v">{{ createdShort }}</text>
           </view>
           <view class="pass-cell">
-            <text class="pass-k mono">覆盖</text>
+            <text class="pass-k mono">通行终端</text>
             <text class="pass-v">6 ENDS</text>
           </view>
         </view>
 
         <view class="pass-actions">
           <view class="pass-btn" hover-class="is-press" @tap="copyId">
-            <text class="pass-btn-text">复制号码</text>
+            <text class="pass-btn-text">复制编号</text>
           </view>
           <view class="pass-btn" hover-class="is-press" @tap="reload">
             <text class="pass-btn-text">刷新资料</text>
           </view>
         </view>
-        <text class="pass-foot mono">该号码全局唯一，可直接作为登录账号使用</text>
+        <text class="pass-foot mono">该编号全局唯一，可直接作为登录账号使用</text>
       </view>
 
       <view class="sheet profile">
@@ -129,9 +132,9 @@
 
     <block v-else>
       <view class="guest-hero">
-        <text class="eyebrow eyebrow--light">NO PASS</text>
-        <text class="guest-title">还没有通行证</text>
-        <text class="guest-lede">注册后即可获得一个专属 MixmAPP 号码，用于全端统一身份。</text>
+        <text class="eyebrow eyebrow--light">NO CREDENTIAL</text>
+        <text class="guest-title">尚未持有联邦通行证</text>
+        <text class="guest-lede">完成注册即可签发星际联邦通行证，并获得全局唯一的 MixmAPP 公民编号。</text>
       </view>
 
       <view class="guest-actions">
@@ -255,10 +258,12 @@ onShow(() => {
   overflow: hidden;
   padding: $sp-4;
   background:
-    radial-gradient(130% 100% at 92% -16%, rgba(15, 157, 143, 0.28), rgba(15, 157, 143, 0) 56%),
-    linear-gradient(152deg, #08110f 0%, #0e2925 64%, #14453c 128%);
+    radial-gradient(130% 100% at 92% -16%, rgba(81, 172, 255, 0.32), rgba(81, 172, 255, 0) 56%),
+    radial-gradient(90% 80% at 0% 110%, rgba(214, 166, 82, 0.18), rgba(214, 166, 82, 0) 60%),
+    linear-gradient(152deg, #04070f 0%, #081128 58%, #152a55 128%);
+  border: 1rpx solid rgba(240, 201, 124, 0.28);
   border-radius: $r-shell;
-  box-shadow: 0 24rpx 56rpx -28rpx rgba(8, 17, 15, 0.55);
+  box-shadow: 0 24rpx 56rpx -28rpx rgba(4, 12, 30, 0.62);
 }
 
 .pass-foil {
@@ -267,7 +272,7 @@ onShow(() => {
   left: 0;
   width: 30%;
   height: 180%;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+  background: linear-gradient(90deg, rgba(255, 230, 180, 0), rgba(255, 230, 180, 0.1), rgba(255, 230, 180, 0));
   animation: foil 9s ease-in-out 1s infinite;
   pointer-events: none;
 }
@@ -279,7 +284,28 @@ onShow(() => {
   font-size: 130rpx;
   line-height: 1;
   letter-spacing: 6rpx;
-  color: rgba(242, 245, 243, 0.06);
+  color: rgba(206, 230, 255, 0.06);
+}
+
+.pass-seal {
+  position: absolute;
+  right: -56rpx;
+  bottom: 44rpx;
+  z-index: 1;
+  width: 220rpx;
+  height: 220rpx;
+  border: 2rpx solid rgba(240, 201, 124, 0.16);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.pass-seal-text {
+  font-size: 54rpx;
+  letter-spacing: 6rpx;
+  color: rgba(255, 226, 171, 0.14);
 }
 
 .pass-head {
@@ -292,9 +318,9 @@ onShow(() => {
 
 .pass-kicker {
   display: block;
-  font-size: 20rpx;
-  letter-spacing: 3rpx;
-  color: rgba(242, 245, 243, 0.5);
+  font-size: 19rpx;
+  letter-spacing: 2.4rpx;
+  color: rgba(255, 226, 171, 0.58);
 }
 
 .pass-title {
@@ -303,13 +329,13 @@ onShow(() => {
   font-family: $font-display;
   font-size: 40rpx;
   font-weight: 600;
-  letter-spacing: 4rpx;
-  color: #f4f8f6;
+  letter-spacing: 3rpx;
+  color: #ffe9bd;
 }
 
 .pass-state {
   padding: 6rpx 16rpx;
-  border: 1rpx solid rgba(242, 245, 243, 0.26);
+  border: 1rpx solid rgba(240, 201, 124, 0.4);
   border-radius: $r-pill;
 }
 
@@ -324,7 +350,7 @@ onShow(() => {
 .pass-state-text {
   font-size: 18rpx;
   letter-spacing: 2rpx;
-  color: rgba(242, 245, 243, 0.8);
+  color: rgba(255, 232, 187, 0.82);
 }
 
 .pass-label {
@@ -334,7 +360,7 @@ onShow(() => {
   margin-top: $sp-6;
   font-size: 20rpx;
   letter-spacing: 2rpx;
-  color: rgba(242, 245, 243, 0.46);
+  color: rgba(196, 219, 255, 0.48);
 }
 
 .pass-no {
@@ -346,7 +372,7 @@ onShow(() => {
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0;
-  color: #f6faf8;
+  color: #f3f8ff;
   word-break: break-all;
 }
 
@@ -354,7 +380,7 @@ onShow(() => {
   position: relative;
   height: 1rpx;
   margin: $sp-4 (-$sp-4) $sp-3;
-  border-top: 1rpx dashed rgba(242, 245, 243, 0.18);
+  border-top: 1rpx dashed rgba(226, 213, 180, 0.22);
 }
 
 .notch {
@@ -389,14 +415,14 @@ onShow(() => {
   display: block;
   font-size: 18rpx;
   letter-spacing: 2rpx;
-  color: rgba(242, 245, 243, 0.44);
+  color: rgba(196, 219, 255, 0.44);
 }
 
 .pass-v {
   display: block;
   margin-top: 8rpx;
   font-size: 26rpx;
-  color: rgba(242, 245, 243, 0.92);
+  color: rgba(240, 247, 255, 0.92);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -413,7 +439,7 @@ onShow(() => {
   height: 68rpx;
   padding: 0 26rpx;
   margin-right: 14rpx;
-  border: 1rpx solid rgba(242, 245, 243, 0.24);
+  border: 1rpx solid rgba(240, 201, 124, 0.32);
   border-radius: $r-pill;
   display: flex;
   align-items: center;
@@ -423,7 +449,7 @@ onShow(() => {
 .pass-btn-text {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: #f4f8f6;
+  color: #ffe9bd;
 }
 
 .pass-foot {
@@ -434,7 +460,7 @@ onShow(() => {
   margin-top: $sp-3;
   font-size: 18rpx;
   letter-spacing: 0.5rpx;
-  color: rgba(242, 245, 243, 0.46);
+  color: rgba(196, 219, 255, 0.46);
 }
 
 /* ---------- 资料 ---------- */
