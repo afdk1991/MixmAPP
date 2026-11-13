@@ -78,15 +78,6 @@
           </view>
         </view>
 
-        <view class="quick">
-          <view class="quick-btn" hover-class="is-press" @tap="go('/pages/auth/login')">
-            <text class="quick-text">登录</text>
-          </view>
-          <view class="quick-btn" hover-class="is-press" @tap="go('/pages/mall/index')">
-            <text class="quick-text">逛商城</text>
-          </view>
-        </view>
-
         <view class="section">
           <view class="sec-head">
             <view class="sec-l">
@@ -147,18 +138,6 @@
           <text class="foot-line foot-line--dim mono">MIXMAPP · 单码多端预览版</text>
         </view>
       </view>
-
-      <view class="dock">
-        <view class="dock-link" hover-class="is-press" @tap="go('/pages/mall/index')">
-          <text class="dock-link-text">商城</text>
-        </view>
-        <view class="dock-link" hover-class="is-press" @tap="go('/pages/me/index')">
-          <text class="dock-link-text">我的</text>
-        </view>
-        <view class="dock-cta" hover-class="is-press" @tap="go(primaryUrl)">
-          <text class="dock-cta-text">{{ primaryLabel }}</text>
-        </view>
-      </view>
     </view>
   </view>
 </template>
@@ -169,6 +148,7 @@ import { onLoad } from '@dcloudio/uni-app';
 import { metaApi } from '../../api/client';
 import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
+import { ROUTES } from '../../routes';
 
 const version = ref(APP_VERSION);
 const online = ref(false);
@@ -184,14 +164,14 @@ const platforms = [
 ];
 
 const entries = [
-  { key: '01', tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: '/pages/mall/index' },
-  { key: '02', tag: 'SIGN', title: '登录', desc: '密码 · 短信 · OAuth', url: '/pages/auth/login' },
-  { key: '03', tag: 'PASS', title: '我的', desc: '号码与绑定方式', url: '/pages/me/index' },
-  { key: '04', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: '/pages/settings/about' },
+  { key: '01', tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: ROUTES.mall },
+  { key: '02', tag: 'SIGN', title: '登录', desc: '密码 · 短信 · OAuth', url: ROUTES.login },
+  { key: '03', tag: 'PASS', title: '我的', desc: '号码与绑定方式', url: ROUTES.me },
+  { key: '04', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: ROUTES.about },
 ];
 
 const signedIn = computed(() => Boolean(session.user));
-const primaryUrl = computed(() => (signedIn.value ? '/pages/me/index' : '/pages/auth/register'));
+const primaryUrl = computed(() => (signedIn.value ? ROUTES.me : ROUTES.register));
 const primaryLabel = computed(() => (signedIn.value ? '进入我的' : '创建账号'));
 
 const statusText = computed(() =>
@@ -224,7 +204,7 @@ onLoad(async () => {
 }
 
 .home {
-  padding-bottom: 260rpx;
+  padding-bottom: 64rpx;
 }
 
 /* ---------- Hero ---------- */
@@ -607,34 +587,6 @@ onLoad(async () => {
   color: #0d1917;
 }
 
-.quick {
-  display: flex;
-  margin-top: 20rpx;
-}
-
-.quick-btn {
-  flex: 1;
-  height: 88rpx;
-  margin-right: 16rpx;
-  border-radius: $r-pill;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: $shell;
-  border: 1rpx solid $paper-3;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
-
-  &:last-child {
-    margin-right: 0;
-  }
-}
-
-.quick-text {
-  font-size: 26rpx;
-  letter-spacing: 0.5rpx;
-  color: $ink;
-}
-
 .section {
   margin-top: 52rpx;
 }
@@ -836,44 +788,6 @@ onLoad(async () => {
 .foot-line--dim {
   margin-top: 10rpx;
   opacity: 0.72;
-}
-
-/* ---------- 底部操作坞（玻璃岛） ---------- */
-.dock {
-  padding: 10rpx;
-  background: rgba(255, 255, 255, 0.86);
-}
-
-.dock-link {
-  flex: 1;
-  height: 84rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dock-link-text {
-  font-size: 26rpx;
-  color: $ink-2;
-}
-
-.dock-cta {
-  flex: 1.5;
-  height: 84rpx;
-  margin-left: 6rpx;
-  border-radius: $r-pill;
-  background: linear-gradient(120deg, #0d1917, #123b33);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 12rpx 28rpx -16rpx rgba(13, 25, 23, 0.5);
-}
-
-.dock-cta-text {
-  font-size: 26rpx;
-  font-weight: 600;
-  letter-spacing: 1rpx;
-  color: #f4f8f6;
 }
 
 /* ---------- 窄屏：收紧字号，保证 375px 也不挤 ---------- */

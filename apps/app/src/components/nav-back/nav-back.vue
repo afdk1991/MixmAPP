@@ -7,6 +7,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { ROUTES } from '../../routes';
 
 /**
  * 页内返回控件。
@@ -14,7 +15,7 @@ import { computed, ref } from 'vue';
  * 导航栏的返回键要么不存在，要么点不到。
  * 行为：能回退就回退一层；栈里只有当前页（直接打开该页）就 reLaunch 回首页。
  */
-const props = withDefaults(defineProps<{ home?: string }>(), { home: '/pages/index/index' });
+const props = withDefaults(defineProps<{ home?: string }>(), { home: ROUTES.home });
 
 const stackDepth = ref(1);
 try {

@@ -118,6 +118,7 @@ import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { ProductDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
+import { ROUTES } from '../../routes';
 
 /** 分类由服务端商品数据推导，避免前端写死与后端不一致的分类。 */
 const facets = ref<string[]>([]);
@@ -168,11 +169,11 @@ function switchCategory(key: string): void {
 }
 
 function openDetail(product: ProductDto): void {
-  uni.navigateTo({ url: `/pages/mall/detail?id=${encodeURIComponent(product.id)}` });
+  uni.navigateTo({ url: `${ROUTES.mallDetail}?id=${encodeURIComponent(product.id)}` });
 }
 
 function goCart(): void {
-  uni.navigateTo({ url: '/pages/cart/index' });
+  uni.navigateTo({ url: ROUTES.cart });
 }
 
 async function addToCart(product: ProductDto): Promise<void> {
@@ -182,7 +183,7 @@ async function addToCart(product: ProductDto): Promise<void> {
   } catch (e) {
     const message = e instanceof Error ? e.message : '加入购物车失败';
     if (message.includes('登录')) {
-      uni.navigateTo({ url: '/pages/auth/login' });
+      uni.navigateTo({ url: ROUTES.login });
       return;
     }
     uni.showToast({ title: message, icon: 'none' });

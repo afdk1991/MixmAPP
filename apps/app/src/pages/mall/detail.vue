@@ -94,6 +94,7 @@ import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import type { ProductDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
+import { ROUTES } from '../../routes';
 
 const product = ref<ProductDto | null>(null);
 const productId = ref('');
@@ -139,7 +140,7 @@ async function addToCart(): Promise<void> {
   } catch (e) {
     const message = e instanceof Error ? e.message : '加入购物车失败';
     if (message.includes('登录')) {
-      uni.navigateTo({ url: '/pages/auth/login' });
+      uni.navigateTo({ url: ROUTES.login });
       return;
     }
     uni.showToast({ title: message, icon: 'none' });
@@ -149,11 +150,11 @@ async function addToCart(): Promise<void> {
 async function buyNow(): Promise<void> {
   try {
     await mallApi.addToCart(productId.value, quantity.value);
-    uni.navigateTo({ url: '/pages/cart/index' });
+    uni.navigateTo({ url: ROUTES.cart });
   } catch (e) {
     const message = e instanceof Error ? e.message : '操作失败';
     if (message.includes('登录')) {
-      uni.navigateTo({ url: '/pages/auth/login' });
+      uni.navigateTo({ url: ROUTES.login });
       return;
     }
     uni.showToast({ title: message, icon: 'none' });

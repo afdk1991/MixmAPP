@@ -179,6 +179,7 @@
 import { ref } from 'vue';
 import { authApi, ApiError } from '../../api/client';
 import { applyAuth, loginByOAuth } from '../../stores/session';
+import { ROUTES } from '../../routes';
 
 const mode = ref<'phone' | 'email' | 'username' | 'onekey'>('phone');
 const phone = ref('');
@@ -213,7 +214,7 @@ function getDeviceId(): string {
 }
 
 function goLogin(): void {
-  uni.redirectTo({ url: '/pages/auth/login' });
+  uni.redirectTo({ url: ROUTES.login });
 }
 
 function toast(title: string, icon: 'none' | 'success' = 'none'): void {
@@ -282,7 +283,7 @@ async function submit(): Promise<void> {
       icon: 'none',
       duration: 2500,
     });
-    setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 800);
+    setTimeout(() => uni.redirectTo({ url: ROUTES.me }), 800);
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '注册失败，请稍后重试';
   } finally {
@@ -303,7 +304,7 @@ async function guestStart(): Promise<void> {
       icon: 'none',
       duration: 2500,
     });
-    setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 800);
+    setTimeout(() => uni.redirectTo({ url: ROUTES.me }), 800);
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '游客账号创建失败，请稍后重试';
   } finally {
@@ -316,7 +317,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
     const result = await loginByOAuth(provider);
     await applyAuth(result);
     toast('登录成功', 'success');
-    setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 600);
+    setTimeout(() => uni.redirectTo({ url: ROUTES.me }), 600);
   } catch (e) {
     toast(e instanceof Error ? e.message : '第三方登录不可用');
   }

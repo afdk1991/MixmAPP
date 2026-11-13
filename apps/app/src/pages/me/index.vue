@@ -100,22 +100,22 @@
 
       <view class="sheet links">
         <text class="eyebrow">SHORTCUTS</text>
-        <view class="link-row" hover-class="is-press" @tap="go('/pages/mall/index')">
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.mall)">
           <text class="link-title">去商城</text>
           <text class="link-desc">商品 · 购物车 · 订单</text>
           <text class="link-arrow mono">→</text>
         </view>
-        <view class="link-row" hover-class="is-press" @tap="go('/pages/cart/index')">
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.cart)">
           <text class="link-title">购物车</text>
           <text class="link-desc">查看已选商品并结算</text>
           <text class="link-arrow mono">→</text>
         </view>
-        <view class="link-row" hover-class="is-press" @tap="go('/pages/orders/index')">
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.orders)">
           <text class="link-title">我的订单</text>
           <text class="link-desc">下单后可查看进度</text>
           <text class="link-arrow mono">→</text>
         </view>
-        <view class="link-row link-row--last" hover-class="is-press" @tap="go('/pages/settings/about')">
+        <view class="link-row link-row--last" hover-class="is-press" @tap="go(ROUTES.about)">
           <text class="link-title">关于与能力</text>
           <text class="link-desc">能力矩阵与版本</text>
           <text class="link-arrow mono">→</text>
@@ -135,22 +135,22 @@
       </view>
 
       <view class="guest-actions">
-        <view class="btn btn--deep btn--block" hover-class="is-press" @tap="go('/pages/auth/register')">
+        <view class="btn btn--deep btn--block" hover-class="is-press" @tap="go(ROUTES.register)">
           <text class="btn-text">创建账号</text>
         </view>
-        <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="go('/pages/auth/login')">
+        <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="go(ROUTES.login)">
           <text class="btn-text btn-text--dark">已有账号，去登录</text>
         </view>
       </view>
 
       <view class="sheet links">
         <text class="eyebrow">BROWSE</text>
-        <view class="link-row" hover-class="is-press" @tap="go('/pages/mall/index')">
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.mall)">
           <text class="link-title">去商城</text>
           <text class="link-desc">商品 · 结算 · 订单</text>
           <text class="link-arrow mono">→</text>
         </view>
-        <view class="link-row link-row--last" hover-class="is-press" @tap="go('/pages/settings/about')">
+        <view class="link-row link-row--last" hover-class="is-press" @tap="go(ROUTES.about)">
           <text class="link-title">关于与能力</text>
           <text class="link-desc">能力矩阵与版本</text>
           <text class="link-arrow mono">→</text>
@@ -165,6 +165,7 @@ import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { session, logout, refreshProfile } from '../../stores/session';
 import { meApi, ApiError } from '../../api/client';
+import { ROUTES } from '../../routes';
 
 const user = computed(() => session.user);
 const createdShort = computed(() => {

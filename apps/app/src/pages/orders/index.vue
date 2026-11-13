@@ -88,6 +88,7 @@ import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import type { OrderDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
+import { ROUTES } from '../../routes';
 
 const orders = ref<OrderDto[]>([]);
 const loading = ref(false);
@@ -120,7 +121,7 @@ async function load(): Promise<void> {
   } catch (e) {
     const message = e instanceof Error ? e.message : '订单加载失败';
     if (message.includes('登录')) {
-      uni.navigateTo({ url: '/pages/auth/login' });
+      uni.navigateTo({ url: ROUTES.login });
       return;
     }
     error.value = message;
@@ -130,7 +131,7 @@ async function load(): Promise<void> {
 }
 
 function goMall(): void {
-  uni.navigateTo({ url: '/pages/mall/index' });
+  uni.navigateTo({ url: ROUTES.mall });
 }
 
 onLoad((options) => {

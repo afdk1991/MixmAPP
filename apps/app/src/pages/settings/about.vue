@@ -68,6 +68,7 @@ import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { API_BASE, metaApi, ApiError } from '../../api/client';
 import { APP_VERSION } from '../../version';
+import { ROUTES } from '../../routes';
 
 const appName = ref('MixmAPP');
 const version = ref(APP_VERSION);
@@ -94,7 +95,7 @@ const flow = [
 ];
 
 function openAdmin(): void {
-  uni.navigateTo({ url: '/pages/admin/index' });
+  uni.navigateTo({ url: ROUTES.admin });
 }
 
 onLoad(async () => {

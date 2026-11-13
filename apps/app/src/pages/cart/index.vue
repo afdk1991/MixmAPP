@@ -135,6 +135,7 @@ import { computed, nextTick, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { CartDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
+import { ROUTES } from '../../routes';
 
 const cart = ref<CartDto>({ items: [], totalQuantity: 0, totalFen: 0 });
 const loading = ref(false);
@@ -170,7 +171,7 @@ async function load(): Promise<void> {
   } catch (e) {
     const message = e instanceof Error ? e.message : '购物车加载失败';
     if (message.includes('登录')) {
-      uni.navigateTo({ url: '/pages/auth/login' });
+      uni.navigateTo({ url: ROUTES.login });
       return;
     }
     error.value = message;
@@ -226,7 +227,7 @@ async function submitOrder(): Promise<void> {
     cart.value = { items: [], totalQuantity: 0, totalFen: 0 };
     uni.showToast({ title: '下单成功', icon: 'success' });
     setTimeout(() => {
-      uni.navigateTo({ url: `/pages/orders/index?orderNo=${encodeURIComponent(order.orderNo)}` });
+      uni.navigateTo({ url: `${ROUTES.orders}?orderNo=${encodeURIComponent(order.orderNo)}` });
     }, 600);
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '下单失败', icon: 'none' });
@@ -236,7 +237,7 @@ async function submitOrder(): Promise<void> {
 }
 
 function goMall(): void {
-  uni.navigateTo({ url: '/pages/mall/index' });
+  uni.navigateTo({ url: ROUTES.mall });
 }
 
 onShow(() => {
