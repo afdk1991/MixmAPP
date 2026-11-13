@@ -136,6 +136,7 @@ const error = ref('');
 async function loadFacets(): Promise<void> {
   try {
     const all = await mallApi.listProducts({ pageSize: 50 });
+    if (!Array.isArray(all)) return;
     const names = Array.from(new Set(all.map((p) => p.category).filter(Boolean)));
     facets.value = names.slice(0, 6);
   } catch {
@@ -151,11 +152,13 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    products.value = await mallApi.listProducts({
+    const list = await mallApi.listProducts({
       category: active.value || undefined,
       keyword: keyword.value.trim() || undefined,
       pageSize: 50,
     });
+    // 接口异常或网关返回非 JSON 时保持空数组，避免模板读取 length 时报错白屏
+    products.value = Array.isArray(list) ? list : [];
   } catch (e) {
     error.value = e instanceof Error ? e.message : '商品加载失败';
   } finally {

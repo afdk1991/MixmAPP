@@ -31,11 +31,13 @@ withDefaults(defineProps<{ compact?: boolean }>(), { compact: false });
  * 用固定高度占位块顶住页面内容，页面本身不需要再补 padding。
  */
 const statusBarHeight = ref(0);
+// #ifndef H5
 try {
   statusBarHeight.value = uni.getSystemInfoSync().statusBarHeight || 0;
 } catch {
   statusBarHeight.value = 0;
 }
+// #endif
 
 const BAR_PX = 44;
 

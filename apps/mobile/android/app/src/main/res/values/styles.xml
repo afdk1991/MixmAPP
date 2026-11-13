@@ -13,6 +13,11 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- 浅色页面配深色状态栏图标，避免时间/电量在浅底上发白看不见 -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F2F5F3</item>
+        <item name="android:navigationBarColor">#F2F5F3</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
 
