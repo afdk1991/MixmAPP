@@ -345,3 +345,34 @@ systemctl status mixmapp-api nginx
 
 一条运维注意：向导服务 `mixmapp-installer.service` 装完后仍会常驻在 `127.0.0.1:8090`（只有本机可达 + 需要 token），
 如需彻底关闭执行 `systemctl disable --now mixmapp-installer`；重装则 `rm /etc/mixmapp/installed.lock` 后再起。
+
+## 12. 生产口径：webRoot 只认 `/var/www/mixmapp-site`
+
+安装器只往一个地方发前端：`/var/www/mixmapp-site`，nginx 的 `root` 也指向它。但仓库的流水线产物另一条路会落在
+`/opt/mixmapp/current/web`，两边并存过一段时间，2026-11-14 00:26 就发生过一次真实覆盖：
+
+- 流水线把 `index.html`（770 字节，Vite 多文件入口）+ `assets/` + `static/` 直接写进 `/var/www/mixmapp-site`，
+  把安装器发的单文件 H5（372,555 字节）顶掉了；
+- 因为 nginx `root` 没被改，覆盖后立即生效，线上 `GET /` 从 372,555 字节变成 770 字节；
+- 多文件产物本身是完整的（`/assets/index-*.js`、`*.css`、`/static/logo.png` 全 200），首页仍显示 `ONLINE · production`，
+  所以这次没有回滚，但这个口径必须写死，否则下一次可能覆盖成半套文件而白屏。
+
+统一规则（后续所有部署都按这条）：
+
+1. **唯一发布目录 = `/var/www/mixmapp-site`**。安装器、CI、手工发布都写这里，不新建第二个 web 目录。
+2. `/opt/mixmapp/current/web` 若继续存在，只能是到上面目录的软链，不能再放独立副本。
+3. 发布前后各做一次体检，三条命令就够：
+
+```bash
+grep -r "root " /etc/nginx/conf.d/*.conf          # 确认 root 指向唯一目录
+ls -l /var/www/mixmapp-site | head                # 入口体积、assets 是否成对
+curl -sS -o /dev/null -w "%{http_code} %{size_download}\n" https://cloud.mixm.top/
+curl -sS -o /dev/null -w "%{http_code}\n" https://cloud.mixm.top/mixmapp/api/v1/healthz
+```
+
+4. 单文件 H5 与多文件 SPA 都合法，但**同一时刻只能有一套**：换版是「整目录替换」，不是「往里叠加」。
+   叠加会出现「新 index.html + 旧 assets」或「旧 index.html + 新 assets」，表现为白屏或样式错乱。
+
+另外，`docs/14-access-domains.md` 在 2026-11-14 曾被并发编辑截断（正文出现「：本项目域名是」后直接断行）。
+该文件已按 git HEAD 恢复，破碎版本留档在仓库外 `mixmapp-wip-backup/14-access-domains.broken-20261114.md`，
+内容以恢复后的版本为准。
