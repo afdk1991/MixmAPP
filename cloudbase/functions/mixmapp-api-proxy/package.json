@@ -3,6 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "main": "index.js",
-  "description": "MixmAPP API 中转云函数：把 gateway 请求转发到源站 IP（固定 SNI cloud.mix.top），绕开国内不可达的加速节点",
+  "description": "MixmAPP API 中转云函数：把 gateway 请求转发到源站 IP（固定 SNI cloud.mixm.top），绕开国内不可达的加速节点",
   "license": "UNLICENSED"
 }

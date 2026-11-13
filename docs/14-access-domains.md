@@ -1,21 +1,25 @@
 # 访问域名与网址清单（MixmAPP）
 
 实测时间：2026-11-13（Asia/Shanghai）
-实测位置：中国大陆网络（宁波）
-实测方法：`Resolve-DnsName` 解析 + `curl` 状态码/字节数/证书握手，静态站另抓取 HTML 内的 API 基址
-结论口径：只有本次实测拿到响应的一律标「可用」；解析存在但握手/内容不对的标「受限」；无解析的标「未解析」。
+实测位置：中国大陆网络（宁波，不跳过证书校验）
+实测方法：`Resolve-DnsName` / DNSPod 权威 NS 直查 + `curl` 状态码与内容类型 + `python ssl` 读取证书 CN/SAN + 抓取静态站 HTML 内嵌的 API 基址（逐字符比对）
+
+> **重要命名提醒（本次事故根因）**：本项目域名是 `mixm.top`（m-i-x-m），生产 API 主机是 `cloud.mixm.top`。
+> 仓库历史文档、README、以及生产机 nginx 配置里曾大量出现 `cloud.mix.top`（少一个 m）。`mix.top`（m-i-x）是**另一个域名**，
+> 解析到 AWS 停放服务（`13.248.169.48` / `76.223.54.146`），与本项目无关——此前“国内 TLS alert 112 / GA 不可达”的结论全部来自这个错误域名。
+> 本文已按真名更正。
 
 ---
 
 ## 一、MixmAPP 本项目入口
 
-| 用途 | 地址 | 实测 | 备注 |
+| 用途 | 地址 | 实测（2026-11-13） | 备注 |
 |---|---|---|---|
-| Web / H5（GitHub Pages） | https://afdk1991.github.io/MixmAPP/ | ✅ 200，473 KB 单文件 | 产物内嵌 API 基址 `https://cloud.mixm.top/mixmapp/api/v1` |
-| Web / H5（腾讯云 CloudBase 静态托管） | https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/ | ✅ 200，473 KB | 与 Pages 同一份内容，同一 API 基址 |
-| 生产 API 根 | https://cloud.mixm.top/mixmapp/api/v1 | ⚠️ 受限 | HTTP 层正常，443 证书不含该域名，浏览器直开会报证书错误（详见第六节） |
-| 生产 API 健康检查 | https://cloud.mix.top/mixmapp/api/v1/healthz、`/readyz`、`/meta` | ⚠️ 受限 | `curl -k` 下 `/meta` 返回 200 JSON；不跳过校验则握手失败 |
-| 生产源站（服务器） | 115.159.159.11（80 / 443） | ✅ 可达 | nginx 对外 443 默认站点应答的是 Mim 站；API 进程为 systemd `mixmapp-api`，监听 127.0.0.1:8080 |
+| Web / H5（GitHub Pages） | https://afdk1991.github.io/MixmAPP/ | ✅ 200，473 KB 单文件；页面状态显示 `ONLINE` | 产物内嵌 API 基址 `https://cloud.mixm.top/mixmapp/api/v1`（正确，逐字符核对） |
+| Web / H5（腾讯云 CloudBase 静态托管） | https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/ | ✅ 200，473 KB | 旧产物内嵌错误基址 `cloud.mix.top`（少 m）→ 页面显示 `OFFLINE`；已于 20:37 重发版本 `mixmapp-005` 修正为 `cloud.mixm.top` |
+| 生产 API 根 | https://cloud.mixm.top/mixmapp/api/v1 | ✅ 200 `application/json` | DNS A → 115.159.159.11；证书 CN/SAN 均为 `cloud.mixm.top`，有效期至 2027-02-10 |
+| 生产 API 健康检查 | https://cloud.mixm.top/mixmapp/api/v1/healthz、`/readyz`、`/meta` | ✅ 全部 200 | `healthz` 返回 `status=ok`、`db=ok`、`dbTarget=cloudbase`、`dbHost=127.0.0.1:5432` |
+| 生产源站（服务器） | 115.159.159.11（80 / 443） | ✅ 可达 | 443 由 nginx `conf.d/cloud-mixmapp.conf` 接管；API 进程 systemd `mixmapp-api` 监听 127.0.0.1:8080 |
 | 本地 API | http://127.0.0.1:8080/api/v1 | 本机自用 | `pnpm dev:api` |
 | 本地 H5 开发 | http://127.0.0.1:5173 | 本机自用 | `pnpm dev:h5`，`/api` 代理到 8080 |
 | 本地 H5 产物预览 | http://127.0.0.1:4173 | 本机自用 | `node scripts/serve-h5.mjs` |
@@ -24,20 +28,22 @@
 
 | 用途 | 地址 | 实测 | 备注 |
 |---|---|---|---|
-| 源码仓 | https://github.com/afdk1991/MixmAPP | ✅ | 公开主仓（Pages 由主仓直接托管） |
+| 源码仓 | https://github.com/afdk1991/MixmAPP | ✅ | 公开主仓（Pages 由主仓直接托管）；无 gitee remote |
 | 容器镜像 | `ghcr.io/afdk1991/mixmapp:latest`（另带 `sha` 标签） | 已发布 | 私有包，匿名拉取 401 |
-| CloudBase 网关中继（`/mixmapp` → 云函数 `mixmapp-api-proxy` → 源站） | https://cs-1-d5g815slocb5a611a-1320483685.ap-shanghai.app.tcloudbase.com/mixmapp | ⚠️ 502 | 返回 `UPSTREAM_UNREACHABLE / no json upstream`；两条上游（`115.159.159.11:80` 得 404、`:443` 得 Mim SPA HTML）都不是本 API |
+| CloudBase 网关中继（`/mixmapp` → 云函数 `mixmapp-api-proxy` → 源站） | https://cs-1-d5g815slocb5a611a-1320483685.ap-shanghai.app.tcloudbase.com/mixmapp | ⚠️ 502 | 函数上游的 `hostHeader` / `sni` 同样写成了错误的 `cloud.mix.top`，导致回源命中的是 Mim 的 SPA → `no json upstream`；代码已更正为 `cloud.mixm.top`，云函数需重新发布后才会生效 |
 | CloudBase 云 PG 网关 | https://cs-1-d5g815slocb5a611a.api.tcloudbasegateway.com | 401 | 仅后端调用，需 `CLOUDBASE_PG_API_KEY` |
 
 ## 三、`mixm.top` 下已解析的记录（同根域，含其他项目）
 
 | 域名 | 解析 | 实测 | 归属 |
 |---|---|---|---|
-| `mim.mixm.top` | A → 115.159.159.11 | ✅ 200，`<title>Mim</title>` | Mim 主站（自建服务器） |
+| `mim.mixm.top` | A → 115.159.159.11 | ✅ 200，`<title>Mim</title>` | Mim 主站（自建服务器，nginx vhost `mim.conf`） |
 | `data.mixm.top` | CNAME → `data.mixm.top.pages.dnsoe5.com`（腾讯云 EdgeOne；落地 114.237.67.60） | ✅ 200，`<title>Mim</title>` | Mim 前端（EdgeOne CDN） |
-| `cloud.mixm.top` | A → 115.159.159.11 | ⚠️ 证书不匹配 | MixmAPP 生产 API 入口 |
-| `gy.mixm.top` | CNAME → `gale-engine-landing-6j02gsvv.edgeone.cool` → `…pages.dnsoe5.com`（落地 61.170.82.52） | 418 | 疾风引擎落地页（EdgeOne Pages），边缘节点返回拦截页，浏览器是否放行未验证 |
-| `mixm.top`（根域） | 无 A / CNAME 记录 | ❌ 无法打开 | 规划中为「主站统一跳转门户」，尚未落地 |
+| `cloud.mixm.top` | A → 115.159.159.11 | ✅ 200 JSON，证书 SAN 正确 | MixmAPP 生产 API 入口（本次修复） |
+| `gy.mixm.top` | CNAME → `gale-engine-landing-6j02gsvv.edgeone.cool` → `…pages.dnsoe5.com`（落地 61.170.82.52） | 418 | 疾风引擎落地页（EdgeOne Pages），边缘节点拦截页 |
+| `mixm.top`（根域） | 无 A / CNAME | ❌ 无法打开 | 规划为「主站统一跳转门户」，尚未落地 |
+
+DNSPod `mixm.top` 区里与 cloud 相关的记录共 3 条：`cloud` A 115.159.159.11（开启）、`cloud.mixm.top` A 115.159.159.11（开启，备注「云服务模块入口」）、`cloud` A 103.0.113.20（暂停，模板遗留）。**无需改 DNS。**
 
 ## 四、规划但尚未建解析的子域
 
@@ -97,26 +103,60 @@
 |---|---|---|
 | https://afdk1991.github.io/mixmapp-h5/ | ❌ 404 | 旧产物仓已删除 |
 | https://mixmapp-h5-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com | ❌ 404 | 旧 CloudBase 应用已删除，现用 `mixmapp-cs-1-…` |
-| `cloud.mix.top` → AWS Global Accelerator（13.248.169.48 / 76.223.54.146） | 已变更 | README「已知基础设施缺陷」一节记录的 GA 解析已不存在，当前 A 记录指向 115.159.159.11；但 443 证书问题仍在（见第六节） |
-| `laal.top` 及其 45 个同名子域 | ❌ NXDOMAIN | `dnspod_records…xls` 中的第二张表，整域未启用 |
+| `mix.top` 及其停放子域（`cloud.mix.top` 等） | 无关 | `mix.top` 是另一个域名，解析到 AWS 停放（13.248.169.48 / 76.223.54.146）。历史文档把它当成本项目 API 的错误结论已作废 |
+| `laal.top` 及其 90 条同名记录 | ❌ NXDOMAIN | `dnspod_records…xls` 的第二张表，整域未启用（DNSPod 里显示「暂停」） |
 
-## 六、结论与待办（按优先级）
+## 六、本次修复记录（2026-11-13）
 
-1. **`cloud.mix.top` 的 443 未接管**（唯一阻塞项）：DNS 已指向源站 115.159.159.11，`curl -k` 可拿到 200 JSON，但标准握手返回 `TLSV1_UNRECOGNIZED_NAME`，说明对外 443 应答的证书/默认站点不是 `cloud.mix.top`（生产机上 `sites-enabled` 有 `mixmapp.conf`，但未在对外监听上生效）。修法：让 `cloud.mix.top` 的 vhost 真正接管 443 并挂上含该域名的证书（此前签发的证书有效期至 2027-02-10，需确认其 SAN 是否包含该域名）。修好后前端无需改任何地址。
-2. **CloudBase 中继 502**：`mixmapp-api-proxy` 仍是「双上游回退 + trace」的诊断态，两条上游都不是 JSON API；接上可达源站后应把上游固定、去掉 trace，并恢复 `rejectUnauthorized`。
-3. **根域 `mixm.top` 无解析**：规划为主站跳转门户，未落地。
-4. **其余 40 个子域未建解析**：需按 DNSPod 模板逐条创建，并逐平台绑定（映射建议见 `docs/08-platform-matrix.md`「域名映射」）。
-5. **网页深链接**：GitHub Pages 单个文件对深路径返回 404（客户端路由可渲染），换自定义域前建议先定 hash 路由或 SPA 回退方案。
+### 1. 根因
+
+`cloud.mixm.top` 打不开不是 DNS 问题，也不是证书问题，而是两处**拼写少一个 m**：
+
+1. 生产机 nginx 的 vhost 写成 `server_name cloud.mix.top;`（`sites-enabled/mixmapp.conf`）。SNI 永不匹配 → 回落 `mim` 默认站 → 客户端收到 `alert 112 TLSV1_UNRECOGNIZED_NAME`，且 `Host: cloud.mixm.top` 的请求也被 Mim SPA 处理。
+2. 历史文档与 CloudBase 静态产物把 API 基址写成 `https://cloud.mix.top/mixmapp/api/v1`，这个域名属于 `mix.top`（停放），必然连不上 → 页面长期显示 `OFFLINE`。
+
+证书本身一直是对的：`/etc/letsencrypt/live/cloud.mixm.top/fullchain.pem`，SAN `DNS:cloud.mixm.top`，有效期至 2027-02-10。
+
+### 2. 动作
+
+- 新建 `/etc/nginx/conf.d/cloud-mixmapp.conf`：443 + 80 两个 server 块，`server_name cloud.mixm.top`，`/mixmapp/` → `127.0.0.1:8080`，`/` → `127.0.0.1:8787`，保留 certbot include、dhparam、独立日志 `mixmapp.access.log` / `mixmapp.error.log`。
+- 把 `sites-enabled/mixmapp.conf` 软链移出到 `/root/nginx-backup-20261113/mixmapp.conf.symlink`；原文件仍留在 `/etc/nginx/sites-available/mixmapp.conf`（**内含错误 server_name，请勿重新启用**）。
+- `nginx -t` 通过后 `systemctl reload nginx`。
+- 重新构建并重发 CloudBase 静态站（`mixmapp-005`，API 基址改为 `cloud.mixm.top`）。
+- 更正 `cloudbase/functions/mixmapp-api-proxy` 的 `hostHeader` / `sni`（原为 `cloud.mix.top`）。
+
+### 3. 验证（宁波家用网络，未跳过证书校验）
+
+```powershell
+curl.exe -sS -o NUL -w "%{http_code} %{content_type}`n" https://cloud.mixm.top/mixmapp/api/v1/meta   # 200 application/json
+curl.exe -sS https://cloud.mixm.top/mixmapp/api/v1/healthz                                          # status=ok, db=ok, dbTarget=cloudbase
+python -c "import ssl,socket;ctx=ssl.create_default_context();s=ctx.wrap_socket(socket.create_connection(('cloud.mixm.top',443),8),server_hostname='cloud.mixm.top');print(s.getpeercert()['subject'], s.getpeercert()['subjectAltName'])"
+# (('commonName','cloud.mixm.top'),) (('DNS','cloud.mixm.top'),)
+```
+
+浏览器侧：GitHub Pages 首页状态 `ONLINE`；CloudBase 静态站重发后同样应回到 `ONLINE`。
+
+## 七、待办（按优先级）
+
+1. **CloudBase 中继云函数重新发布**：代码已改，未发布前 `/mixmapp` 网关仍是 502。
+2. **根域 `mixm.top` 无解析**：规划为主站跳转门户，未落地。
+3. **其余 40 个子域未建解析**：需按 DNSPod 模板逐条创建并逐平台绑定（映射建议见 `docs/08-platform-matrix.md`「域名映射」）。
+4. **网页深链接**：GitHub Pages 单文件托管对深路径返回 404（客户端路由可渲染），上自定义域名前建议先定 hash 路由或 SPA 回退方案。
+5. **清理 `sites-available/mixmapp.conf`**：确认无回滚需求后删除或修正，避免误启用导致复发。
 
 ## 附：复核命令
 
 ```powershell
-# 解析核查（示例）
-Resolve-DnsName -Name mim.mixm.top | Select-Object Name,Type,IPAddress,NameHost
-Resolve-DnsName -Name gy.mixm.top  | Select-Object Name,Type,IPAddress,NameHost
+# 解析核查
+Resolve-DnsName -Name cloud.mixm.top | Select-Object Name,Type,IPAddress
+Resolve-DnsName -Name mim.mixm.top   | Select-Object Name,Type,IPAddress
 
-# 站点与 API 状态（-k 跳过证书校验，仅用于判断 HTTP 层）
-curl.exe -sk -o NUL -w "%{http_code} %{size_download}`n" https://afdk1991.github.io/MixmAPP/
-curl.exe -sk -o NUL -w "%{http_code}`n" https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/
-curl.exe -sS -o NUL -w "%{http_code}`n" https://cloud.mix.top/mixmapp/api/v1/healthz   # 不加 -k，观察证书问题
+# 站点与 API（严格校验证书）
+curl.exe -sS -o NUL -w "%{http_code} %{size_download}`n" https://afdk1991.github.io/MixmAPP/
+curl.exe -sS -o NUL -w "%{http_code} %{size_download}`n" https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/
+curl.exe -sS https://cloud.mixm.top/mixmapp/api/v1/healthz
+
+# 产物内嵌 API 基址逐字符核对（防再次出现「少一个 m」）
+python -c "import re,io,sys;s=io.open(sys.argv[1],encoding='utf-8',errors='replace').read();print(['-'.join(h) for h in sorted(set(re.findall(r'https://(cloud\.mix[a-z]*\.top)',s)))]);" .\release\mixmapp-h5-single.html
+# 期望输出：['c-l-o-u-d-.-m-i-x-m-.-t-o-p']
 ```

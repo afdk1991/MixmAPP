@@ -144,16 +144,16 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 | 平台 / 工作流 | 结果 | 证明的事 |
 |---|---|---|
-| 生产 API（云服务器 + CloudBase PG） | ✅ 线上可用 | `cloud.mix.top` 上真实注册、加购、下单、幂等、订单查询、个人中心全通过 |
+| 生产 API（云服务器 + CloudBase PG） | ✅ 线上可用 | `cloud.mixm.top` 上真实注册、加购、下单、幂等、订单查询、个人中心全通过；2026-11-13 国内家用网络严格校验 TLS 复核 `/meta` 200、`/healthz` db=ok |
 | `ci` | ✅ 1m18s | 规则/类型/单元测试/**真实 PostgreSQL 集成测试**/API 构建/H5 构建/小程序构建/`dist` 启动后 `readyz` 就绪 |
 | `deploy` | ✅ 1m10s | 独立发布包（`pnpm deploy --prod`）+ H5 打包 + SSH 原子发布（`/opt/mixmapp/current`） |
 | `Android` | ✅ 3m18s | H5 → `cap sync` → `assembleDebug`，产出 `mixmapp-debug-apk`（3.91 MB） |
 | GitHub Pages | ✅ 已上线 | <https://afdk1991.github.io/MixmAPP/>，单文件 H5 注入生产 API 源，新版「通行证 PASS」界面 run `43249567035` success |
-| CloudBase 静态托管 | ✅ 已上线 | <https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/>，版本 `MixmAPP-004`（buildId `2612291692`）SUCCESS，同一份新版界面 |
+| CloudBase 静态托管 | ✅ 已上线 | <https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/>，当前版本 `mixmapp-005`（buildId `2612457298`）SUCCESS；2026-11-13 重发以修正产物内嵌的 API 基址（原为错误的 `cloud.mix.top`），首页状态回到 `ONLINE` |
 
 **线上内容一致性（2026-11-12 复核）**：三端静态站此前展示的是旧版白卡片界面，仓库里的全站改版未入库。已提交 `6ce6bb0`（14 个文件、全站通行证视觉）与 `1393512`（`rise` 动效去掉 `opacity` 起始，避免动画被浏览器冻结时「通行入口」整块永久空白），Pages 与 CloudBase 均已按修复版重发并逐页取证（首页 / 登录 / 商城）。详见 [`docs/12-delivery-report-2026-11-12-ui-consistency.md`](docs/12-delivery-report-2026-11-12-ui-consistency.md)。
 
-**已知基础设施缺陷（不是代码问题，未修完）**：`cloud.mix.top` 当前解析到 AWS Global Accelerator 节点（`13.248.169.48` / `76.223.54.146`），从中国大陆网络发起 TLS 握手会被回 `unrecognized_name`（SSL alert 112），因此国内浏览器打开任何静态站时首页状态显示 `OFFLINE`；GitHub Actions runner（海外）同一域名健康检查 HTTP 200 通过。修复需要把该域名（或其子域）的 DNS 直接指向源站出口，或把 API 迁到国内可直连的托管——这两件事都需要 DNS/账号权限，当前环境无凭据。
+**基础设施缺陷（2026-11-13 已修，结论更正）**：此前记录为「`cloud.mix.top` 解析到 AWS Global Accelerator、国内 TLS alert 112」——该域名少写一个 m，`mix.top` 是另一个域名（停放服务，13.248.169.48 / 76.223.54.146），与本项目无关。真实主机名是 `cloud.mixm.top`，一直解析到源站 115.159.159.11。国内打不开的真实原因是生产机 nginx 的 vhost 把 `server_name` 写成了 `cloud.mix.top`（SNI 永不匹配，回落 Mim 默认站 → alert 112），且部分静态产物内嵌的 API 基址也写错。两处均已修正：nginx 改由 `/etc/nginx/conf.d/cloud-mixmapp.conf` 接管 443（`nginx -t` 通过），CloudBase 静态站重发 `mixmapp-005`。现网实测（宁波家用网络、不跳过证书校验）：`/meta` 200 JSON、`/healthz` db=ok、证书 CN/SAN = `cloud.mixm.top`、两个静态站首页状态 `ONLINE`。取证与整改全过程见 [`docs/14-access-domains.md`](docs/14-access-domains.md)。
 
 
 **未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥；生产手机验证码注册因无短信通道暂不可用，可用用户名密码注册）。

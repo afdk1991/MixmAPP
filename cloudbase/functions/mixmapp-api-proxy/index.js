@@ -1,8 +1,8 @@
 const http=require('http');const https=require('https');
 const PORT=process.env.PORT||9000;
 const EPS=[
- {proto:'http',host:'115.159.159.11',port:80,hostHeader:'cloud.mix.top'},
- {proto:'https',host:'115.159.159.11',port:443,hostHeader:'cloud.mix.top',sni:'cloud.mix.top'}
+ {proto:'http',host:'115.159.159.11',port:80,hostHeader:'cloud.mixm.top'},
+ {proto:'https',host:'115.159.159.11',port:443,hostHeader:'cloud.mixm.top',sni:'cloud.mixm.top'}
 ];
 const PASS=['content-type','accept','authorization','idempotency-key','x-request-id','x-mixmapp-client','accept-language'];
 const CORS={'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS','access-control-allow-headers':'authorization,content-type,idempotency-key,x-request-id,x-mixmapp-client,accept,accept-language','access-control-max-age':'86400','cache-control':'no-store'};
