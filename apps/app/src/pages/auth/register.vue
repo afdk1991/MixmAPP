@@ -367,7 +367,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 
 .mode-label {
   padding: 20rpx 0 16rpx;
-  font-size: 28rpx;
+  font-size: 30rpx;
   letter-spacing: 0.5rpx;
   color: $ink-3;
 }
@@ -451,7 +451,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   border-radius: 50%;
   background: $signal;
   color: #ffffff;
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 32rpx;
   text-align: center;
   margin-right: 12rpx;
@@ -470,7 +470,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 }
 
 .submit-text {
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 600;
   letter-spacing: 2rpx;
   color: #f4f8f6;
@@ -527,7 +527,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 }
 
 .guest-btn-text {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 600;
   letter-spacing: 1rpx;
   color: $ink;
@@ -574,12 +574,12 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 }
 
 .oauth-name {
-  font-size: 28rpx;
+  font-size: 30rpx;
   color: $ink;
 }
 
 .oauth-arrow {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
 }
 
@@ -587,7 +587,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   display: block;
   margin-top: $sp-6;
   text-align: center;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: $ink-4;
 }

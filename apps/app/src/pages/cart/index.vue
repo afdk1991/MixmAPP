@@ -271,7 +271,7 @@ onShow(() => {
 .sub {
   display: block;
   margin-top: 10rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: $ink-3;
 }
@@ -335,7 +335,7 @@ onShow(() => {
   flex: 1;
   padding-right: $sp-2;
   font-family: $font-display;
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: 1.35;
@@ -354,7 +354,7 @@ onShow(() => {
 }
 
 .remove-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: $ink-3;
 }
@@ -367,7 +367,7 @@ onShow(() => {
 }
 
 .unit {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-3;
 }
 
@@ -395,14 +395,14 @@ onShow(() => {
 }
 
 .step-text {
-  font-size: 28rpx;
+  font-size: 30rpx;
   color: $ink;
 }
 
 .count {
   width: 76rpx;
   text-align: center;
-  font-size: 28rpx;
+  font-size: 30rpx;
   color: $ink;
 }
 
@@ -412,19 +412,19 @@ onShow(() => {
 }
 
 .subtotal-k {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
   margin-right: 6rpx;
 }
 
 .subtotal-v {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 700;
   color: $ink;
 }
 
 .stock {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
 }
 
@@ -468,7 +468,7 @@ onShow(() => {
 }
 
 .form-btn-text {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 600;
   letter-spacing: 1rpx;
   color: $ink;
@@ -485,7 +485,7 @@ onShow(() => {
 
 .bar-label {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: $ink-4;
 }
@@ -493,7 +493,7 @@ onShow(() => {
 .bar-price {
   display: block;
   margin-top: 4rpx;
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 700;
   line-height: 1.1;
   color: $ink;
@@ -515,7 +515,7 @@ onShow(() => {
 }
 
 .bar-btn-text {
-  font-size: 28rpx;  font-weight: 600;
+  font-size: 30rpx;  font-weight: 600;
   letter-spacing: 1rpx;
   color: #f4f8f6;
 }

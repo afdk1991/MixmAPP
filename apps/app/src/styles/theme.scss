@@ -19,7 +19,7 @@
 .hint {
   display: block;
   font-size: $fs-meta;
-  line-height: 1.75;
+  line-height: $lh-body;
   color: $ink-3;
 }
 
@@ -28,7 +28,7 @@
   font-family: $font-mono;
   font-size: $fs-micro;
   line-height: 1.5;
-  letter-spacing: 2rpx;
+  letter-spacing: $ls-label;
   text-transform: uppercase;
   color: $ink-4;
 }
@@ -38,7 +38,7 @@
   align-items: center;
   font-family: $font-mono;
   font-size: $fs-micro;
-  line-height: 1;
+  line-height: 1.4;
   letter-spacing: $ls-label;
   text-transform: uppercase;
   color: $ink-3;
@@ -89,7 +89,7 @@
   font-family: $font-display;
   font-size: $fs-h1;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: $lh-tight;
   letter-spacing: $ls-tight;
   color: $ink;
 }
@@ -99,14 +99,14 @@
   font-family: $font-display;
   font-size: $fs-h2;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.25;
   letter-spacing: $ls-tight;
   color: $ink;
 }
 
 /* ---------- 按钮 ---------- */
 .btn {
-  height: 88rpx;
+  height: 92rpx;
   padding: 0 $sp-4;
   border-radius: $r-control;
   display: flex;
@@ -115,7 +115,7 @@
   box-sizing: border-box;
   font-size: $fs-body;
   font-weight: 600;
-  letter-spacing: 0.5rpx;
+  letter-spacing: 0;
   transition: transform 0.16s ease, opacity 0.16s ease;
 
   &--deep {
@@ -141,10 +141,10 @@
   }
 
   &--sm {
-    height: 68rpx;
+    height: 72rpx;
     padding: 0 $sp-3;
     font-size: $fs-meta;
-    letter-spacing: 0.5rpx;
+    letter-spacing: 0;
   }
 
   &--block {
@@ -164,9 +164,9 @@
 /* ---------- 表单 ---------- */
 .field {
   width: 100%;
-  height: 92rpx;
+  height: 96rpx;
   box-sizing: border-box;
-  padding: 0 24rpx;
+  padding: 0 26rpx;
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
@@ -175,14 +175,14 @@
 }
 
 .field--area {
-  height: 168rpx;
-  padding: 22rpx 24rpx;
-  line-height: 1.65;
+  height: 176rpx;
+  padding: 24rpx 26rpx;
+  line-height: $lh-body;
 }
 
 .field-ph {
   color: $ink-4;
-  font-size: 28rpx;
+  font-size: $fs-meta;
 }
 
 .label {
@@ -190,7 +190,8 @@
   margin-bottom: 10rpx;
   font-family: $font-mono;
   font-size: $fs-micro;
-  letter-spacing: 2rpx;
+  line-height: 1.4;
+  letter-spacing: $ls-label;
   text-transform: uppercase;
   color: $ink-3;
 }
@@ -199,13 +200,14 @@
 .tag {
   display: inline-flex;
   align-items: center;
-  height: 40rpx;
-  padding: 0 14rpx;
+  height: 44rpx;
+  padding: 0 16rpx;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
   background: $shell;
   font-family: $font-mono;
   font-size: $fs-micro;
+  line-height: 1.2;
   letter-spacing: 1rpx;
   color: $ink-2;
 }
@@ -225,11 +227,12 @@
 .stamp {
   display: inline-flex;
   align-items: center;
-  padding: 5rpx 14rpx;
+  padding: 6rpx 16rpx;
   border: 2rpx solid currentColor;
   border-radius: 4rpx;
   font-family: $font-mono;
   font-size: $fs-micro;
+  line-height: 1.2;
   letter-spacing: 2rpx;
   transform: rotate(-4deg);
 }
@@ -258,7 +261,7 @@
 .empty-title {
   display: block;
   font-family: $font-display;
-  font-size: 40rpx;
+  font-size: $fs-h3;
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $ink;
@@ -268,7 +271,7 @@
   display: block;
   margin-top: 12rpx;
   font-size: $fs-meta;
-  line-height: 1.7;
+  line-height: $lh-body;
   color: $ink-3;
 }
 

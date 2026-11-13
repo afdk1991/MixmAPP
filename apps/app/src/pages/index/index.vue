@@ -291,7 +291,7 @@ onLoad(async () => {
   position: absolute;
   right: -6rpx;
   top: 300rpx;
-  font-size: 64rpx;
+  font-size: 68rpx;
   line-height: 1;
   letter-spacing: 8rpx;
   color: rgba(170, 214, 255, 0.05);
@@ -327,7 +327,7 @@ onLoad(async () => {
 }
 
 .emblem-text {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
   color: #8fe9dd;
@@ -342,7 +342,7 @@ onLoad(async () => {
 
 .brand-name {
   font-family: $font-body;
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 700;
   letter-spacing: 0.5rpx;
   color: #f4fbf8;
@@ -350,7 +350,7 @@ onLoad(async () => {
 
 .brand-sub {
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2.4rpx;
   color: rgba(255, 226, 171, 0.62);
 }
@@ -363,7 +363,7 @@ onLoad(async () => {
 }
 
 .ver-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: rgba(226, 245, 238, 0.72);
 }
@@ -402,13 +402,13 @@ onLoad(async () => {
 }
 
 .pass-chip-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: rgba(255, 232, 187, 0.94);
 }
 
 .pass-no {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: rgba(226, 245, 238, 0.38);
 }
@@ -420,10 +420,10 @@ onLoad(async () => {
 .hl-line {
   display: block;
   font-family: $font-body;
-  font-size: 84rpx;
+  font-size: $fs-display;
   font-weight: 700;
-  line-height: 1.12;
-  letter-spacing: -2rpx;
+  line-height: $lh-tight;
+  letter-spacing: $ls-tight;
   color: #f7fcfa;
 }
 
@@ -468,14 +468,14 @@ onLoad(async () => {
 }
 
 .stat-k {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 3rpx;
   color: rgba(184, 211, 255, 0.48);
 }
 
 .stat-v {
   margin-top: 10rpx;
-  font-size: 28rpx;
+  font-size: 30rpx;
   letter-spacing: 1rpx;
   color: rgba(239, 247, 255, 0.94);
 }
@@ -541,7 +541,7 @@ onLoad(async () => {
 }
 
 .foot {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: rgba(226, 245, 238, 0.42);
 }
@@ -585,7 +585,7 @@ onLoad(async () => {
 
 .cta-kicker {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 3rpx;
   color: rgba(120, 240, 214, 0.82);
 }
@@ -623,7 +623,7 @@ onLoad(async () => {
 }
 
 .cta-arrow-text {
-  font-size: 36rpx;
+  font-size: 40rpx;
   line-height: 1;
   color: #0d1917;
 }
@@ -646,21 +646,21 @@ onLoad(async () => {
 
 .sec-n {
   margin-right: 16rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: $brand-deep;
 }
 
 .sec-title {
   font-family: $font-body;
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 700;
   letter-spacing: -0.5rpx;
   color: $ink;
 }
 
 .sec-meta {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: $ink-4;
 }
@@ -690,7 +690,7 @@ onLoad(async () => {
 }
 
 .tile-code {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: $ink-4;
 }
@@ -699,7 +699,7 @@ onLoad(async () => {
   padding: 4rpx 12rpx;
   border-radius: $r-pill;
   background: $brand-soft;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1.5rpx;
   color: $brand-deep;
 }
@@ -708,7 +708,7 @@ onLoad(async () => {
   display: block;
   margin-top: 22rpx;
   font-family: $font-body;
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 700;
   line-height: 1.25;
   color: $ink;
@@ -717,7 +717,7 @@ onLoad(async () => {
 .tile-desc {
   display: block;
   margin-top: 8rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 1.5;
   color: $ink-3;
 }
@@ -730,7 +730,7 @@ onLoad(async () => {
 }
 
 .tile-arrow {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
 }
 
@@ -764,7 +764,7 @@ onLoad(async () => {
 }
 
 .cover-glyph-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: #d8fff3;
 }
@@ -777,14 +777,14 @@ onLoad(async () => {
 }
 
 .cover-name {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 600;
   color: $ink;
 }
 
 .cover-code {
   margin-top: 4rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1.5rpx;
   color: $ink-4;
 }
@@ -801,7 +801,7 @@ onLoad(async () => {
   display: block;
   margin-top: 20rpx;
   padding: 0 8rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 1.7;
   color: $ink-3;
 }
@@ -821,7 +821,7 @@ onLoad(async () => {
 }
 
 .foot-line {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: $ink-4;
 }
@@ -834,7 +834,7 @@ onLoad(async () => {
 /* ---------- 窄屏：收紧字号，保证 375px 也不挤 ---------- */
 @media (max-width: 390px) {
   .hl-line {
-    font-size: 76rpx;
+    font-size: 84rpx;
   }
 
   .hero {
@@ -874,7 +874,7 @@ onLoad(async () => {
   }
 
   .tile-title {
-    font-size: 32rpx;
+    font-size: 34rpx;
   }
 }
 @keyframes twinkle {

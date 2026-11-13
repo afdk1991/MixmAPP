@@ -320,7 +320,7 @@ onShow(() => {
 
 .pass-kicker {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2.4rpx;
   color: rgba(244, 244, 241, 0.55);
 }
@@ -350,7 +350,7 @@ onShow(() => {
 }
 
 .pass-state-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: rgba(244, 244, 241, 0.8);
 }
@@ -360,7 +360,7 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: $sp-6;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: rgba(196, 219, 255, 0.48);
 }
@@ -370,7 +370,7 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: 10rpx;
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0;
@@ -383,7 +383,7 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: rgba(196, 219, 255, 0.56);
   word-break: break-all;
@@ -426,7 +426,7 @@ onShow(() => {
 
 .pass-k {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: rgba(196, 219, 255, 0.44);
 }
@@ -434,7 +434,7 @@ onShow(() => {
 .pass-v {
   display: block;
   margin-top: 8rpx;
-  font-size: 28rpx;
+  font-size: 30rpx;
   color: rgba(240, 247, 255, 0.92);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -471,7 +471,7 @@ onShow(() => {
   display: block;
   max-width: 74%;
   margin-top: $sp-3;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 0.5rpx;
   color: rgba(196, 219, 255, 0.46);
 }
@@ -512,13 +512,13 @@ onShow(() => {
 .k {
   flex-shrink: 0;
   margin-right: $sp-3;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-3;
 }
 
 .v {
   flex: 1;
-  font-size: 28rpx;
+  font-size: 30rpx;
   line-height: 1.5;
   color: $ink;
   text-align: right;
@@ -526,7 +526,7 @@ onShow(() => {
 }
 
 .v--mono {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-3;
 }
 
@@ -563,7 +563,7 @@ onShow(() => {
 }
 
 .btn-text {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 600;
   letter-spacing: 2rpx;
   color: #f4f8f6;
@@ -599,7 +599,7 @@ onShow(() => {
 
 .link-title {
   font-family: $font-display;
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $ink;
@@ -609,14 +609,14 @@ onShow(() => {
 .link-desc {
   flex: 1;
   margin-left: $sp-3;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-3;
   text-align: right;
 }
 
 .link-arrow {
   margin-left: 14rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
 }
 
@@ -628,7 +628,7 @@ onShow(() => {
 }
 
 .logout-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: $signal;
 }
@@ -661,12 +661,19 @@ onShow(() => {
 .guest-lede {
   display: block;
   margin-top: $sp-3;
-  font-size: 28rpx;
+  font-size: 30rpx;
   line-height: 1.7;
   color: rgba(242, 245, 243, 0.66);
 }
 
 .guest-actions {
   margin-top: $sp-4;
+}
+
+/* 窄屏通行证编号降一级，避免 24 位编号被折断 */
+@media (max-width: 420px) {
+  .pass-no {
+    font-size: 36rpx;
+  }
 }
 </style>

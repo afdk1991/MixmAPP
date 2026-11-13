@@ -215,7 +215,7 @@ onLoad((options) => {
   left: $sp-4;
   top: $sp-4;
   z-index: 2;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 3rpx;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.8);
@@ -240,7 +240,7 @@ onLoad((options) => {
   right: $sp-4;
   bottom: $sp-6;
   z-index: 2;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: rgba(244, 244, 241, 0.55);
 }
@@ -270,7 +270,7 @@ onLoad((options) => {
 .subtitle {
   display: block;
   margin-top: 10rpx;
-  font-size: 28rpx;
+  font-size: 30rpx;
   line-height: 1.6;
   color: $ink-3;
 }
@@ -290,7 +290,7 @@ onLoad((options) => {
 }
 
 .cur {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-2;
   margin-right: 4rpx;
 }
@@ -304,13 +304,13 @@ onLoad((options) => {
 
 .price-old {
   margin-left: 14rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
   text-decoration: line-through;
 }
 
 .stock {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 0.5rpx;
   color: $ink-3;
 }
@@ -332,7 +332,7 @@ onLoad((options) => {
 
 .sec-label {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 3rpx;
   color: $ink-4;
 }
@@ -350,7 +350,7 @@ onLoad((options) => {
 .desc {
   display: block;
   margin-top: 14rpx;
-  font-size: 28rpx;
+  font-size: 30rpx;
   line-height: 1.8;
   color: $ink-2;
 }
@@ -392,14 +392,14 @@ onLoad((options) => {
 }
 
 .step-text {
-  font-size: 32rpx;
+  font-size: 34rpx;
   color: $ink;
 }
 
 .count {
   width: 84rpx;
   text-align: center;
-  font-size: 32rpx;
+  font-size: 34rpx;
   color: $ink;
 }
 
@@ -417,7 +417,7 @@ onLoad((options) => {
 
 .bar-label {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: $ink-4;
 }
@@ -425,7 +425,7 @@ onLoad((options) => {
 .bar-price {
   display: block;
   margin-top: 4rpx;
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 700;
   line-height: 1.1;
   color: $ink;
@@ -452,7 +452,7 @@ onLoad((options) => {
 }
 
 .bar-btn-text {
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 600;
   letter-spacing: 0.5rpx;
   color: #f4f8f6;

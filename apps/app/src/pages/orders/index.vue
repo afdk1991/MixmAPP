@@ -166,7 +166,7 @@ onLoad((options) => {
 .sub {
   display: block;
   margin-top: 10rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 2rpx;
   color: $ink-3;
 }
@@ -196,13 +196,13 @@ onLoad((options) => {
 }
 
 .tk-no {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: $ink;
 }
 
 .tk-date {
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
 }
 
@@ -220,7 +220,7 @@ onLoad((options) => {
 }
 
 .active-flag-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: #ffffff;
 }
@@ -278,7 +278,7 @@ onLoad((options) => {
 
 .item-title {
   flex: 1;
-  font-size: 28rpx;
+  font-size: 30rpx;
   color: $ink;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -288,14 +288,14 @@ onLoad((options) => {
 .item-qty {
   width: 80rpx;
   text-align: right;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
 }
 
 .item-price {
   width: 140rpx;
   text-align: right;
-  font-size: 28rpx;
+  font-size: 30rpx;
   color: $ink-2;
 }
 
@@ -314,13 +314,13 @@ onLoad((options) => {
 }
 
 .receiver-name {
-  font-size: 28rpx;
+  font-size: 30rpx;
   color: $ink-2;
 }
 
 .receiver-phone {
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: $ink-4;
 }
 
@@ -330,14 +330,14 @@ onLoad((options) => {
 }
 
 .total-k {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: $ink-4;
   margin-right: 8rpx;
 }
 
 .total-v {
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 700;
   color: $ink;
 }
@@ -346,7 +346,7 @@ onLoad((options) => {
   display: block;
   margin-top: $sp-2;
   padding-bottom: $sp-4;
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 1.6;
   color: $ink-3;
 }
@@ -361,7 +361,7 @@ onLoad((options) => {
 }
 
 .active-flag-text {
-  font-size: 24rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   color: #ffffff;
 }

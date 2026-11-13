@@ -37,18 +37,24 @@ $font-body: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC
   'Microsoft YaHei', sans-serif;
 $font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Roboto Mono', Consolas, 'Courier New', monospace;
 
-/* ---------- 字阶 ---------- */
-$fs-display: 84rpx;     // 首屏大标
-$fs-h1: 56rpx;          // 页标题
-$fs-h2: 40rpx;          // 区块标题
-$fs-body: 32rpx;
-$fs-meta: 28rpx;
-$fs-micro: 24rpx;
+/* ---------- 字阶：13 / 15 / 17 / 20 / 22 / 24 / 28 / 34 / 42 / 48px ---------- */
+$fs-display: 96rpx;     // 首屏大标
+$fs-h1: 68rpx;          // 页标题
+$fs-h2: 48rpx;          // 区块标题
+$fs-h3: 40rpx;          // 卡片标题
+$fs-body: 34rpx;        // 正文
+$fs-meta: 30rpx;        // 说明
+$fs-micro: 26rpx;       // 最小标签
+
+/* ---------- 行高 ---------- */
+$lh-tight: 1.18;
+$lh-snug: 1.35;
+$lh-body: 1.7;
 
 /* ---------- 字距 ---------- */
-$ls-tight: -2rpx;       // 大标
+$ls-tight: -1rpx;       // 大标
 $ls-normal: 0;
-$ls-label: 4rpx;        // 等宽小标签
+$ls-label: 3rpx;        // 等宽小标签
 
 /* ---------- 间距（base 8rpx = 4px） ---------- */
 $sp-1: 8rpx;
