@@ -110,37 +110,6 @@ function goBack(): void {
   justify-content: center;
 }
 
-.mx-mark {
-  width: 22px;
-  height: 22px;
-  margin-right: 7px;
-  border: 1px solid rgba(13, 25, 23, 0.28);
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: $shell;
-  box-sizing: border-box;
-}
-
-.mx-mark-text {
-  display: block;
-  font-family: $font-mono;
-  font-size: 9px;
-  line-height: 1;
-  letter-spacing: 0.2px;
-  color: $ink;
-}
-
-.mx-word {
-  display: block;
-  font-family: $font-display;
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: 0.3px;
-  color: $ink;
-}
-
 .mx-side {
   width: 44px;
   height: 44px;
