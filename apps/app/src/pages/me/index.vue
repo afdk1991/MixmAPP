@@ -21,6 +21,7 @@
 
         <text class="pass-label mono">公民编号 / CITIZEN NO.</text>
         <text class="pass-no mono">{{ user.accountNo }}</text>
+        <text class="pass-id mono">数字 ID · {{ user.id }}</text>
 
         <view class="pass-perf">
           <view class="notch notch--l" />
@@ -60,6 +61,7 @@
         </view>
         <view class="row"><text class="k">昵称</text><text class="v">{{ user.nickname }}</text></view>
         <view class="row"><text class="k">用户名</text><text class="v">{{ user.username ?? '未设置' }}</text></view>
+        <view class="row"><text class="k">公民编号</text><text class="v v--mono mono">{{ user.accountNo }}</text></view>
         <view class="row"><text class="k">手机号</text><text class="v mono">{{ user.phone ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">邮箱</text><text class="v">{{ user.email ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">注册时间</text><text class="v mono">{{ createdText }}</text></view>
@@ -68,7 +70,7 @@
           <text class="v">{{ bindingText }}</text>
         </view>
         <view class="row row--last">
-          <text class="k">主键样例</text>
+          <text class="k">数字 ID</text>
           <text class="v v--mono mono">{{ user.id }}</text>
         </view>
       </view>
@@ -373,6 +375,17 @@ onShow(() => {
   line-height: 1.4;
   letter-spacing: 0;
   color: #f3f8ff;
+  word-break: break-all;
+}
+
+.pass-id {
+  position: relative;
+  z-index: 2;
+  display: block;
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+  color: rgba(196, 219, 255, 0.56);
   word-break: break-all;
 }
 
