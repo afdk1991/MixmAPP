@@ -1,5 +1,6 @@
 <template>
   <view class="page page--auth">
+    <mx-bar compact />
     <view class="head">
       <text class="eyebrow">NEW CITIZEN</text>
       <text class="title">创建 MixmAPP 账号</text>
@@ -147,7 +148,7 @@
     <view class="sheet guest">
       <text class="eyebrow">GUEST</text>
       <text class="guest-title">先逛逛</text>
-      <text class="hint">游客账号在同一设备上直接可用，之后可在「我的」绑定手机号或补设用户名升级。</text>
+      <text class="hint">游客账号在同一设备上直接可用，之后可在「星际联邦通行证」绑定手机号或补设用户名升级。</text>
       <view class="guest-btn" :class="{ 'btn--disabled': submitting }" hover-class="is-press" @tap="guestStart">
         <text class="guest-btn-text">{{ submitting ? '创建中…' : '游客身份进入' }}</text>
       </view>
@@ -337,12 +338,12 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 
 .title {
   display: block;
-  margin-top: 16rpx;
+  margin-top: 18rpx;
   font-family: $font-display;
-  font-size: 52rpx;
-  font-weight: 600;
-  line-height: 1.22;
-  letter-spacing: 1rpx;
+  font-size: 56rpx;
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -505,7 +506,8 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   margin-top: 12rpx;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -542,7 +544,8 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   margin-top: 12rpx;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 

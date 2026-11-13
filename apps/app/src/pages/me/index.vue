@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <nav-back />
+    <mx-bar />
     <block v-if="user">
       <view class="pass">
         <view class="pass-foil" />
@@ -19,7 +19,7 @@
           </view>
         </view>
 
-        <text class="pass-label mono">公民编号 / CITIZEN NO.</text>
+        <text class="pass-label mono">MixmAPP 公民编号 / CITIZEN NO.</text>
         <text class="pass-no mono">{{ user.accountNo }}</text>
         <text class="pass-id mono">数字 ID · {{ user.id }}</text>
 
@@ -61,7 +61,7 @@
         </view>
         <view class="row"><text class="k">昵称</text><text class="v">{{ user.nickname }}</text></view>
         <view class="row"><text class="k">用户名</text><text class="v">{{ user.username ?? '未设置' }}</text></view>
-        <view class="row"><text class="k">公民编号</text><text class="v v--mono mono">{{ user.accountNo }}</text></view>
+        <view class="row"><text class="k">MixmAPP 公民编号</text><text class="v v--mono mono">{{ user.accountNo }}</text></view>
         <view class="row"><text class="k">手机号</text><text class="v mono">{{ user.phone ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">邮箱</text><text class="v">{{ user.email ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">注册时间</text><text class="v mono">{{ createdText }}</text></view>
@@ -116,7 +116,7 @@
           <text class="link-arrow mono">→</text>
         </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.orders)">
-          <text class="link-title">我的订单</text>
+          <text class="link-title">通行证订单</text>
           <text class="link-desc">下单后可查看进度</text>
           <text class="link-arrow mono">→</text>
         </view>
@@ -260,12 +260,12 @@ onShow(() => {
   overflow: hidden;
   padding: $sp-4;
   background:
-    radial-gradient(130% 100% at 92% -16%, rgba(81, 172, 255, 0.32), rgba(81, 172, 255, 0) 56%),
-    radial-gradient(90% 80% at 0% 110%, rgba(214, 166, 82, 0.18), rgba(214, 166, 82, 0) 60%),
-    linear-gradient(152deg, #04070f 0%, #081128 58%, #152a55 128%);
-  border: 1rpx solid rgba(240, 201, 124, 0.28);
+    radial-gradient(130% 100% at 92% -16%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 56%),
+    radial-gradient(90% 80% at 0% 110%, rgba(244, 244, 241, 0.05), rgba(244, 244, 241, 0) 60%),
+    linear-gradient(152deg, #0b0f0e 0%, #11201d 58%, #16302a 128%);
+  border: 1rpx solid rgba(244, 244, 241, 0.16);
   border-radius: $r-shell;
-  box-shadow: 0 24rpx 56rpx -28rpx rgba(4, 12, 30, 0.62);
+  box-shadow: 0 24rpx 56rpx -28rpx rgba(11, 15, 14, 0.5);
 }
 
 .pass-foil {
@@ -274,7 +274,7 @@ onShow(() => {
   left: 0;
   width: 30%;
   height: 180%;
-  background: linear-gradient(90deg, rgba(255, 230, 180, 0), rgba(255, 230, 180, 0.1), rgba(255, 230, 180, 0));
+  background: linear-gradient(90deg, rgba(143, 233, 221, 0), rgba(143, 233, 221, 0.1), rgba(143, 233, 221, 0));
   animation: foil 9s ease-in-out 1s infinite;
   pointer-events: none;
 }
@@ -286,7 +286,7 @@ onShow(() => {
   font-size: 130rpx;
   line-height: 1;
   letter-spacing: 6rpx;
-  color: rgba(206, 230, 255, 0.06);
+  color: rgba(244, 244, 241, 0.06);
 }
 
 .pass-seal {
@@ -296,7 +296,7 @@ onShow(() => {
   z-index: 1;
   width: 220rpx;
   height: 220rpx;
-  border: 2rpx solid rgba(240, 201, 124, 0.16);
+  border: 2rpx solid rgba(244, 244, 241, 0.14);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -307,7 +307,7 @@ onShow(() => {
 .pass-seal-text {
   font-size: 54rpx;
   letter-spacing: 6rpx;
-  color: rgba(255, 226, 171, 0.14);
+  color: rgba(244, 244, 241, 0.14);
 }
 
 .pass-head {
@@ -322,37 +322,37 @@ onShow(() => {
   display: block;
   font-size: 19rpx;
   letter-spacing: 2.4rpx;
-  color: rgba(255, 226, 171, 0.58);
+  color: rgba(244, 244, 241, 0.55);
 }
 
 .pass-title {
   display: block;
   margin-top: 10rpx;
   font-family: $font-display;
-  font-size: 40rpx;
-  font-weight: 600;
-  letter-spacing: 3rpx;
-  color: #ffe9bd;
+  font-size: 44rpx;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
+  color: #f4f4f1;
 }
 
 .pass-state {
   padding: 6rpx 16rpx;
-  border: 1rpx solid rgba(240, 201, 124, 0.4);
+  border: 1rpx solid rgba(244, 244, 241, 0.2);
   border-radius: $r-pill;
 }
 
 .pass-state--guest {
-  border-color: rgba(216, 168, 90, 0.55);
+  border-color: rgba(224, 169, 99, 0.55);
 }
 
 .pass-state--guest .pass-state-text {
-  color: #d8a85a;
+  color: #e0a963;
 }
 
 .pass-state-text {
   font-size: 18rpx;
   letter-spacing: 2rpx;
-  color: rgba(255, 232, 187, 0.82);
+  color: rgba(244, 244, 241, 0.8);
 }
 
 .pass-label {
@@ -462,7 +462,7 @@ onShow(() => {
 .pass-btn-text {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: #ffe9bd;
+  color: #f4f4f1;
 }
 
 .pass-foot {
@@ -492,7 +492,8 @@ onShow(() => {
   margin-top: 10rpx;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -540,7 +541,8 @@ onShow(() => {
   margin-top: 12rpx;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -598,7 +600,8 @@ onShow(() => {
 .link-title {
   font-family: $font-display;
   font-size: 32rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
   flex-shrink: 0;
 }
@@ -648,7 +651,8 @@ onShow(() => {
   margin-top: $sp-4;
   font-family: $font-display;
   font-size: 56rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1.25;
   letter-spacing: 2rpx;
   color: #f4f8f6;

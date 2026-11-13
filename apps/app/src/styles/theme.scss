@@ -1,9 +1,13 @@
-/* MixmAPP 通用组件层：全局只此一份，页面只做局部排版 */
+/* MixmAPP 通用组件层（2026-11-13 重设计）：全局只此一份，页面只做局部排版。
+ * 视觉规则：石墨黑标题 + 等宽小标签 + 发丝线分隔 + 12rpx 控件圆角 + 几乎无阴影。
+ */
 
 /* ---------- 排版原子 ---------- */
 .serif {
+  /* 变量名沿用，实际为展示无衬线：粗重 + 负字距 */
   font-family: $font-display;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
 }
 
 .mono {
@@ -15,15 +19,17 @@
 .hint {
   display: block;
   font-size: $fs-meta;
-  line-height: 1.7;
+  line-height: 1.75;
   color: $ink-3;
 }
 
 .micro {
   display: block;
+  font-family: $font-mono;
   font-size: $fs-micro;
   line-height: 1.5;
-  letter-spacing: 1rpx;
+  letter-spacing: 2rpx;
+  text-transform: uppercase;
   color: $ink-4;
 }
 
@@ -33,16 +39,17 @@
   font-family: $font-mono;
   font-size: $fs-micro;
   line-height: 1;
-  letter-spacing: 3rpx;
+  letter-spacing: $ls-label;
   text-transform: uppercase;
   color: $ink-3;
 }
 
+/* 编号式前导：用实心小方块替掉细线，识别度更高 */
 .eyebrow::before {
   content: '';
-  width: 28rpx;
-  height: 1rpx;
-  margin-right: 14rpx;
+  width: 10rpx;
+  height: 10rpx;
+  margin-right: 12rpx;
   background: $brand;
   flex-shrink: 0;
 }
@@ -54,7 +61,7 @@
 
 .rule--dark {
   height: 1rpx;
-  background: rgba(242, 245, 243, 0.14);
+  background: rgba(244, 244, 241, 0.14);
 }
 
 /* ---------- 外壳 ---------- */
@@ -62,7 +69,7 @@
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-card;
-  box-shadow: $shadow-card;
+  box-shadow: none;
 }
 
 .sheet--flat {
@@ -81,9 +88,9 @@
   display: block;
   font-family: $font-display;
   font-size: $fs-h1;
-  font-weight: 600;
-  line-height: 1.24;
-  letter-spacing: 0.5rpx;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -91,35 +98,34 @@
   display: block;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
 /* ---------- 按钮 ---------- */
 .btn {
-  height: 96rpx;
+  height: 88rpx;
   padding: 0 $sp-4;
-  border-radius: $r-pill;
+  border-radius: $r-control;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
   font-size: 28rpx;
   font-weight: 600;
-  letter-spacing: 1rpx;
-  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+  letter-spacing: 0.5rpx;
+  transition: transform 0.16s ease, opacity 0.16s ease;
 
   &--deep {
     background: $ink;
-    color: #f4f8f6;
-    box-shadow: 0 12rpx 28rpx -14rpx rgba(13, 25, 23, 0.5);
+    color: #f4f4f1;
   }
 
   &--brand {
     background: $brand;
     color: #ffffff;
-    box-shadow: 0 12rpx 28rpx -14rpx rgba(15, 157, 143, 0.55);
   }
 
   &--ghost {
@@ -135,7 +141,7 @@
   }
 
   &--sm {
-    height: 72rpx;
+    height: 68rpx;
     padding: 0 $sp-3;
     font-size: $fs-meta;
     letter-spacing: 0.5rpx;
@@ -158,10 +164,10 @@
 /* ---------- 表单 ---------- */
 .field {
   width: 100%;
-  height: 96rpx;
+  height: 92rpx;
   box-sizing: border-box;
-  padding: 0 28rpx;
-  background: #f7faf8;
+  padding: 0 24rpx;
+  background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
   font-size: 28rpx;
@@ -170,7 +176,7 @@
 
 .field--area {
   height: 168rpx;
-  padding: 22rpx 28rpx;
+  padding: 22rpx 24rpx;
   line-height: 1.65;
 }
 
@@ -181,9 +187,11 @@
 
 .label {
   display: block;
-  margin-bottom: 12rpx;
-  font-size: $fs-meta;
-  letter-spacing: 0.5rpx;
+  margin-bottom: 10rpx;
+  font-family: $font-mono;
+  font-size: $fs-micro;
+  letter-spacing: 2rpx;
+  text-transform: uppercase;
   color: $ink-3;
 }
 
@@ -191,12 +199,14 @@
 .tag {
   display: inline-flex;
   align-items: center;
-  height: 44rpx;
-  padding: 0 18rpx;
+  height: 40rpx;
+  padding: 0 14rpx;
   border: 1rpx solid $paper-3;
-  border-radius: $r-pill;
+  border-radius: $r-control;
   background: $shell;
+  font-family: $font-mono;
   font-size: $fs-micro;
+  letter-spacing: 1rpx;
   color: $ink-2;
 }
 
@@ -207,17 +217,17 @@
 }
 
 .tag--dark {
-  background: rgba(242, 245, 243, 0.1);
-  border-color: rgba(242, 245, 243, 0.18);
-  color: rgba(242, 245, 243, 0.86);
+  background: rgba(244, 244, 241, 0.08);
+  border-color: rgba(244, 244, 241, 0.18);
+  color: rgba(244, 244, 241, 0.86);
 }
 
 .stamp {
   display: inline-flex;
   align-items: center;
-  padding: 6rpx 16rpx;
+  padding: 5rpx 14rpx;
   border: 2rpx solid currentColor;
-  border-radius: 6rpx;
+  border-radius: 4rpx;
   font-family: $font-mono;
   font-size: $fs-micro;
   letter-spacing: 2rpx;
@@ -231,16 +241,17 @@
 }
 
 .empty-mark {
-  width: 120rpx;
-  height: 120rpx;
-  margin: 0 auto 28rpx;
+  width: 112rpx;
+  height: 112rpx;
+  margin: 0 auto 26rpx;
   border: 1rpx solid $paper-3;
-  border-radius: 50%;
+  border-radius: $r-control;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: $font-display;
-  font-size: 44rpx;
+  font-size: 40rpx;
+  font-weight: 800;
   color: $ink-3;
 }
 
@@ -248,7 +259,8 @@
   display: block;
   font-family: $font-display;
   font-size: 40rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -266,9 +278,9 @@
 }
 
 .sk {
-  background: linear-gradient(100deg, $paper-2 18%, #f6f9f7 38%, $paper-2 58%);
+  background: linear-gradient(100deg, $paper-2 18%, #f6f6f2 38%, $paper-2 58%);
   background-size: 300% 100%;
-  border-radius: 12rpx;
+  border-radius: 10rpx;
   animation: sk-sweep 1.5s ease-in-out infinite;
 }
 
@@ -293,7 +305,7 @@
   padding: 10rpx;
   background: $shell;
   border: 1rpx solid $paper-3;
-  border-radius: $r-pill;
+  border-radius: $r-control;
   box-shadow: $shadow-lift;
 }
 
@@ -309,7 +321,6 @@
   padding: 18rpx $sp-3 calc(18rpx + env(safe-area-inset-bottom));
   background: $shell;
   border-top: 1rpx solid $paper-3;
-  box-shadow: 0 -12rpx 32rpx -24rpx rgba(13, 25, 23, 0.28);
 }
 
 /* ---------- 动效 ---------- */

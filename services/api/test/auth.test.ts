@@ -234,6 +234,28 @@ describe('用户名注册', () => {
       expect(res.statusCode).toBe(422);
     }
   });
+
+  it('不同账号分配不同的 MixmAPP 公民编号', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username: 'citizen_a_01', password: 'Passw0rd!x' },
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username: 'citizen_b_02', password: 'Passw0rd!x' },
+    });
+    expect(first.statusCode).toBe(201);
+    expect(second.statusCode).toBe(201);
+    const a = first.json().data.user.accountNo as string;
+    const b = second.json().data.user.accountNo as string;
+    expect(a).toMatch(/^MixmAPP-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
+    expect(b).toMatch(/^MixmAPP-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]$/);
+    expect(a).not.toBe(b); // 公民编号按用户唯一分配，不允许两名用户共用
+  });
 });
 
 describe('游客注册', () => {

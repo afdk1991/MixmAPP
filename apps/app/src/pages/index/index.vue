@@ -12,13 +12,7 @@
 
         <view class="hero-inner">
           <view class="bar-top">
-            <view class="emblem">
-              <text class="emblem-text mono">IF</text>
-            </view>
-            <view class="brand">
-              <text class="brand-name">MixmAPP</text>
-              <text class="brand-sub mono">INTERSTELLAR FEDERATION</text>
-            </view>
+            <mx-logo size="lg" tone="light" sub="MULTI-END IDENTITY" />
             <view class="ver-chip">
               <text class="ver-text mono">{{ version }}</text>
             </view>
@@ -152,6 +146,7 @@ import { metaApi } from '../../api/client';
 import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
+import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
 const version = ref(APP_VERSION);
 const online = ref(false);
@@ -169,13 +164,13 @@ const platforms = [
 const entries = [
   { key: '01', tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: ROUTES.mall },
   { key: '02', tag: 'SIGN', title: '登录', desc: '密码 · 短信 · OAuth', url: ROUTES.login },
-  { key: '03', tag: 'PASS', title: '我的', desc: '号码与绑定方式', url: ROUTES.me },
+  { key: '03', tag: 'PASS', title: '星际联邦通行证', desc: '公民编号与绑定方式', url: ROUTES.me },
   { key: '04', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: ROUTES.about },
 ];
 
 const signedIn = computed(() => Boolean(session.user));
 const primaryUrl = computed(() => (signedIn.value ? ROUTES.me : ROUTES.register));
-const primaryLabel = computed(() => (signedIn.value ? '进入我的' : '创建账号'));
+const primaryLabel = computed(() => (signedIn.value ? '进入星际联邦通行证' : '创建账号'));
 
 const statusText = computed(() =>
   online.value ? `联邦网络在线 · ${env.value} 环境` : '联邦网络离线 · 未连上 API',
@@ -202,8 +197,8 @@ onLoad(async () => {
 .halo {
   min-height: 100vh;
   background:
-    radial-gradient(90% 60% at 50% -10%, rgba(58, 119, 226, 0.18), rgba(58, 119, 226, 0) 62%),
-    linear-gradient(180deg, #e7edf4 0%, #dde6f0 100%);
+    radial-gradient(90% 60% at 50% -10%, rgba(15, 157, 143, 0.14), rgba(15, 157, 143, 0) 62%),
+    linear-gradient(180deg, #f4f4f1 0%, #eaebe6 100%);
 }
 
 .home {
@@ -216,10 +211,10 @@ onLoad(async () => {
   overflow: hidden;
   padding: calc(56rpx + var(--status-bar-height, 0px)) $sp-5 60rpx;
   background:
-    radial-gradient(90% 120% at 6% 0%, rgba(40, 96, 226, 0.42), rgba(40, 96, 226, 0) 56%),
-    radial-gradient(70% 90% at 100% 8%, rgba(82, 219, 255, 0.18), rgba(82, 219, 255, 0) 60%),
-    radial-gradient(60% 60% at 82% 100%, rgba(214, 166, 82, 0.16), rgba(214, 166, 82, 0) 72%),
-    linear-gradient(162deg, #05070f 0%, #081128 46%, #14234b 100%);
+    radial-gradient(90% 120% at 6% 0%, rgba(15, 157, 143, 0.34), rgba(15, 157, 143, 0) 56%),
+    radial-gradient(70% 90% at 100% 8%, rgba(100, 228, 255, 0.1), rgba(100, 228, 255, 0) 60%),
+    radial-gradient(60% 60% at 82% 100%, rgba(244, 244, 241, 0.06), rgba(244, 244, 241, 0) 72%),
+    linear-gradient(162deg, #0b0f0e 0%, #11201d 52%, #17322c 100%);
   border-bottom-left-radius: $r-shell;
   border-bottom-right-radius: $r-shell;
 }
@@ -231,8 +226,8 @@ onLoad(async () => {
   right: 0;
   bottom: 0;
   background-image:
-    linear-gradient(rgba(170, 210, 255, 0.06) 1rpx, transparent 1rpx),
-    linear-gradient(90deg, rgba(170, 210, 255, 0.06) 1rpx, transparent 1rpx);
+    linear-gradient(rgba(244, 244, 241, 0.06) 1rpx, transparent 1rpx),
+    linear-gradient(90deg, rgba(244, 244, 241, 0.06) 1rpx, transparent 1rpx);
   background-size: 64rpx 64rpx;
   -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.25) 78%, transparent 100%);
   mask-image: radial-gradient(120% 90% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.25) 78%, transparent 100%);
@@ -283,7 +278,7 @@ onLoad(async () => {
   right: -120rpx;
   width: 460rpx;
   height: 460rpx;
-  background: radial-gradient(circle, rgba(82, 207, 255, 0.32), rgba(82, 207, 255, 0) 68%);
+  background: radial-gradient(circle, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 68%);
 }
 
 .hero-glow--b {
@@ -291,7 +286,7 @@ onLoad(async () => {
   left: -140rpx;
   width: 520rpx;
   height: 520rpx;
-  background: radial-gradient(circle, rgba(215, 169, 86, 0.2), rgba(215, 169, 86, 0) 70%);
+  background: radial-gradient(circle, rgba(100, 228, 255, 0.12), rgba(100, 228, 255, 0) 70%);
 }
 
 .hero-watermark {
@@ -325,19 +320,19 @@ onLoad(async () => {
   justify-content: center;
   background:
     radial-gradient(120% 120% at 30% 0%, rgba(255, 239, 201, 0.32), rgba(255, 239, 201, 0) 56%),
-    linear-gradient(150deg, rgba(52, 122, 255, 0.38), rgba(10, 24, 58, 0.72));
-  border: 1rpx solid rgba(240, 201, 124, 0.55);
+    linear-gradient(150deg, rgba(15, 157, 143, 0.3), rgba(11, 15, 14, 0.8));
+  border: 1rpx solid rgba(15, 157, 143, 0.55);
   box-shadow:
     inset 0 1rpx 0 rgba(255, 255, 255, 0.32),
     0 16rpx 32rpx -20rpx rgba(0, 0, 0, 0.7),
-    0 0 24rpx -6rpx rgba(240, 201, 124, 0.35);
+    0 0 24rpx -6rpx rgba(15, 157, 143, 0.35);
 }
 
 .emblem-text {
   font-size: 28rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
-  color: #ffefc9;
+  color: #8fe9dd;
 }
 
 .brand {
@@ -388,8 +383,8 @@ onLoad(async () => {
   height: 44rpx;
   padding: 0 18rpx;
   border-radius: $r-pill;
-  background: rgba(8, 20, 48, 0.66);
-  border: 1rpx solid rgba(240, 201, 124, 0.38);
+  background: rgba(11, 18, 16, 0.72);
+  border: 1rpx solid rgba(15, 157, 143, 0.38);
 }
 
 .pass-dot {
@@ -397,13 +392,13 @@ onLoad(async () => {
   height: 10rpx;
   border-radius: 50%;
   margin-right: 12rpx;
-  background: #64e4ff;
+  background: #8fe9dd;
   box-shadow: 0 0 0 6rpx rgba(100, 228, 255, 0.16);
   animation: pulse 2.4s ease-in-out infinite;
 }
 
 .pass-dot--off {
-  background: #e8b267;
+  background: #e0a963;
   box-shadow: 0 0 0 6rpx rgba(232, 178, 103, 0.16);
   animation: none;
 }
@@ -436,11 +431,11 @@ onLoad(async () => {
 
 .hl-accent {
   margin-top: 8rpx;
-  background-image: linear-gradient(96deg, #ffe6b0 0%, #ffc96b 34%, #7ce6ff 96%);
+  background-image: linear-gradient(96deg, #f4f4f1 0%, #8fe9dd 34%, #0f9d8f 96%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  color: #ffd98a;
+  color: #8fe9dd;
 }
 
 .lede {
@@ -458,7 +453,7 @@ onLoad(async () => {
   margin-top: 40rpx;
   padding: 22rpx 8rpx;
   border-radius: 28rpx;
-  background: rgba(4, 10, 26, 0.56);
+  background: rgba(11, 18, 16, 0.56);
   border: 1rpx solid rgba(140, 190, 255, 0.14);
 }
 
@@ -471,7 +466,7 @@ onLoad(async () => {
 
 .stat-sep {
   width: 1rpx;
-  background: rgba(160, 205, 255, 0.14);
+  background: rgba(244, 244, 241, 0.12);
 }
 
 .stat-k {
@@ -498,13 +493,13 @@ onLoad(async () => {
   height: 12rpx;
   border-radius: 50%;
   margin-right: 12rpx;
-  background: #64e4ff;
+  background: #8fe9dd;
   box-shadow: 0 0 0 6rpx rgba(100, 228, 255, 0.15);
   animation: pulse 2.4s ease-in-out infinite;
 }
 
 .status-dot--down {
-  background: #e8b267;
+  background: #e0a963;
   box-shadow: 0 0 0 6rpx rgba(232, 178, 103, 0.15);
   animation: none;
 }
@@ -566,9 +561,9 @@ onLoad(async () => {
   padding: 36rpx 34rpx;
   border-radius: $r-card;
   background:
-    radial-gradient(120% 140% at 100% 0%, rgba(93, 170, 255, 0.34), rgba(93, 170, 255, 0) 58%),
-    linear-gradient(140deg, #060a18 0%, #0b1836 100%);
-  box-shadow: 0 30rpx 60rpx -34rpx rgba(8, 24, 60, 0.58);
+    radial-gradient(120% 140% at 100% 0%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 58%),
+    linear-gradient(140deg, #0b0f0e 0%, #152622 100%);
+  box-shadow: 0 30rpx 60rpx -34rpx rgba(11, 15, 14, 0.5);
   animation: rise 0.5s ease both;
 }
 

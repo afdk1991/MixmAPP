@@ -1,5 +1,6 @@
 <template>
   <view class="page page--auth">
+    <mx-bar compact />
     <view class="head">
       <text class="eyebrow">SIGN IN</text>
       <text class="title">欢迎回来</text>
@@ -305,12 +306,12 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 
 .title {
   display: block;
-  margin-top: 16rpx;
+  margin-top: 18rpx;
   font-family: $font-display;
-  font-size: 56rpx;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 1rpx;
+  font-size: 60rpx;
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -473,7 +474,8 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   margin-top: 12rpx;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 

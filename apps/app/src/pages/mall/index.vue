@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <nav-back />
+    <mx-bar />
     <view class="head">
       <view class="head-top">
         <view class="head-title">
@@ -83,7 +83,7 @@
           hover-class="is-press"
           @tap="openDetail(product)"
         >
-          <view class="cover" :style="{ backgroundColor: product.cover }">
+          <view class="cover">
             <view class="cover-scrim" />
             <view class="cover-ring" />
             <text class="cover-tag mono">{{ product.category }}</text>
@@ -223,7 +223,8 @@ onShow(() => {
   margin-top: 16rpx;
   font-family: $font-display;
   font-size: $fs-h1;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1.2;
   letter-spacing: 1rpx;
   color: $ink;
@@ -385,11 +386,13 @@ onShow(() => {
 
 .cover {
   position: relative;
-  height: 300rpx;
+  height: 280rpx;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: $paper-2;
+  border-bottom: 1rpx solid $paper-3;
 }
 
 .cover-scrim {
@@ -398,7 +401,7 @@ onShow(() => {
   right: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(150deg, rgba(8, 17, 15, 0.04) 12%, rgba(8, 17, 15, 0.42) 100%);
+  background: linear-gradient(150deg, rgba(17, 20, 19, 0.02) 12%, rgba(17, 20, 19, 0.08) 100%);
 }
 
 .cover-ring {
@@ -406,7 +409,7 @@ onShow(() => {
   width: 210rpx;
   height: 210rpx;
   border-radius: 50%;
-  border: 1rpx solid rgba(255, 255, 255, 0.22);
+  border: 1rpx solid rgba(17, 20, 19, 0.12);
   top: 46rpx;
   left: 50%;
   margin-left: -105rpx;
@@ -419,8 +422,8 @@ onShow(() => {
   font-size: 18rpx;
   letter-spacing: 2rpx;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.78);
-  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  color: $ink-3;
+  border: 1rpx solid rgba(17, 20, 19, 0.18);
   border-radius: 6rpx;
   padding: 4rpx 10rpx;
   z-index: 2;
@@ -431,9 +434,10 @@ onShow(() => {
   z-index: 2;
   font-family: $font-display;
   font-size: 84rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.94);
+  color: $ink;
 }
 
 .cover-add {
@@ -466,7 +470,8 @@ onShow(() => {
 .p-name {
   font-family: $font-display;
   font-size: 28rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1.4;
   color: $ink;
   overflow: hidden;

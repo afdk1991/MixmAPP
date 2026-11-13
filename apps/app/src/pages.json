@@ -46,6 +46,7 @@
     }
   ],
   "globalStyle": {
+    "navigationStyle": "custom",
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "MixmAPP",
     "navigationBarBackgroundColor": "#F2F5F3",

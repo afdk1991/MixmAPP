@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <nav-back />
+    <mx-bar />
     <view class="head">
       <text class="eyebrow">BAG</text>
       <text class="title">购物车</text>
@@ -261,7 +261,8 @@ onShow(() => {
   margin-top: 16rpx;
   font-family: $font-display;
   font-size: $fs-h1;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1.2;
   letter-spacing: 1rpx;
   color: $ink;
@@ -311,7 +312,8 @@ onShow(() => {
   z-index: 2;
   font-family: $font-display;
   font-size: 52rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: rgba(255, 255, 255, 0.95);
 }
 
@@ -332,7 +334,8 @@ onShow(() => {
   padding-right: $sp-2;
   font-family: $font-display;
   font-size: 32rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1.35;
   color: $ink;
   overflow: hidden;
@@ -435,7 +438,8 @@ onShow(() => {
   margin-top: 12rpx;
   font-family: $font-display;
   font-size: 40rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 

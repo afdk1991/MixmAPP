@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <nav-back />
+    <mx-bar />
     <view class="brand">
       <text class="brand-watermark mono">MixmAPP</text>
       <view class="brand-mark mono">MX</view>
@@ -161,7 +161,8 @@ onLoad(async () => {
   margin-top: $sp-4;
   font-family: $font-display;
   font-size: 48rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   letter-spacing: 2rpx;
   color: #f6faf8;
 }
@@ -203,7 +204,8 @@ onLoad(async () => {
   margin-top: 12rpx;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 

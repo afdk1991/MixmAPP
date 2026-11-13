@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <nav-back />
+    <mx-bar />
     <view v-if="loading" class="loading">
       <view class="sk hero-sk" />
       <view class="loading-body">
@@ -18,7 +18,7 @@
     </view>
 
     <block v-else-if="product">
-      <view class="hero" :style="{ backgroundColor: product.cover }">
+      <view class="hero">
         <view class="hero-scrim" />
         <view class="hero-ring" />
         <view class="hero-ring hero-ring--sm" />
@@ -177,7 +177,9 @@ onLoad((options) => {
 /* ---------- 主视觉 ---------- */
 .hero {
   position: relative;
-  height: 470rpx;
+  height: 440rpx;
+  background: $paper-2;
+  border-bottom: 1rpx solid $paper-3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -190,21 +192,21 @@ onLoad((options) => {
   right: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(160deg, rgba(8, 17, 15, 0.05) 10%, rgba(8, 17, 15, 0.46) 100%);
+  background: linear-gradient(160deg, rgba(17, 20, 19, 0.02) 10%, rgba(17, 20, 19, 0.1) 100%);
 }
 
 .hero-ring {
   position: absolute;
   width: 400rpx;
   height: 400rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  border: 1rpx solid rgba(17, 20, 19, 0.14);
   border-radius: 50%;
 }
 
 .hero-ring--sm {
   width: 280rpx;
   height: 280rpx;
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(17, 20, 19, 0.08);
 }
 
 .hero-tag {
@@ -226,9 +228,10 @@ onLoad((options) => {
   z-index: 2;
   font-family: $font-display;
   font-size: 140rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.95);
+  color: $ink;
 }
 
 .hero-serial {
@@ -257,7 +260,8 @@ onLoad((options) => {
   margin-top: 14rpx;
   font-family: $font-display;
   font-size: 46rpx;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1.28;
   color: $ink;
 }
@@ -337,7 +341,8 @@ onLoad((options) => {
   margin-top: 8rpx;
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
@@ -359,7 +364,8 @@ onLoad((options) => {
 .qty-title {
   font-family: $font-display;
   font-size: $fs-h2;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 

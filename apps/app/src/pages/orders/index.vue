@@ -1,9 +1,9 @@
 <template>
   <view class="page">
-    <nav-back />
+    <mx-bar />
     <view class="head">
       <text class="eyebrow">ORDERS</text>
-      <text class="title">我的订单</text>
+      <text class="title">通行证订单</text>
       <text class="sub mono">{{ orders.length ? `${orders.length} RECORDS` : 'NO RECORDS' }}</text>
     </view>
 
@@ -156,7 +156,8 @@ onLoad((options) => {
   margin-top: 16rpx;
   font-family: $font-display;
   font-size: $fs-h1;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
   line-height: 1.2;
   letter-spacing: 1rpx;
   color: $ink;
