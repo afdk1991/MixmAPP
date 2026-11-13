@@ -67,6 +67,15 @@ GET /pages/mall/index -> deep=200 size=472994
 
 同一套前端产物、同一份源码：Pages 能连上生产 API 并显示真实数据，CloudBase 域名下同一请求报 TLS 112 —— 差异在域名/链路，不在代码。
 
+补充取证（部署后复核，commit `7e95353` / `d2037a0`）：
+
+- `deploy.yml` run `43426421623`（`7e95353`）：**completed success**，三个 job 全绿
+  —— 构建发布包 success / 静态端发布（Cloudflare Pages）success / API 原子发布（SSH）success。
+- `deploy.yml` run `43426983222`（`d2037a0`，并行提交 nginx vhost 修正）：**completed success**，三个 job 同样全绿。
+- `ci` run `43426421578`、`Image` run `43426421612` 均 success。
+- 部署后再开 Pages 首页：`状态 ONLINE · 服务在线 · production 环境`；点 `01 商城` 仍为 **6 ITEMS** 且价格/库存与生产库一致，控制台无报错。
+- 直接访问 `https://cloud.mix.top/` 根路径仍是 `ERR_SSL_UNRECOGNIZED_NAME_ALERT`；但页面内对 `https://cloud.mix.top/mixmapp/api/v1/*` 的请求返回 `ok` 并带回真实生产数据（两条路径的差异属域名/加速器链路问题，与前端无关）。
+
 ## 五、本轮发现与处置
 
 | # | 发现 | 处置 |
