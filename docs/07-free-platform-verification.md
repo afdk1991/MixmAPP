@@ -498,4 +498,6 @@ Edge 无头模式的 `--window-size=430,932` 会被钳制到约 492 CSS px 宽�
 - 直接打开 `/pages/mall/index`（模拟深链，栈深 1）→ 控件文案「首页」，点击后 `reLaunch` 到 `/`；
 - `uni build` 通过；`nav-back` 样式进入产物 `nav-back-*.css`。
 
+**线上复验（Pages run 43433292684，commit 7d5f209）**：docs/screenshots/live-mall-back.png 为线上商城首屏，标题栏下即「‹ 首页」控件；首页→商城「返回」回首页、直开商城「首页」eLaunch 回首页，两条路径均在线上点通。
+
 **顺带记一笔**：本机 4173 端口被并行会话的 Mim 预览占用，`serve-h5` 起来后 `EADDRINUSE` 静默失败，打开的是别人的产物（页面标题「欢迎使用 Mim」、路由 `/marketplace`）。判断「构建产物是不是自己的」不要只看端口活着：先看产物 JS 里有没有本项目标识，再用 `H5_PORT=4199` 另起一份。
