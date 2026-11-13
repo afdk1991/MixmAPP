@@ -15,6 +15,8 @@ export type OAuthProvider = {
   readonly name: OAuthProviderName;
   readonly enabled: boolean;
   exchange(code: string): Promise<OAuthProfile>;
+  /** 生成授权页地址；该渠道在 H5 端不支持服务端拉起时返回 null（如 Apple）。 */
+  authorizeUrl?(redirectUri: string, state: string): string | null;
 };
 
 const json = async <T>(res: Response): Promise<T> => {
@@ -29,6 +31,15 @@ export class GithubOAuth implements OAuthProvider {
 
   get enabled(): boolean {
     return Boolean(this.config.clientId && this.config.clientSecret);
+  }
+
+  authorizeUrl(redirectUri: string, state: string): string {
+    const url = new URL('https://github.com/login/oauth/authorize');
+    url.searchParams.set('client_id', this.config.clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('scope', 'read:user');
+    url.searchParams.set('state', state);
+    return url.toString();
   }
 
   async exchange(code: string): Promise<OAuthProfile> {
@@ -77,6 +88,16 @@ export class WechatOAuth implements OAuthProvider {
     return Boolean(this.config.appId && this.config.appSecret);
   }
 
+  authorizeUrl(redirectUri: string, state: string): string {
+    const url = new URL('https://open.weixin.qq.com/connect/qrconnect');
+    url.searchParams.set('appid', this.config.appId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', 'snsapi_login');
+    url.searchParams.set('state', state);
+    return `${url.toString()}#wechat_redirect`;
+  }
+
   async exchange(code: string): Promise<OAuthProfile> {
     if (!this.enabled) throw new AppError('PROVIDER_DISABLED', '微信登录未配置');
     const tokenUrl = new URL('https://api.weixin.qq.com/sns/oauth2/access_token');
@@ -115,6 +136,15 @@ export class QqOAuth implements OAuthProvider {
 
   get enabled(): boolean {
     return Boolean(this.config.appId && this.config.appKey);
+  }
+
+  authorizeUrl(redirectUri: string, state: string): string {
+    const url = new URL('https://graph.qq.com/oauth2.0/authorize');
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', this.config.appId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('state', state);
+    return url.toString();
   }
 
   async exchange(code: string): Promise<OAuthProfile> {
@@ -166,6 +196,11 @@ export class AppleOAuth implements OAuthProvider {
 
   get enabled(): boolean {
     return Boolean(this.config.clientId);
+  }
+
+  /** Apple 在 H5 端只能由 Apple JS 在端侧拉起，服务端不提供 authorize 地址。 */
+  authorizeUrl(): string | null {
+    return null;
   }
 
   async exchange(identityToken: string): Promise<OAuthProfile> {

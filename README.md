@@ -132,13 +132,15 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 第三方按需开启：填了对应凭据，`/api/v1/meta` 的能力矩阵会变成 `on`，未填则自动退化为 dev 适配器（不报错、不联网）。
 
+第三方登录是**真实闭环**（2026-11-13）：`GET /api/v1/auth/oauth/:provider/start` 校验渠道后 302 到官方授权页（`redirect_uri` 固定回本站 `/auth/oauth/:provider/callback`，带一次性 `state`），回跳把 `code` 带回原页面，再由 `POST /auth/login/oauth` 换令牌建号。未配置渠道直接返回 `PROVIDER_DISABLED`，前端渲染「未启用」且不显示跳转箭头、不发假跳转。部署在带前缀的域名时，`PUBLIC_BASE_URL` 要写到 API 前缀（例：`https://cloud.mix.top/mixmapp/api/v1`），未配置则按请求 `Host` 反推。
+
 ---
 
 ## 状态与边界（事实陈述，2026-11-12）
 
 **生产闭环已打通**（前端不是静态壳）：生产 API `https://cloud.mixm.top/mixmapp/api/v1` 的数据层走 CloudBase 云 PG（`public.mix_exec` SQL 桥），公网域名上已完成「用户名注册 → 加购 → 下单 → 同 Idempotency-Key 幂等复放 → 我的订单 → `/me`」API 级取证，以及 Pages 生产站浏览器点击级取证（订单 `MOMWDO6PT5181888`、库存 63→62 均可在云端库回查）。详见 [`docs/11-delivery-report-2026-11-12-prod-closed-loop.md`](docs/11-delivery-report-2026-11-12-prod-closed-loop.md)。
 
-**本地已验证**：`pnpm install` / `lint` / `typecheck` / **62 例通过（6 例需真库跳过）** / `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
+**本地已验证**：`pnpm install` / `lint` / `typecheck` / **68 例通过（6 例需真库跳过）** / `build:api` / `build:h5` / `build:mp-weixin` / `build:app` / `build:harmony` / Android debug APK 构建 / 注册→分配 MixmAPP 号码→`/me`→三策略试算→刷新令牌 的端到端调用。
 
 **免费平台已验证**：
 

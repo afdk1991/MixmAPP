@@ -187,8 +187,21 @@ export async function apiRequest<T>(
   );
 }
 
-export const authApi = {
-  requestSmsCode: (phone: string, purpose: 'register' | 'login' | 'bind') =>
+/**
+ * 第三方登录发起地址。由浏览器整页跳转到服务端 `/auth/oauth/:provider/start`，
+ * 服务端 302 到渠道授权页，回跳后再带 `code` 回到当前页面。
+ * 未配置的渠道不要调用，服务端会返回 `PROVIDER_DISABLED`。
+ */
+export function oauthStartUrl(
+  provider: 'wechat' | 'qq' | 'github' | 'apple',
+  redirect?: string,
+): string {
+  const base = API_BASE.replace(/\/+$/, '');
+  const back = redirect ?? (typeof window !== 'undefined' ? window.location.href : '');
+  return `${base}/auth/oauth/${provider}/start${back ? `?redirect=${encodeURIComponent(back)}` : ''}`;
+}
+
+export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 'login' | 'bind') =>
     apiRequest<{ ttlSec: number; devCode?: string }>('/auth/sms/code', {
       method: 'POST',
       data: { phone, purpose },

@@ -117,11 +117,13 @@
           v-for="p in providers"
           :key="p.key"
           class="oauth-btn"
+          :class="{ 'oauth-btn--off': !providerEnabled(p.key) }"
           hover-class="is-press"
           @tap="oauthLogin(p.key)"
         >
           <text class="oauth-name">{{ p.name }}</text>
-          <text class="oauth-arrow mono">↗</text>
+          <text v-if="providerEnabled(p.key)" class="oauth-arrow mono">↗</text>
+          <text v-else class="oauth-off mono">未启用</text>
         </view>
       </view>
     </view>
@@ -131,8 +133,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { authApi, ApiError } from '../../api/client';
+import { ref, onMounted } from 'vue';
+import { authApi, ApiError, metaApi, oauthStartUrl } from '../../api/client';
 import { applyAuth, loginByOAuth, loginByPassword, loginBySms } from '../../stores/session';
 
 const mode = ref<'password' | 'sms' | 'onekey'>('password');
@@ -154,6 +156,54 @@ const providers = [
   { key: 'qq' as const, name: 'QQ' },
   { key: 'apple' as const, name: 'Apple' },
 ];
+
+/** 服务端 /meta 的 thirdParty 开关；未取到时一律视为未启用，不做假跳转。 */
+const providerFlags = ref<Record<string, boolean>>({});
+/** 授权回跳带回的 code / 错误 / 渠道，用于完成登录或提示。 */
+const oauthCode = ref('');
+const oauthProvider = ref('');
+const oauthError = ref('');
+
+function providerEnabled(key: string): boolean {
+  return Boolean(providerFlags.value[key]);
+}
+
+function providerLabel(key: string): string {
+  return providers.find((p) => p.key === key)?.name ?? key;
+}
+
+async function loadProviders(): Promise<void> {
+  try {
+    const meta = await metaApi.get();
+    const third = meta.thirdParty ?? {};
+    providerFlags.value = {
+      github: third.githubOauth === 'on',
+      wechat: third.wechatOauth === 'on',
+      qq: third.qqOauth === 'on',
+      apple: third.appleOauth === 'on',
+    };
+  } catch {
+    providerFlags.value = {};
+  }
+}
+
+function readOAuthReturn(): void {
+  // #ifdef H5
+  const params = new URLSearchParams(window.location.search);
+  oauthCode.value = params.get('code') ?? '';
+  oauthProvider.value = params.get('oauthProvider') ?? '';
+  oauthError.value = params.get('oauthError') ?? '';
+  if (oauthError.value) error.value = `第三方授权被取消或失败：${oauthError.value}`;
+  if (oauthCode.value && oauthProvider.value) {
+    void oauthLogin(oauthProvider.value as 'wechat' | 'qq' | 'github' | 'apple');
+  }
+  // #endif
+}
+
+onMounted(() => {
+  void loadProviders();
+  readOAuthReturn();
+});
 
 function goRegister(): void {
   uni.redirectTo({ url: '/pages/auth/register' });
@@ -210,14 +260,29 @@ async function submit(): Promise<void> {
 }
 
 async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promise<void> {
-  try {
-    const result = await loginByOAuth(provider);
-    await applyAuth(result);
-    uni.showToast({ title: '登录成功', icon: 'success' });
-    setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 600);
-  } catch (e) {
-    uni.showToast({ title: e instanceof Error ? e.message : '第三方登录不可用', icon: 'none' });
+  // 已配置渠道：整页跳服务端发起授权，回跳带 code 再走 oauthComplete。
+  if (providerEnabled(provider)) {
+    // #ifdef H5
+    window.location.assign(oauthStartUrl(provider));
+    return;
+    // #endif
+    // 非 H5 端由各端 SDK 拉起，当前未接入时明确提示，不做假跳转。
+    uni.showToast({ title: '该端的第三方登录需先接入对应 SDK', icon: 'none' });
+    return;
   }
+  // 回跳带回 code 时完成换令牌与建号。
+  if (oauthCode.value && oauthProvider.value === provider) {
+    try {
+      const result = await loginByOAuth(provider);
+      await applyAuth(result);
+      uni.showToast({ title: '登录成功', icon: 'success' });
+      setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 600);
+    } catch (e) {
+      uni.showToast({ title: e instanceof Error ? e.message : '第三方登录不可用', icon: 'none' });
+    }
+    return;
+  }
+  uni.showToast({ title: `${providerLabel(provider)} 登录未启用`, icon: 'none' });
 }
 </script>
 
@@ -437,6 +502,16 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 
 .oauth-arrow {
   font-size: 22rpx;
+  color: $ink-4;
+}
+
+.oauth-btn--off {
+  opacity: 0.55;
+}
+
+.oauth-off {
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
   color: $ink-4;
 }
 

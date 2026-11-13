@@ -283,7 +283,14 @@ export class AuthService {
   }): Promise<AuthResult> {
     const adapter = this.oauth[input.provider];
     if (!adapter?.enabled) throw new AppError('PROVIDER_DISABLED', `${input.provider} 登录未配置`);
-    const profile = await adapter.exchange(input.code);
+    let profile;
+    try {
+      profile = await adapter.exchange(input.code);
+    } catch (error) {
+      // 网络不可达 / 证书校验失败等底层错误统一收敛成渠道错误，避免暴露 500。
+      if (error instanceof AppError) throw error;
+      throw new AppError('PROVIDER_ERROR', `${input.provider} 授权服务不可达，请稍后重试`);
+    }
     const binding = await this.store.bindings.findByProvider(input.provider, profile.openId);
     if (binding) {
       const user = await this.store.users.findById(binding.userId);

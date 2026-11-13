@@ -17,6 +17,7 @@ import { createAiProvider, type AiProvider } from './adapters/ai.js';
 import { AppError } from './lib/errors.js';
 import { verifyAccessToken } from './lib/jwt.js';
 import { authRoutes } from './routes/auth.js';
+import { oauthRoutes } from './routes/oauth.js';
 import { mallRoutes } from './routes/mall.js';
 import { adminRoutes } from './routes/admin.js';
 import { meRoutes } from './routes/me.js';
@@ -162,6 +163,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     async (scope) => {
       await metaRoutes(scope);
       await authRoutes(scope);
+      await oauthRoutes(scope);
       await meRoutes(scope);
       await mallRoutes(scope);
       await integrationRoutes(scope);
