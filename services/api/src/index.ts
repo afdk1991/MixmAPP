@@ -24,6 +24,11 @@ async function main(): Promise<void> {
   if (!config.databaseUrl && !hasGateway) {
     console.warn('[warn] ALLOW_MEMORY_STORE=1：使用内存存储，重启即丢数据，禁止用于任何验证或演示环境');
   }
+  if (process.env['SEED_DEMO_PRODUCTS'] === '1' && store.driver === 'memory') {
+    const { seedDemoProducts } = await import('./db/demo-seed.js');
+    const added = await seedDemoProducts(store as unknown as import('./db/memory.js').MemoryStore);
+    console.info(`[seed] 内存驱动注入示例商品：${added} 件（与 infra/sql/0002_mall.sql 同源）`);
+  }
   if (config.databaseUrl && process.env['RUN_MIGRATIONS'] === '1') {
     const applied = await runMigrations(config.databaseUrl);
     console.info(`[db] 迁移完成：${applied.length ? applied.join(', ') : '已是最新'}`);
