@@ -7,7 +7,7 @@
 <!-- version:begin -->
 当前构建版本：**V0.0.0-preview**（内部预览构建，未对外发布）
 已发布版本：无
-版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/08-versioning.md](docs/08-versioning.md)
+版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
 <!-- version:end -->
 
 ---
@@ -129,7 +129,7 @@ bash scripts/install.sh mixmapp-install-<ver>.tar.gz   # 服务器上（root）
 ```
 
 原理、安全模型、腾讯云 CVM/轻量应用服务器落地步骤、镜像制作与验收清单见
-[`docs/17-wordpress-style-installer.md`](docs/17-wordpress-style-installer.md)。
+[`docs/21-wordpress-style-installer.md`](docs/21-wordpress-style-installer.md)。
 
 ---
 
@@ -184,7 +184,7 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 **线上内容一致性（2026-11-12 复核）**：三端静态站此前展示的是旧版白卡片界面，仓库里的全站改版未入库。已提交 `6ce6bb0`（14 个文件、全站通行证视觉）与 `1393512`（`rise` 动效去掉 `opacity` 起始，避免动画被浏览器冻结时「通行入口」整块永久空白），Pages 与 CloudBase 均已按修复版重发并逐页取证（首页 / 登录 / 商城）。详见 [`docs/12-delivery-report-2026-11-12-ui-consistency.md`](docs/12-delivery-report-2026-11-12-ui-consistency.md)。
 
-**基础设施缺陷（2026-11-13 已修，结论更正）**：此前记录为「`cloud.mix.top` 解析到 AWS Global Accelerator、国内 TLS alert 112」——该域名少写一个 m，`mix.top` 是另一个域名（停放服务，13.248.169.48 / 76.223.54.146），与本项目无关。真实主机名是 `cloud.mixm.top`，一直解析到源站 115.159.159.11。国内打不开的真实原因是生产机 nginx 的 vhost 把 `server_name` 写成了 `cloud.mix.top`（SNI 永不匹配，回落 Mim 默认站 → alert 112），且部分静态产物内嵌的 API 基址也写错。两处均已修正：nginx 改由 `/etc/nginx/conf.d/cloud-mixmapp.conf` 接管 443（`nginx -t` 通过），CloudBase 静态站重发 `mixmapp-005`。现网实测（宁波家用网络、不跳过证书校验）：`/meta` 200 JSON、`/healthz` db=ok、证书 CN/SAN = `cloud.mixm.top`、两个静态站首页状态 `ONLINE`。**2026-11-13 21:14 追加**：`https://cloud.mixm.top/` 根路径原先转发给 Mim 的 8787，访客拿到 404；现已改为 nginx `location = /` 直接返回自托管的单文件 H5（`/var/www/mixmapp-site/index.html`），域名根即项目入口首页。取证与整改全过程见 [`docs/14-access-domains.md`](docs/14-access-domains.md) 与 [`docs/15-entry-hosting.md`](docs/15-entry-hosting.md)。
+**基础设施缺陷（2026-11-13 已修，结论更正）**：此前记录为「`cloud.mix.top` 解析到 AWS Global Accelerator、国内 TLS alert 112」——该域名少写一个 m，`mix.top` 是另一个域名（停放服务，13.248.169.48 / 76.223.54.146），与本项目无关。真实主机名是 `cloud.mixm.top`，一直解析到源站 115.159.159.11。国内打不开的真实原因是生产机 nginx 的 vhost 把 `server_name` 写成了 `cloud.mix.top`（SNI 永不匹配，回落 Mim 默认站 → alert 112），且部分静态产物内嵌的 API 基址也写错。两处均已修正：nginx 改由 `/etc/nginx/conf.d/cloud-mixmapp.conf` 接管 443（`nginx -t` 通过），CloudBase 静态站重发 `mixmapp-005`。现网实测（宁波家用网络、不跳过证书校验）：`/meta` 200 JSON、`/healthz` db=ok、证书 CN/SAN = `cloud.mixm.top`、两个静态站首页状态 `ONLINE`。**2026-11-13 21:14 追加**：`https://cloud.mixm.top/` 根路径原先转发给 Mim 的 8787，访客拿到 404；现已改为 nginx `location = /` 直接返回自托管的单文件 H5（`/var/www/mixmapp-site/index.html`），域名根即项目入口首页。取证与整改全过程见 [`docs/14-access-domains.md`](docs/14-access-domains.md) 与 [`docs/20-entry-hosting.md`](docs/20-entry-hosting.md)。
 
 
 **未验证**（缺外部条件，不做假绿）：iOS 打包（需 macOS + 证书）、Android release 签名（需 keystore）、鸿蒙上架包（需 DevEco / HBuilderX）、Cloudflare Pages（需 API Token）、真实短信/支付/地图/推送/AI（需商户号与密钥；生产手机验证码注册因无短信通道暂不可用，可用用户名密码注册）。

@@ -7,6 +7,7 @@
  * 4. Vue 单文件组件必须闭合 <template>/<script>/<style>
  * 5. 路由与命名唯一性：页面路径不重复注册、routes.ts 与 pages.json 一一对应、
  *    页面里不许写 '/pages/...' 字面量、API 的「方法 + 完整路径」不重复注册
+ * 6. 文档编号唯一性：docs/NN-*.md 的 NN 不许撞号，同一编号只许一篇
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
@@ -133,9 +134,28 @@ function checkApiRoutes() {
   }
 }
 
+// ---------- 文档编号唯一性 ----------
+const DOCS = join(ROOT, 'docs');
+function checkDocNumbers() {
+  const byNo = new Map();
+  for (const entry of readdirSync(DOCS)) {
+    if (!entry.endsWith('.md')) continue;
+    const m = entry.match(/^(\d{2})-.*\.md$/);
+    if (!m) continue;
+    const no = m[1];
+    if (byNo.has(no)) {
+      const first = byNo.get(no);
+      violations.push(`docs/${entry} 与 docs/${first} 撞号 ${no}，同一编号只许一篇（新增文档请取当前最大号之后的空号）`);
+    } else {
+      byNo.set(no, entry);
+    }
+  }
+}
+
 walk(ROOT);
 checkRoutes();
 checkApiRoutes();
+checkDocNumbers();
 
 if (violations.length) {
   console.error(`✗ 规则检查失败，共 ${violations.length} 处：`);

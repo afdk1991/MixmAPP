@@ -2,7 +2,7 @@
 /**
  * 版本号单一事实源：version.json
  *
- * 规约（详见 docs/08-versioning.md）：
+ * 规约（详见 docs/19-versioning.md）：
  * - 首个对外正式版本 = V0.0.0，之后每次功能/模块更新按 V0.0.1、V0.0.2 递增
  * - 发布前不得占用正式版本号：没有真正对外发布，就不能把该号写进 released，也不能打 tag
  * - 内部 / 预览 / 草稿构建一律显示 V0.0.0-preview，正式上线才显示 V0.0.0
@@ -130,7 +130,7 @@ function readmeBlock(state) {
     BEGIN,
     `当前构建版本：**${current}**（${currentNote}）`,
     `已发布版本：${released}`,
-    '版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/08-versioning.md](docs/08-versioning.md)',
+    '版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)',
     END,
   ].join('\n');
 }

@@ -15,7 +15,7 @@
 | 门禁 | `pnpm version:check`，已插入 `ci.yml` 安装依赖之后、规则检查之前 |
 | 同步面 | 6 个 `package.json`、`.env.example` 的 `APP_VERSION`、`services/api/src/config.ts` 默认值、`README.md` 版本块 |
 | 当前展示版本 | **V0.0.0-preview**（内部预览，未对外发布） |
-| 规范文档 | `docs/08-versioning.md` |
+| 规范文档 | `docs/19-versioning.md` |
 
 规则三条硬约束（脚本强制，不是口头约定）：
 
@@ -132,7 +132,7 @@ exit=0
 |---|---|
 | `version.json` | 新增，版本单一事实源 |
 | `scripts/version.mjs` | 新增，5 个子命令 + 一致性校验 |
-| `docs/08-versioning.md` | 新增，规约与命令说明 |
+| `docs/19-versioning.md` | 新增，规约与命令说明 |
 | `package.json` | `version` 0.1.0 → 0.0.0；新增 5 个 `version:*` 脚本 |
 | `apps/*/package.json`、`services/*/package.json`、`packages/*/package.json` | 版本归零到 0.0.0 |
 | `.env.example` | `APP_VERSION=0.0.0-preview` |

@@ -182,7 +182,7 @@ ssh -L 8090:127.0.0.1:8090 root@<服务器IP>
 - **CI（`.github/workflows/deploy.yml` + `deploy/atomic-release.sh`）= 后续发版**：只替换 `releases/<新时间戳>` 并切 `current`，以及覆盖 `/var/www/mixmapp-site/index.html`。
 - 两者共用同一套目录约定，所以“装完的机器”可以直接被 CI 接管，不需要重装。
 - 回滚：`deploy/rollback.sh` 切回上一个 release；H5 回滚就是把上一个 `index.html` 覆盖回去。
-- 已知缺口：`atomic-release.sh` 目前**不产出** `/opt/mixmapp/current/web`，所以 nginx 的 `root` 必须是 `/var/www/mixmapp-site`（见 `docs/15-entry-hosting.md`）。若以后流水线真的产出 `web/`，两处择一，不要各写一半。
+- 已知缺口：`atomic-release.sh` 目前**不产出** `/opt/mixmapp/current/web`，所以 nginx 的 `root` 必须是 `/var/www/mixmapp-site`（见 `docs/20-entry-hosting.md`）。若以后流水线真的产出 `web/`，两处择一，不要各写一半。
 
 ---
 
