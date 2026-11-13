@@ -4,4 +4,6 @@
     <string name="title_activity_main">MixmAPP</string>
     <string name="package_name">top.mixm.app</string>
     <string name="custom_url_scheme">top.mixm.app</string>
+    <string name="press_back_again_to_exit">再按一次退出</string>
+    <string name="no_browser_for_link">没有可用的浏览器打开此链接</string>
 </resources>

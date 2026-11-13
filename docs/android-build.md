@@ -31,15 +31,14 @@
 # 1) 装依赖（首次或锁文件变化后）
 pnpm install --frozen-lockfile
 
-# 2) 构建 H5（uni-app），**必须注入 API 源**
-$env:MIXMAPP_API_BASE='https://cloud.mixm.top/mixmapp/api/v1'
-node scripts/build-h5.mjs                    # 产物：apps/app/dist/build/h5，index.html 里带 window.__MIXMAPP_API_BASE__
+# 2) 构建 H5（uni-app）
+node scripts/build-h5.mjs                    # 产物：apps/app/dist/build/h5
 
-# 3) 同步到 Android 工程
-pnpm --filter @mixmapp/mobile exec cap sync android
+# 3) 同步到 Android 工程 + 注入 API 源（一步到位，别再裸跑 cap sync）
+pnpm --filter @mixmapp/mobile sync:android
 
-# 4) 壳产物体检（漏注入会在这里红，不用等装到手机上才发现）
-node scripts/android-check-assets.mjs
+# 4) 壳产物体检（可选，sync 脚本已内置同样的检查）
+node scripts/android-inject-base.mjs --check
 
 # 5) 打包
 node scripts/android-build.mjs assembleDebug
@@ -48,8 +47,8 @@ node scripts/android-build.mjs assembleDebug
 > **为什么必须注入**：壳的 WebView 从 `https://localhost` 加载 `assets/public` 里的本地 H5。
 > 不注入 API 源时，客户端按"生产态同源"退回 `/api/v1`，实际请求打到 `https://localhost/api/v1`，
 > 结果是装出来的 APP 全站离线（首页状态一直 `OFFLINE · 未连上 API`）。
-> 2026-11-13 的 debug APK 就是这个状态，现已修正，并由 `scripts/android-check-assets.mjs` 兜住：
-> 缺注入、取值不是绝对地址、缺 `/api/v1` 后缀，三种情况都会 exit 1。
+> 2026-11-13 的 debug APK 就是这个状态。现在注入由 `sync:android` 兜住（读 `apps/mobile/api-base.json`，
+> 可用环境变量 `MIXMAPP_API_BASE` 覆盖）：缺注入、取值不是绝对地址、缺 `/api/v1` 后缀，三种情况都 exit 1。
 
 
 产物（本机实测）：
@@ -100,7 +99,7 @@ CI Secrets 名称（`.github/workflows/android.yml`）：
 
 `android.yml` 触发：`apps/app/**`、`apps/mobile/**`、`packages/**` 变更，或手动 dispatch（可勾选 release）。
 
-流程：`pnpm install --frozen-lockfile` → `node scripts/build-h5.mjs`（带 `MIXMAPP_API_BASE`）→ `cap sync android` → `node scripts/android-check-assets.mjs` → `setup-java 21` → `assembleDebug` → （有签名 Secrets 时）`bundleRelease` → 上传 artifact。
+流程：`pnpm install --frozen-lockfile` → `node scripts/build-h5.mjs`（带 `MIXMAPP_API_BASE`）→ `pnpm --filter @mixmapp/mobile sync:android`（sync + 注入）→ `node scripts/android-inject-base.mjs --check` → `setup-java 21` → `assembleDebug` → （有签名 Secrets 时）`bundleRelease` → 上传 artifact。
 
 CI 里的 API 源：默认 `https://cloud.mixm.top/mixmapp/api/v1`，可用仓库变量 `vars.MIXMAPP_API_BASE` 覆盖（换域名不用改工作流）。
 
@@ -109,6 +108,9 @@ CI 里的 API 源：默认 `https://cloud.mixm.top/mixmapp/api/v1`，可用仓�
 - 没有签名 Secrets 时只产出 debug APK，且工作流输出 `::warning::未配置签名 Secrets……不得视为可发布产物`。
 - 有签名 Secrets 时才产出 release AAB，缺失则作业失败（`if-no-files-found: error`）。
 - 壳产物体检失败（H5 没注入 API 源）时，工作流在打包前就红。
+
+> **为什么注入要放在 sync 之后**：任何人只要跑一次裸的 `pnpm --filter @mixmapp/app build:h5` + `cap sync android`，就会把注入覆盖掉（2026-11-14 在真机上复现过一次：装上去 `injectedBase="(未注入)"`、首页恒 OFFLINE）。
+> 所以 `apps/mobile` 的 `sync:android` = `cap sync android && node ../../scripts/android-inject-base.mjs`，注入值来自 `apps/mobile/api-base.json`（可用环境变量覆盖）。走这条脚本，谁构建都不会漏。
 
 ---
 
@@ -126,12 +128,78 @@ CI 里的 API 源：默认 `https://cloud.mixm.top/mixmapp/api/v1`，可用仓�
 
 ---
 
-## 7. 尚未做的部分
+## 7. 图标与启动图
+
+不再是 Capacitor 模板素材，画法取自 `apps/app/src/components/mx-logo/mx-logo.vue`（方框内 MX 连字 + 品牌青底线），色值取自 `uni.scss`（`$deep #0b0f0e` / `$paper #f4f4f1` / `$brand #0f9d8f`）。
+
+单一事实源是生成脚本，**不要手改 PNG**：
+
+```bash
+python apps/mobile/branding/generate-icons.py
+```
+
+产物（27 个文件）：
+
+| 类别 | 文件 | 规格 |
+|---|---|---|
+| 传统图标 | `mipmap-{mdpi..xxxhdpi}/ic_launcher.png` | 48/72/96/144/192，深底圆角方块 |
+| 圆形图标 | 同上目录 `ic_launcher_round.png` | 同尺寸，圆形裁切 |
+| 自适应前景 | 同上目录 `ic_launcher_foreground.png` | 108/162/216/324/432，透明层，内容收在 66% 安全区 |
+| 启动图 | `drawable`/`drawable-port-*`/`drawable-land-*/splash.png` | 11 张，深底 + MX 方框 + MixmAPP 字标 + MULTI-END IDENTITY |
+| 底色 | `values/ic_launcher_background.xml` | `#0B0F0E` |
+
+---
+
+## 8. 返回键与外链
+
+`MainActivity` 不再是空壳，两件事都在原生层兜住：
+
+**返回键**：Android 15+ 对 targetSdk 35 默认开启预测性返回，`Activity.onBackPressed()` **不再被调用**（本项目实测 API 36 上改造前返回键完全失效）。现在走 `OnBackPressedDispatcher`：
+1. `webView.canGoBack()` 为真 → `goBack()`（pushState 的页面跳转也算在历史栈里）；
+2. 否则交给 H5 页面栈（`uni.getCurrentPages().length > 1` → `uni.navigateBack()`）；
+3. 到根部 → 弹「再按一次退出」，2 秒内再按才 `finish()`。
+
+实测：`我的` → 返回落到首页；首页按一次不退出、连按两次回到桌面。
+
+**外链**：壳的 WebView 只服务本地 H5（`https://localhost` / `127.0.0.1` / `file:` / `about:` / `capacitor:`），命中站外地址时用 `ACTION_VIEW` 交系统浏览器，壳本身不被导航走。实测 `https://example.com/x?from=mixmapp` 跳进 vivo 浏览器，回到 App 仍在原页。
+
+---
+
+## 9. 真机冒烟
+
+```bash
+node scripts/android-smoke.mjs                        # 第一台在线设备 + debug APK
+node scripts/android-smoke.mjs --serial 10AE3Y0LGQ0018Z
+node scripts/android-smoke.mjs --require-api         # API 不可达也判失败（CI 用）
+```
+
+检查项：设备在线 → APK 存在 → 装 → 启 → 进程存活 → logcat 无本应用 FATAL → WebView 可调试 → API 源已注入 → 壳内 `fetch /healthz` → 截图（`apps/mobile/android/app/build/smoke/smoke.png`）。
+
+判定：装不上/启不来/崩溃/没注入 = 失败；抓不到调试通道、`/healthz` 不通 = 告警（生产会短时抖动，加 `--require-api` 才判死）。
+
+2026-11-14 实测输出：
+
+```
+✓ 设备在线：10AE3Y0LGQ0018Z
+✓ 安装：Success
+✓ 启动：TotalTime: 609
+✓ 进程存活：8019
+✓ logcat 无本应用崩溃
+✓ 壳内 WebView 可调试：https://localhost/
+✓ API 源已注入：https://cloud.mixm.top/mixmapp/api/v1
+✗ 壳内探活 /healthz：fetch 失败: Failed to fetch
+冒烟结果：9/10 通过
+```
+
+`/healthz` 那一条是当时线上 443 短暂拒连（同一时刻本机 `Test-NetConnection cloud.mixm.top -Port 443` 也是 False，恢复后 WebView 内 `fetch` 返回 `200 application/json`）。**这说明冒烟脚本能抓到后端抖动，而不是只看 APK 装成功了事。**
+
+---
+
+## 10. 尚未做的部分
 
 - **真实 keystore 未配**（需生成或提供，`keytool -genkeypair`，不入库；缺它只能出 debug APK + 未签名 AAB）。
-- **图标/启动图仍是 Capacitor 默认占位**：`res/mipmap-*` 与 `res/drawable-*splash.png` 都是模板素材，没换成这一轮的 MX 徽标/星际联邦视觉，装出来和品牌对不上。
-- **物理返回键与外链**未做专门处理：`MainActivity` 只是空壳 `BridgeActivity`；H5 内部靠 history 退栈，从外部链接（OAuth 授权页等）进来时没有明确策略，也没有把站外链接交给系统浏览器的分流。
-- **没有真机回归**：`adb` 可用但未接设备，CI 只 `assembleDebug`，不安装、不启动、不验证 API 连通性。
+- **OAuth 回跳还没有深链**：站外链接现在交给浏览器，但授权完成后不会自动回到 App（需要 `intent-filter` + `appUrlOpen` 处理，且要和服务端 redirect_uri 对齐）。
 - **两套打包路径并存**：`apps/app` 的 uni-app 自带 `build:app` 与本手册的 Capacitor 路径，不要同时用来出 Android 包，否则会出现两套签名与两套产物口径。
 - `allowBackup` 已从 `true` 改为 `false`（本地存着令牌，不该被云备份带走到另一台设备上）。
+
 

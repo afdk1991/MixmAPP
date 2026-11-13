@@ -55,11 +55,12 @@ jobs:
           MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || 'https://cloud.mixm.top/mixmapp/api/v1' }}
         run: node scripts/build-h5.mjs
 
-      - name: Sync Capacitor
-        run: pnpm --filter @mixmapp/mobile exec cap sync android
+      - name: Sync Capacitor（含 API 源注入）
+        # 注入放在 sync 之后由脚本兜住：任何人裸跑 build:h5 + cap sync 都不会把注入覆盖掉
+        run: pnpm --filter @mixmapp/mobile sync:android
 
       - name: Check shell assets
-        run: node scripts/android-check-assets.mjs
+        run: node scripts/android-inject-base.mjs --check
 
       - uses: actions/setup-java@v4
         with:

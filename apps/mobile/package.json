@@ -4,7 +4,8 @@
   "private": true,
   "description": "MixmAPP 原生壳（Capacitor）：装载 apps/app 的 H5 产物，产出 Android APK/AAB",
   "scripts": {
-    "sync:android": "cap sync android",
+    "sync:android": "cap sync android && node ../../scripts/android-inject-base.mjs",
+    "check:android-assets": "node ../../scripts/android-inject-base.mjs --check",
     "open:android": "cap open android",
     "build:debug": "node ../../scripts/android-build.mjs assembleDebug",
     "build:release": "node ../../scripts/android-build.mjs assembleRelease"
