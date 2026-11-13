@@ -305,7 +305,7 @@ onShow(() => {
 }
 
 .pass-seal-text {
-  font-size: 54rpx;
+  font-size: 56rpx;
   letter-spacing: 6rpx;
   color: rgba(244, 244, 241, 0.14);
 }
@@ -320,7 +320,7 @@ onShow(() => {
 
 .pass-kicker {
   display: block;
-  font-size: 19rpx;
+  font-size: 24rpx;
   letter-spacing: 2.4rpx;
   color: rgba(244, 244, 241, 0.55);
 }
@@ -350,7 +350,7 @@ onShow(() => {
 }
 
 .pass-state-text {
-  font-size: 18rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
   color: rgba(244, 244, 241, 0.8);
 }
@@ -360,7 +360,7 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: $sp-6;
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
   color: rgba(196, 219, 255, 0.48);
 }
@@ -383,7 +383,7 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: 6rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
   color: rgba(196, 219, 255, 0.56);
   word-break: break-all;
@@ -426,7 +426,7 @@ onShow(() => {
 
 .pass-k {
   display: block;
-  font-size: 18rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
   color: rgba(196, 219, 255, 0.44);
 }
@@ -434,7 +434,7 @@ onShow(() => {
 .pass-v {
   display: block;
   margin-top: 8rpx;
-  font-size: 26rpx;
+  font-size: 28rpx;
   color: rgba(240, 247, 255, 0.92);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -471,7 +471,7 @@ onShow(() => {
   display: block;
   max-width: 74%;
   margin-top: $sp-3;
-  font-size: 18rpx;
+  font-size: 24rpx;
   letter-spacing: 0.5rpx;
   color: rgba(196, 219, 255, 0.46);
 }
@@ -518,7 +518,7 @@ onShow(() => {
 
 .v {
   flex: 1;
-  font-size: 26rpx;
+  font-size: 28rpx;
   line-height: 1.5;
   color: $ink;
   text-align: right;
@@ -526,7 +526,7 @@ onShow(() => {
 }
 
 .v--mono {
-  font-size: 20rpx;
+  font-size: 24rpx;
   color: $ink-3;
 }
 
@@ -609,7 +609,7 @@ onShow(() => {
 .link-desc {
   flex: 1;
   margin-left: $sp-3;
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: $ink-3;
   text-align: right;
 }
@@ -661,7 +661,7 @@ onShow(() => {
 .guest-lede {
   display: block;
   margin-top: $sp-3;
-  font-size: 26rpx;
+  font-size: 28rpx;
   line-height: 1.7;
   color: rgba(242, 245, 243, 0.66);
 }

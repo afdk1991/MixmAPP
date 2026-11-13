@@ -22,6 +22,7 @@ page {
   color: $ink;
   font-family: $font-body;
   font-size: $fs-body;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 

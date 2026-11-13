@@ -338,7 +338,7 @@ onShow(() => {
 }
 
 .tab-label {
-  font-size: 26rpx;
+  font-size: 28rpx;
   letter-spacing: 0.5rpx;
   color: $ink-3;
   padding-bottom: 12rpx;
@@ -419,7 +419,7 @@ onShow(() => {
   position: absolute;
   left: 20rpx;
   top: 20rpx;
-  font-size: 18rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
   text-transform: uppercase;
   color: $ink-3;
@@ -455,7 +455,7 @@ onShow(() => {
 }
 
 .cover-add-text {
-  font-size: 34rpx;
+  font-size: 36rpx;
   line-height: 1;
   color: $ink;
 }
@@ -484,7 +484,7 @@ onShow(() => {
 .p-sub {
   display: block;
   margin-top: 6rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
   color: $ink-3;
   white-space: nowrap;
   overflow: hidden;
@@ -505,26 +505,26 @@ onShow(() => {
 }
 
 .p-cur {
-  font-size: 20rpx;
+  font-size: 24rpx;
   color: $ink-2;
   margin-right: 2rpx;
 }
 
 .p-amount {
-  font-size: 34rpx;
+  font-size: 36rpx;
   font-weight: 700;
   color: $ink;
 }
 
 .p-old {
   margin-left: 8rpx;
-  font-size: 18rpx;
+  font-size: 24rpx;
   color: $ink-4;
   text-decoration: line-through;
 }
 
 .p-stock {
-  font-size: 18rpx;
+  font-size: 24rpx;
   color: $ink-4;
 }
 
@@ -555,7 +555,7 @@ onShow(() => {
 }
 
 .foot-note {
-  font-size: 18rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
   color: $ink-4;
 }

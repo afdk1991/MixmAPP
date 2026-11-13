@@ -271,7 +271,7 @@ onShow(() => {
 .sub {
   display: block;
   margin-top: 10rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
   color: $ink-3;
 }
@@ -313,7 +313,7 @@ onShow(() => {
   position: relative;
   z-index: 2;
   font-family: $font-display;
-  font-size: 52rpx;
+  font-size: 56rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $ink;
@@ -354,7 +354,7 @@ onShow(() => {
 }
 
 .remove-text {
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
   color: $ink-3;
 }
@@ -367,7 +367,7 @@ onShow(() => {
 }
 
 .unit {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: $ink-3;
 }
 
@@ -412,7 +412,7 @@ onShow(() => {
 }
 
 .subtotal-k {
-  font-size: 20rpx;
+  font-size: 24rpx;
   color: $ink-4;
   margin-right: 6rpx;
 }
@@ -424,7 +424,7 @@ onShow(() => {
 }
 
 .stock {
-  font-size: 20rpx;
+  font-size: 24rpx;
   color: $ink-4;
 }
 
@@ -468,7 +468,7 @@ onShow(() => {
 }
 
 .form-btn-text {
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 600;
   letter-spacing: 1rpx;
   color: $ink;
@@ -485,7 +485,7 @@ onShow(() => {
 
 .bar-label {
   display: block;
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
   color: $ink-4;
 }

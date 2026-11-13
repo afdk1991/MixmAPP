@@ -150,7 +150,7 @@ onLoad(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30rpx;
+  font-size: 32rpx;
   font-weight: 700;
   letter-spacing: 3rpx;
   color: #f4f8f6;
@@ -170,7 +170,7 @@ onLoad(async () => {
 .brand-ver {
   display: block;
   margin-top: 10rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
   color: rgba(244, 244, 241, 0.62);
 }
@@ -178,7 +178,7 @@ onLoad(async () => {
 .brand-lede {
   display: block;
   margin-top: $sp-3;
-  font-size: 26rpx;
+  font-size: 28rpx;
   line-height: 1.7;
   color: rgba(244, 244, 241, 0.66);
 }
@@ -250,13 +250,13 @@ onLoad(async () => {
 }
 
 .cap-key {
-  font-size: 22rpx;
+  font-size: 24rpx;
   color: $ink-2;
 }
 
 .cap-val {
   margin-left: $sp-2;
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 0.5rpx;
   color: $brand-deep;
   flex-shrink: 0;
@@ -271,7 +271,7 @@ onLoad(async () => {
   margin-top: $sp-3;
   padding-top: $sp-3;
   border-top: 1rpx solid $paper-2;
-  font-size: 22rpx;
+  font-size: 24rpx;
   line-height: 1.6;
   color: $ink-3;
 }
@@ -307,7 +307,7 @@ onLoad(async () => {
 }
 
 .v--mono {
-  font-size: 20rpx;
+  font-size: 24rpx;
   color: $ink-3;
 }
 
@@ -339,7 +339,7 @@ onLoad(async () => {
 }
 
 .flow-no {
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 1rpx;
   color: $brand-deep;
   line-height: 1.4;
@@ -355,7 +355,7 @@ onLoad(async () => {
 .flow-text {
   flex: 1;
   padding: 0 0 32rpx 12rpx;
-  font-size: 26rpx;
+  font-size: 28rpx;
   line-height: 1.4;
   color: $ink-2;
 }
@@ -364,7 +364,7 @@ onLoad(async () => {
   display: block;
   margin-top: $sp-6;
   text-align: center;
-  font-size: 20rpx;
+  font-size: 24rpx;
   letter-spacing: 2rpx;
   color: $ink-4;
 }
