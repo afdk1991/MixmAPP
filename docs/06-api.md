@@ -59,9 +59,8 @@
 
 ## 4. 发号
 
-| 方法 | 路径 | 鉴权 | 说明 |
-|---|---|---|---|
-| POST | `/ids/preview` | 否 | `{ strategy?: snowflake\|ulid\|uuidv7 }`，一次返回 `id` / `snowflake` / `accountNo` / `ulid` / `uuidV7` |
+发号器只在服务端内部使用（注册时分配 `accountNo`、写入主键），**不再对外暴露任何试算接口**。
+编号形态由 `ID_STRATEGY` 决定（`snowflake | ulid | uuidv7`），详见 [`02-id-and-auth.md`](02-id-and-auth.md)。
 
 ## 5. 支付
 
@@ -101,9 +100,6 @@
 ```powershell
 # 能力快照
 curl http://127.0.0.1:8080/api/v1/meta
-
-# 发号试算（不需要登录）
-curl -X POST http://127.0.0.1:8080/api/v1/ids/preview -H "content-type: application/json" -d '{\"strategy\":\"uuidv7\"}'
 
 # 登录后取我
 curl http://127.0.0.1:8080/api/v1/me -H "Authorization: Bearer <token>"

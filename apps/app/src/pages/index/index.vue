@@ -696,11 +696,6 @@ onLoad(async () => {
   justify-content: space-between;
 }
 
-/* 5 个入口是奇数：最后一块通栏，避免右下留一块空洞 */
-.grid .tile:nth-child(5) {
-  width: calc(100% - 16rpx);
-}
-
 .tile-code {
   font-size: 20rpx;
   letter-spacing: 1rpx;

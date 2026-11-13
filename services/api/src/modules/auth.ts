@@ -444,13 +444,4 @@ export class AuthService {
     const record = await this.store.refreshTokens.findByHash(sha256Hex(rawToken));
     if (record) await this.store.refreshTokens.revoke(record.tokenHash, null);
   }
-
-  /** 供前端“ID 试算器”使用：演示三套策略的产出形态。 */
-  previewIds(strategy?: Config['ids']['strategy']) {
-    const factory = new IdFactory({
-      strategy: strategy ?? this.config.ids.strategy,
-      workerId: this.config.ids.workerId,
-    });
-    return factory.next();
-  }
 }

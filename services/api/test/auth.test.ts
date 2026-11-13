@@ -462,23 +462,6 @@ describe('鉴权与发号器', () => {
     expect(res.json().error.code).toBe('UNAUTHORIZED');
   });
 
-  it('/ids/preview 支持三套策略', async () => {
-    const ctx = await makeApp();
-    app = ctx.app;
-    for (const strategy of ['snowflake', 'ulid', 'uuidv7']) {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/v1/ids/preview',
-        payload: { strategy },
-      });
-      expect(res.statusCode).toBe(200);
-      const data = res.json().data;
-      expect(data.accountNo).toMatch(/^MixmAPP-/);
-      if (strategy === 'ulid') expect(data.id).toHaveLength(26);
-      if (strategy === 'uuidv7') expect(data.id).toContain('-');
-    }
-  });
-
   it('/api/v1/meta 暴露能力快照但不泄露密钥', async () => {
     const ctx = await makeApp();
     app = ctx.app;

@@ -58,9 +58,9 @@ pnpm dev:h5
 
 ## 界面预览（本地 H5 实测截图，390 × 844）
 
-| 首页 | 注册 | ID 试算器 |
-|---|---|---|
-| ![首页](docs/screenshots/home.png) | ![注册](docs/screenshots/register.png) | ![ID 试算器](docs/screenshots/ids.png) |
+| 首页 | 注册 |
+|---|---|
+| ![首页](docs/screenshots/home.png) | ![注册](docs/screenshots/register.png) |
 
 截图来源：`pnpm build:h5` 产物 + `node scripts/serve-h5.mjs` 本地预览 + 系统 Edge 无头截图，页面上的「服务在线 · development 环境」是真实调用 `/api/v1/meta` 的结果。
 

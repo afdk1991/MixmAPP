@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import {
   aiChatSchema,
   createPaymentSchema,
-  idStrategySchema,
   presignSchema,
   reverseGeoSchema,
   routeSchema,
@@ -12,12 +11,6 @@ import { parse } from '../lib/validate.js';
 import { AppError } from '../lib/errors.js';
 
 export async function integrationRoutes(app: FastifyInstance): Promise<void> {
-  // ---- 发号器 ----
-  app.post('/ids/preview', async (request) => {
-    const body = parse(z.object({ strategy: idStrategySchema.optional() }), request.body ?? {});
-    return { data: app.auth.previewIds(body.strategy) };
-  });
-
   // ---- 支付 ----
   app.post('/pay/orders', { preHandler: app.requireAuth }, async (request, reply) => {
     const body = parse(createPaymentSchema, request.body);

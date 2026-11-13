@@ -170,10 +170,9 @@ H5 是 history 模式（`manifest.json` 的 `h5.router.mode=history`），而 Pa
 |---|---|---|
 | <https://afdk1991.github.io/MixmAPP/> | 200 | 首页（hero / 未连上 API 提示 / 四宫格） |
 | `/MixmAPP/pages/auth/register` | 404（Pages 用 404.html 兜底） | 创建账号页正常：手机号/邮箱/用户名/一键登录分段、验证码、游客身份进入 |
-| `/MixmAPP/pages/tools/ids` | 404 | ID 试算器 |
 | `/MixmAPP/pages/mall/index` | 404 | 商城页壳正常，但商品区显示「请求失败(404)」——因为没有部署 API |
 
-截图：`docs/screenshots/live-home.png`、`live-register.png`、`live-ids.png`、`live-mall.png`。
+截图：`docs/screenshots/live-home.png`、`live-register.png`、`live-mall.png`。
 
 注意：深链接的状态码仍是 404（内容由 `404.html` 提供），浏览器能正常渲染，但爬虫/监测会看到 404。
 要 200 语义，得换到支持 SPA rewrite 的宿主（Cloudflare Pages 的 `_redirects`、CloudBase 的路由规则、nginx 的 `try_files`）。
