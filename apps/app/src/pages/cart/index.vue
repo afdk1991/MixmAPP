@@ -37,7 +37,7 @@
     <block v-else>
       <view class="list">
         <view v-for="line in cart.items" :key="line.productId" class="sheet line">
-          <view class="cover" :style="{ backgroundColor: line.cover }">
+          <view class="cover">
             <view class="cover-scrim" />
             <text class="cover-char">{{ line.title.slice(0, 1) }}</text>
           </view>
@@ -296,6 +296,8 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background: $paper-2;
+  border: 1rpx solid $paper-3;
 }
 
 .cover-scrim {
@@ -304,7 +306,7 @@ onShow(() => {
   right: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(150deg, rgba(8, 17, 15, 0.04), rgba(8, 17, 15, 0.4));
+  background: linear-gradient(150deg, rgba(17, 20, 19, 0.02), rgba(17, 20, 19, 0.08));
 }
 
 .cover-char {
@@ -314,7 +316,7 @@ onShow(() => {
   font-size: 52rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: rgba(255, 255, 255, 0.95);
+  color: $ink;
 }
 
 .info {
@@ -500,7 +502,7 @@ onShow(() => {
 .bar-btn {
   height: 88rpx;
   padding: 0 48rpx;
-  border-radius: $r-pill;
+  border-radius: $r-control;
   background: $ink;
   display: flex;
   align-items: center;

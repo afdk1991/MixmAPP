@@ -178,8 +178,9 @@ onLoad((options) => {
 .hero {
   position: relative;
   height: 440rpx;
-  background: $paper-2;
-  border-bottom: 1rpx solid $paper-3;
+  background:
+    radial-gradient(120% 120% at 18% 0%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 58%),
+    linear-gradient(160deg, #0b0f0e 0%, #152622 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -192,21 +193,21 @@ onLoad((options) => {
   right: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(160deg, rgba(17, 20, 19, 0.02) 10%, rgba(17, 20, 19, 0.1) 100%);
+  background: linear-gradient(160deg, rgba(244, 244, 241, 0.02) 10%, rgba(244, 244, 241, 0.08) 100%);
 }
 
 .hero-ring {
   position: absolute;
   width: 400rpx;
   height: 400rpx;
-  border: 1rpx solid rgba(17, 20, 19, 0.14);
+  border: 1rpx solid rgba(244, 244, 241, 0.18);
   border-radius: 50%;
 }
 
 .hero-ring--sm {
   width: 280rpx;
   height: 280rpx;
-  border-color: rgba(17, 20, 19, 0.08);
+  border-color: rgba(244, 244, 241, 0.1);
 }
 
 .hero-tag {
@@ -231,7 +232,7 @@ onLoad((options) => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: 1;
-  color: $ink;
+  color: #f4f4f1;
 }
 
 .hero-serial {
@@ -241,7 +242,7 @@ onLoad((options) => {
   z-index: 2;
   font-size: 20rpx;
   letter-spacing: 2rpx;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(244, 244, 241, 0.55);
 }
 
 /* ---------- 正文层 ---------- */
@@ -433,7 +434,7 @@ onLoad((options) => {
 .bar-btn {
   height: 84rpx;
   padding: 0 30rpx;
-  border-radius: $r-pill;
+  border-radius: $r-control;
   display: flex;
   align-items: center;
   justify-content: center;

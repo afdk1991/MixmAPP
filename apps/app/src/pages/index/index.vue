@@ -67,8 +67,8 @@
           <view class="cta-glow" />
           <view class="cta-text">
             <text class="cta-kicker mono">{{ signedIn ? 'SIGNED IN' : 'GET STARTED' }}</text>
-            <text class="cta-title">{{ signedIn ? '查看联邦通行证' : '领取星际联邦通行证' }}</text>
-            <text class="cta-sub">{{ signedIn ? '编号 · 绑定方式 · 账号资料' : '30 秒签发 · 全端通用' }}</text>
+            <text class="cta-title">{{ signedIn ? '查看联邦通行证' : '登录 / 领取星际联邦通行证' }}</text>
+            <text class="cta-sub">{{ signedIn ? '编号 · 绑定方式 · 账号资料' : '登录 · 注册 · 30 秒签发' }}</text>
           </view>
           <view class="cta-arrow">
             <text class="cta-arrow-text">→</text>
@@ -81,7 +81,7 @@
               <text class="sec-n mono">01</text>
               <text class="sec-title">通行入口</text>
             </view>
-            <text class="sec-meta mono">04 ENTRIES</text>
+            <text class="sec-meta mono">03 ENTRIES</text>
           </view>
 
           <view class="grid">
@@ -163,14 +163,12 @@ const platforms = [
 
 const entries = [
   { key: '01', tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: ROUTES.mall },
-  { key: '02', tag: 'SIGN', title: '登录', desc: '密码 · 短信 · OAuth', url: ROUTES.login },
-  { key: '03', tag: 'PASS', title: '星际联邦通行证', desc: '公民编号与绑定方式', url: ROUTES.me },
-  { key: '04', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: ROUTES.about },
+  { key: '02', tag: 'PASS', title: '星际联邦通行证', desc: '登录 · 注册 · 公民编号', url: ROUTES.me },
+  { key: '03', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: ROUTES.about },
 ];
 
 const signedIn = computed(() => Boolean(session.user));
-const primaryUrl = computed(() => (signedIn.value ? ROUTES.me : ROUTES.register));
-const primaryLabel = computed(() => (signedIn.value ? '进入星际联邦通行证' : '创建账号'));
+const primaryUrl = computed(() => ROUTES.me);
 
 const statusText = computed(() =>
   online.value ? `联邦网络在线 · ${env.value} 环境` : '联邦网络离线 · 未连上 API',

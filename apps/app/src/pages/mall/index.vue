@@ -245,7 +245,7 @@ onShow(() => {
   height: 64rpx;
   padding: 0 22rpx;
   border: 1rpx solid $paper-3;
-  border-radius: $r-pill;
+  border-radius: $r-control;
   background: $shell;
 }
 
@@ -311,7 +311,7 @@ onShow(() => {
 .search-go {
   height: 72rpx;
   padding: 0 28rpx;
-  border-radius: $r-pill;
+  border-radius: $r-control;
   background: $ink;
   display: flex;
   align-items: center;

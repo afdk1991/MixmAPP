@@ -3,8 +3,7 @@
     <mx-bar />
     <view class="brand">
       <text class="brand-watermark mono">MixmAPP</text>
-      <view class="brand-mark mono">MX</view>
-      <text class="brand-name">{{ appName }}</text>
+      <mx-logo size="lg" tone="light" sub="MULTI-END IDENTITY" />
       <text class="brand-ver mono">v{{ version }} · {{ env }}</text>
       <text class="brand-lede">uni-app 单码多端 · 自动发号 · 全链路自动化</text>
       <view class="brand-tags">
@@ -69,6 +68,7 @@ import { onLoad } from '@dcloudio/uni-app';
 import { API_BASE, metaApi, ApiError } from '../../api/client';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
+import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
 const appName = ref('MixmAPP');
 const version = ref(APP_VERSION);
@@ -128,7 +128,7 @@ onLoad(async () => {
   padding: $sp-6 $sp-5 $sp-5;
   background:
     radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
-    linear-gradient(158deg, #08110f 0%, #0e2925 62%, #14453c 120%);
+    linear-gradient(158deg, #0b0f0e 0%, #152622 62%, #17322c 120%);
   border-radius: $r-shell;
 }
 
@@ -139,13 +139,13 @@ onLoad(async () => {
   font-size: 84rpx;
   line-height: 1;
   letter-spacing: 3rpx;
-  color: rgba(242, 245, 243, 0.06);
+  color: rgba(244, 244, 241, 0.06);
 }
 
 .brand-mark {
   width: 96rpx;
   height: 96rpx;
-  border: 1rpx solid rgba(242, 245, 243, 0.24);
+  border: 1rpx solid rgba(244, 244, 241, 0.24);
   border-radius: 22rpx;
   display: flex;
   align-items: center;
@@ -172,7 +172,7 @@ onLoad(async () => {
   margin-top: 10rpx;
   font-size: 22rpx;
   letter-spacing: 1rpx;
-  color: rgba(242, 245, 243, 0.62);
+  color: rgba(244, 244, 241, 0.62);
 }
 
 .brand-lede {
@@ -180,7 +180,7 @@ onLoad(async () => {
   margin-top: $sp-3;
   font-size: 26rpx;
   line-height: 1.7;
-  color: rgba(242, 245, 243, 0.66);
+  color: rgba(244, 244, 241, 0.66);
 }
 
 .brand-tags {

@@ -135,16 +135,16 @@
     <block v-else>
       <view class="guest-hero">
         <text class="eyebrow eyebrow--light">NO CREDENTIAL</text>
-        <text class="guest-title">尚未持有联邦通行证</text>
-        <text class="guest-lede">完成注册即可签发星际联邦通行证，并获得全局唯一的 MixmAPP 公民编号。</text>
+        <text class="guest-title">登录 / 领取联邦通行证</text>
+        <text class="guest-lede">登录已有通行证，或注册签发一张新的星际联邦通行证，并获得全局唯一的 MixmAPP 公民编号。</text>
       </view>
 
       <view class="guest-actions">
-        <view class="btn btn--deep btn--block" hover-class="is-press" @tap="go(ROUTES.register)">
-          <text class="btn-text">创建账号</text>
+        <view class="btn btn--deep btn--block" hover-class="is-press" @tap="go(ROUTES.login)">
+          <text class="btn-text">登录已有通行证</text>
         </view>
-        <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="go(ROUTES.login)">
-          <text class="btn-text btn-text--dark">已有账号，去登录</text>
+        <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="go(ROUTES.register)">
+          <text class="btn-text btn-text--dark">创建新的通行证</text>
         </view>
       </view>
 

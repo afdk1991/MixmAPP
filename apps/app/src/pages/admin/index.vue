@@ -158,7 +158,7 @@ onLoad(() => {
   padding: 1.25rem;
   background:
     radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
-    linear-gradient(158deg, #08110f 0%, #0e2925 62%, #14453c 120%);
+    linear-gradient(158deg, #0b0f0e 0%, #152622 62%, #17322c 120%);
   border-radius: 1.75rem;
 }
 
@@ -171,7 +171,7 @@ onLoad(() => {
   width: 2.75rem;
   height: 2.75rem;
   margin-right: 0.75rem;
-  border: 1px solid rgba(242, 245, 243, 0.24);
+  border: 1px solid rgba(244, 244, 241, 0.24);
   border-radius: 0.625rem;
   display: flex;
   align-items: center;
@@ -199,7 +199,7 @@ onLoad(() => {
   word-break: break-all;
   margin-top: 0.25rem;
   font-size: 0.625rem;
-  color: rgba(242, 245, 243, 0.6);
+  color: rgba(244, 244, 241, 0.6);
 }
 
 .block {
