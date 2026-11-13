@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>安装 MixmAPP</title>
+<style>
+  :root{
+    --ink:#0c1f1a; --ink2:#123027; --line:rgba(255,255,255,.14);
+    --paper:#f4f6f5; --card:#ffffff; --text:#16211e; --muted:#6b7a75;
+    --brand:#0f6b53; --brand2:#0a4b3b; --accent:#2ee6a8; --warn:#b4451f; --ok:#127a4b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.6 -apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--text);background:radial-gradient(1200px 600px at 15% -10%,#dff3ea,transparent),var(--paper)}
+  .wrap{max-width:980px;margin:0 auto;padding:36px 20px 64px}
+  header{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+  .badge{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;color:#fff;
+    background:linear-gradient(160deg,var(--brand),var(--brand2));font-weight:700;letter-spacing:.5px}
+  h1{font-size:22px;margin:0;letter-spacing:-.2px}
+  .sub{color:var(--muted);font-size:13px}
+  .steps{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px}
+  .chip{font-size:12px;padding:7px 12px;border-radius:999px;border:1px solid #d7e2de;background:#fff;color:var(--muted)}
+  .chip.on{border-color:var(--brand);background:var(--brand);color:#fff}
+  .chip.done{border-color:#bfe6d5;background:#e7f7ef;color:var(--ok)}
+  .card{background:var(--card);border:1px solid #e3ebe8;border-radius:18px;padding:26px;box-shadow:0 22px 50px -34px rgba(9,40,32,.5)}
+  .card + .card{margin-top:18px}
+  h2{font-size:17px;margin:0 0 4px}
+  .hint{color:var(--muted);font-size:13px;margin:0 0 18px}
+  label{display:block;font-size:13px;font-weight:600;margin:16px 0 6px}
+  input[type=text],input[type=password],input[type=email],input[type=number]{
+    width:100%;padding:11px 13px;border-radius:11px;border:1px solid #d7e2de;background:#fbfdfc;font-size:14px}
+  input:focus{outline:2px solid #a9dcc7;border-color:#7cc8aa}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.row{grid-template-columns:1fr}}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;padding:12px 20px;
+    background:linear-gradient(160deg,var(--brand),var(--brand2));color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+  .btn[disabled]{opacity:.55;cursor:not-allowed}
+  .btn.ghost{background:#fff;color:var(--brand);border:1px solid #cfe3d9}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px;align-items:center}
+  .checks{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+  .checks li{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:#f7faf9;border:1px solid #e8f0ec}
+  .dot{width:9px;height:9px;border-radius:50%;margin-top:7px;flex:0 0 auto}
+  .dot.ok{background:var(--ok)} .dot.bad{background:var(--warn)}
+  .fix{color:var(--muted);font-size:12px}
+  .log{font:12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--ink);color:#cfe9df;
+    border-radius:12px;padding:14px;max-height:280px;overflow:auto;white-space:pre-wrap}
+  .note{font-size:13px;color:var(--muted);background:#f3f8f6;border-left:3px solid #a9dcc7;padding:10px 12px;border-radius:8px}
+  .done{display:grid;gap:8px;font:13px/1.7 ui-monospace,Consolas,monospace;background:#0e2820;color:#d9f2e8;padding:16px;border-radius:12px;overflow:auto}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:#e7f7ef;color:var(--ok);margin-left:8px}
+  .foot{margin-top:26px;font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">MX</div>
+    <div>
+      <h1>安装 MixmAPP</h1>
+      <div class="sub">一次装好前端入口、后端 API、PostgreSQL 与 nginx —— 装完这个向导会自动关闭</div>
+    </div>
+  </header>
+
+  <div class="steps" id="chips"></div>
+
+  <section class="card" id="step-env">
+    <h2>1 · 环境检查</h2>
+    <p class="hint">确认这台机器满足最低要求；红项会被安装脚本自动补齐。</p>
+    <ul class="checks" id="checks"><li><span class="dot"></span><span>点“开始检测”…</span></li></ul>
+    <div class="actions"><button class="btn" id="btn-check">开始检测</button><button class="btn ghost" id="btn-next-config">下一步</button></div>
+  </section>
+
+  <section class="card" id="step-db" hidden>
+    <h2>2 · 数据库</h2>
+    <p class="hint">用本机 PostgreSQL（向导可代建库）或直接填腾讯云/Neon 的连接串。</p>
+    <div class="row">
+      <div>
+        <label>使用方式</label>
+        <input type="text" id="db-mode" value="本机 PostgreSQL" readonly />
+      </div>
+      <div>
+        <label>连接串</label>
+        <input type="text" id="db-url" placeholder="postgres://mixmapp:密码@127.0.0.1:5432/mixmapp" />
+      </div>
+    </div>
+    <div class="row">
+      <div><label>库名（本机模式）</label><input type="text" id="db-name" value="mixmapp" /></div>
+      <div><label>库用户</label><input type="text" id="db-user" value="mixmapp" /></div>
+    </div>
+    <label>库密码（本机模式，向导会用它建角色）</label>
+    <input type="password" id="db-pass" placeholder="至少 8 位，装完会写进 /etc/mixmapp/api.env" />
+    <div class="actions">
+      <button class="btn" id="btn-db-local">本机建库并测试</button>
+      <button class="btn ghost" id="btn-db-test">只测已有连接串</button>
+      <button class="btn ghost" id="btn-next-site">下一步</button>
+    </div>
+    <div class="actions"><div class="note" id="db-result" hidden></div></div>
+  </section>
+
+  <section class="card" id="step-site" hidden>
+    <h2>3 · 站点与账号</h2>
+    <p class="hint">域名要已解析到本机 IP；勾选 HTTPS 会调用 certbot（需要邮箱）。</p>
+    <div class="row">
+      <div><label>站点域名</label><input type="text" id="domain" placeholder="cloud.example.com" /></div>
+      <div><label>API 内部端口</label><input type="number" id="apiPort" value="8080" /></div>
+    </div>
+    <div class="row">
+      <div><label>第一个账号（用户名）</label><input type="text" id="adminUsername" placeholder="2-20 位，支持中文" /></div>
+      <div><label>密码</label><input type="password" id="adminPassword" placeholder="≥8 位且含字母" /></div>
+    </div>
+    <div class="row">
+      <div><label>证书邮箱（可选）</label><input type="email" id="adminEmail" placeholder="ops@example.com" /></div>
+      <div><label>自动 HTTPS</label><input type="text" id="httpsFlag" value="勾选＝签发证书" readonly /></div>
+    </div>
+    <label><input type="checkbox" id="https" /> 用 certbot 自动签发并强制跳转 HTTPS</label>
+    <div class="actions"><button class="btn" id="btn-start">开始安装</button></div>
+  </section>
+
+  <section class="card" id="step-run" hidden>
+    <h2>4 · 正在安装<span class="tag" id="run-tag">请勿关闭页面</span></h2>
+    <div class="log" id="run-log">准备中…</div>
+  </section>
+
+  <section class="card" id="step-done" hidden>
+    <h2>5 · 完成</h2>
+    <p class="hint">记下这些值：管理令牌用于 /mixmapp/api/v1/admin/*，配置文件在 /etc/mixmapp/api.env。</p>
+    <div class="done" id="done-body"></div>
+    <div class="actions"><a class="btn" id="open-site" href="#" target="_blank" rel="noopener">打开站点</a></div>
+  </section>
+
+  <div class="foot">
+    <span>MixmAPP Installer · 与 WordPress 同构的“装完即用”流程</span>
+    <span id="env-line"></span>
+  </div>
+</div>
+
+<script>
+const token = new URLSearchParams(location.search).get('token') || '';
+const H = { 'x-install-token': token, 'content-type': 'application/json' };
+const $ = (id) => document.getElementById(id);
+const CHIPS = [
+  ['env', '环境检查'], ['db', '数据库'], ['site', '站点与账号'], ['run', '安装'], ['done', '完成'],
+];
+let state = { dev: false };
+
+const show = (key) => {
+  for (const [k] of CHIPS) $(`step-${k}`).hidden = k !== key;
+  $('chips').innerHTML = CHIPS.map(([k, label], i) => {
+    const idx = CHIPS.findIndex(([x]) => x === key);
+    const cls = k === key ? 'on' : i < idx ? 'done' : '';
+    return `<span class="chip ${cls}">${i + 1} · ${label}</span>`;
+  }).join('');
+};
+const api = async (path, body) => {
+  const res = await fetch(path, { method: body ? 'POST' : 'GET', headers: H, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+  return data;
+};
+
+(async () => {
+  show('env');
+  try {
+    state = await api('/api/state');
+    $('env-line').textContent = `${state.platform} · node ${state.node}${state.dev ? ' · 预演模式' : ''}`;
+  } catch (e) {
+    alert(`无法连接安装器：${e.message}`);
+  }
+})();
+
+$('btn-check').onclick = async () => {
+  $('btn-check').disabled = true;
+  try {
+    const { checks } = await api('/api/env/check');
+    $('checks').innerHTML = checks.map((c) => `
+      <li><span class="dot ${c.ok ? 'ok' : 'bad'}"></span><div>
+        <strong>${c.name}</strong> — <span class="fix">${c.detail}</span>
+        ${c.ok ? '' : `<div class="fix">建议：${c.fix}</div>`}
+      </div></li>`).join('');
+  } catch (e) {
+    $('checks').innerHTML = `<li><span class="dot bad"></span><div>${e.message}</div></li>`;
+  } finally { $('btn-check').disabled = false; }
+};
+
+const result = (text, ok = true) => {
+  const box = $('db-result');
+  box.hidden = false;
+  box.textContent = text;
+  box.style.borderLeftColor = ok ? '#a9dcc7' : '#e2b7a3';
+};
+
+$('btn-db-local').onclick = async () => {
+  try {
+    const r = await api('/api/db/provision', { dbName: $('db-name').value, dbUser: $('db-user').value, dbPassword: $('db-pass').value });
+    if (!r.ok) return result(r.detail, false);
+    $('db-url').value = r.url;
+    const t = await api('/api/db/test', { url: r.url });
+    result(`${r.detail}；连通性：${t.ok ? 'OK' : '失败'} ${t.detail}`, t.ok);
+  } catch (e) { result(e.message, false); }
+};
+$('btn-db-test').onclick = async () => {
+  try {
+    const t = await api('/api/db/test', { url: $('db-url').value });
+    result(`${t.ok ? '连接成功' : '连接失败'}：${t.detail}`, t.ok);
+  } catch (e) { result(e.message, false); }
+};
+
+$('btn-next-config').onclick = () => show('db');
+$('btn-next-site').onclick = () => {
+  if (!$('db-url').value) return alert('先完成数据库连接测试');
+  show('site');
+};
+
+$('btn-start').onclick = async () => {
+  $('btn-start').disabled = true;
+  $('run-log').textContent = '';
+  show('run');
+  const body = {
+    domain: $('domain').value.trim(),
+    apiPort: Number($('apiPort').value),
+    https: $('https').checked,
+    adminEmail: $('adminEmail').value.trim(),
+    adminUsername: $('adminUsername').value.trim(),
+    adminPassword: $('adminPassword').value,
+    databaseUrl: $('db-url').value.trim(),
+  };
+  try {
+    const r = await api('/api/install', body);
+    $('run-log').textContent = r.log.map((l) => `[ok] ${l.title}`).join('\n');
+    $('done-body').textContent = Object.entries(r.summary).map(([k, v]) => `${k.padEnd(12)} ${v}`).join('\n');
+    $('open-site').href = `http://${r.summary.domain}/`;
+    $('run-tag').textContent = r.summary.preview ? '预演完成' : '已完成';
+    setTimeout(() => show('done'), 900);
+  } catch (e) {
+    $('run-log').textContent += `\n[错误] ${e.message}`;
+    $('run-tag').textContent = '安装中断';
+    $('btn-start').disabled = false;
+  }
+};
+</script>
+</body>
+</html>

@@ -96,12 +96,28 @@ MixmAPP/
 │  ├─ ids/                 # @mixmapp/ids：雪花 / ULID / UUIDv7 / Crockford MixmAPP 号码
 │  └─ contracts/           # @mixmapp/contracts：zod schema 与 DTO 契约
 ├─ infra/                  # SQL 迁移、Nginx、systemd
+├─ install/                # WordPress 式安装向导（server.mjs + ui.html）
 ├─ deploy/                 # 原子发布、回滚脚本
-├─ scripts/                # 门禁、健康检查、备份、静态发布、品牌素材、H5 预览
+├─ scripts/                # 门禁、健康检查、备份、静态发布、品牌素材、H5 预览、install.sh、打包安装器
 ├─ docs/                   # 架构、ID 与鉴权、第三方、CI/CD、运维手册、API 参考、免费平台取证
 ├─ .github/workflows/      # ci.yml / deploy.yml / android.yml / ops-nightly.yml
 └─ .gitee/pipeline.yml     # Gitee Go 流水线
 ```
+
+---
+
+## 一键安装（WordPress 式）
+
+新服务器上只需两步：`bash install.sh <安装包>`，然后在浏览器里点完 5 步（环境检查 → 数据库 → 站点与账号 → 安装 → 完成）。
+向导会自动写 `/etc/mixmapp/api.env`、建库迁移、起 systemd 服务、发 HTTPS、部署入口首页，装完自动失效。
+
+```bash
+node scripts/package-installer.mjs          # 产出 release/mixmapp-install-<ver>.tar.gz
+bash scripts/install.sh mixmapp-install-<ver>.tar.gz   # 服务器上（root）
+```
+
+原理、安全模型、腾讯云 CVM/轻量应用服务器落地步骤、镜像制作与验收清单见
+[`docs/17-wordpress-style-installer.md`](docs/17-wordpress-style-installer.md)。
 
 ---
 
