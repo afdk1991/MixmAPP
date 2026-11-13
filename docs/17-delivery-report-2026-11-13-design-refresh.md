@@ -71,16 +71,30 @@
 | `/pages/settings/about` | 品牌区 `mx-logo lg light`；服务端能力 13 项（githubOAuth=on 等）、运行环境、管理后台入口正常 |
 | `/pages/admin/index` | 数据库落点深场标题、管理令牌表单正常 |
 
-## 6. 部署
+## 6. 部署与线上取证（本轮真实结果）
 
-| 平台 | 动作 | 结果 |
-|---|---|---|
-| GitHub Pages | push 触发 `pages.yml` | 待本轮 CI 结论（见报告末尾追加） |
-| 腾讯云生产机 | push 触发 `deploy.yml`（API + H5 原子发布） | 待本轮 CI 结论 |
-| CloudBase 静态站 | 本地按 `MIXMAPP_H5_BASE=/` + 生产 API 重建后 `manageApps` 重发 | 待本轮结论 |
+提交：`93ff1a3`（品牌重设计），基线 `293df26`（品牌栏复用 MxLogo），已推送 `origin/main`。
 
-## 7. 未解与边界
+| 平台 | 动作 | 结论 | 线上取证 |
+|---|---|---|---|
+| GitHub CI | run 43441227527 | **success** | — |
+| Android | run 43441227402 | **success** | — |
+| GitHub Pages | run 43441227554 | **success** | 打开 `https://afdk1991.github.io/MixmAPP/`，顶栏为方框 MX + `MULTI-END IDENTITY`，Hero 石墨-青，链路显示 `OFFLINE`（截图 `docs/screenshots/pages-new-2026-11-13.png`） |
+| CloudBase | `manageApps(deployApp)` → `MixmAPP-011` / buildId `2612476691` | **SUCCESS** | 打开带 `?cb=` 的站点，版式与 Pages 完全一致（截图 `docs/screenshots/cloudbase-011-2026-11-13.png`） |
+| 腾讯云生产机 | `deploy.yml` run 43441227438（重跑一次同样失败） | **FAILURE** | SSH 阶段 `Permission denied (publickey,password)`，退出码 255，H5 与 API 均未更新 |
+
+构建产物：本地生产构建 363.9 KB / 372,653 B（API 指向 `https://cloud.mix.top/mixmapp/api/v1`，已确认无 `/MixmAPP/assets` 残留、CSS 与 JS 均已内联）。
+
+## 7. 两个线上红灯（如实记录，非本轮设计引入）
+
+1. **生产 API 不可达**：本机 `curl https://cloud.mix.top/mixmapp/api/v1/meta` 返回 `HTTP:000` + `schannel SEC_E_ILLEGAL_MESSAGE`（TLS 握手被拒）。根因仍是 `*.mix.top` 整组解析到 AWS Global Accelerator（`13.248.169.48` / `76.223.54.146`），与生产机 `127.0.0.1:8080` 上的真实 API 对不上。线上首页因此显示「联邦网络离线 · 未连上 API」，商城显示「没能取到商品 / request:fail」（截图 `docs/screenshots/pages-mall-offline-2026-11-13.png`）——这是真实失败，不是占位。
+2. **生产机 SSH 认证被拒**：13:56 的 `1a2e491` 部署还是绿灯，14:00 起连续失败，`deploy.yml` 本身未改动，判定为服务器侧 `authorized_keys` / 密钥对失配。该项需要服务器上的 SSH 权限才能修复，本机与沙箱都没有该机器钥匙。
+
+以上两项都不是改代码能绕过的，因此本轮**没有**声称生产机已上线新界面；Pages 与 CloudBase 两个公网入口已实际换成新视觉。
+
+## 8. 未解与边界
 
 - 国内访问 `cloud.mix.top` 仍受 `*.mix.top → AWS Global Accelerator` 影响（TLS alert 112），属 DNS 权属问题，仓库侧无法自解。
 - 四个第三方登录渠道的生产凭据仍需用户在平台侧创建；页面在未配置时如实显示「未启用」。
-- 部分页面深场仍保留旧绿色调（`#08110f` 家族）的渐变残留，已统一替换为石墨家族；若后续要做第二套主题（浅色/高对比），令牌层已可复用。
+- 生产机 SSH 失配需要在服务器侧恢复授权（把 `.github/workflows/deploy.yml` 使用的公钥重新加回 `authorized_keys`），恢复后重新跑一次 `deploy.yml` 即可让生产机与 Pages 同版。
+- 尚未处理的资产：`apps/app/src/static/splash.png` 仍是旧视觉，Android/iOS 启动图未随新图标重导出。
