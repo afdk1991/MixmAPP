@@ -111,7 +111,11 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    product.value = await mallApi.getProduct(productId.value);
+    const res = await mallApi.getProduct(productId.value);
+    // 离线/网关兜底会返回空值，缺 tags 时补空数组，避免模板读 tags.length 白屏
+    product.value = res && typeof res === 'object'
+      ? { ...res, tags: Array.isArray(res.tags) ? res.tags : [] }
+      : null;
   } catch (e) {
     error.value = e instanceof Error ? e.message : '商品加载失败';
   } finally {

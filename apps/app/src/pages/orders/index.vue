@@ -117,7 +117,8 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    orders.value = await mallApi.listOrders();
+    const list = await mallApi.listOrders();
+    orders.value = Array.isArray(list) ? list : [];
   } catch (e) {
     const message = e instanceof Error ? e.message : '订单加载失败';
     if (message.includes('登录')) {

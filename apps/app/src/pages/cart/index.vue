@@ -138,6 +138,17 @@ import { mallApi } from '../../api/client';
 import { ROUTES } from '../../routes';
 
 const cart = ref<CartDto>({ items: [], totalQuantity: 0, totalFen: 0 });
+
+/** 接口返回非 JSON（离线/网关兜底）时可能是 undefined，统一收敛成合法购物车，避免模板读 items 白屏。 */
+function normalizeCart(input: unknown): CartDto {
+  const raw = (input ?? {}) as Partial<CartDto>;
+  if (!Array.isArray(raw.items)) return { items: [], totalQuantity: 0, totalFen: 0 };
+  return {
+    items: raw.items,
+    totalQuantity: raw.totalQuantity ?? 0,
+    totalFen: raw.totalFen ?? 0,
+  };
+}
 const loading = ref(false);
 const error = ref('');
 const checkoutVisible = ref(false);
@@ -167,7 +178,7 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    cart.value = await mallApi.getCart();
+    cart.value = normalizeCart(await mallApi.getCart());
   } catch (e) {
     const message = e instanceof Error ? e.message : '购物车加载失败';
     if (message.includes('登录')) {
@@ -186,7 +197,7 @@ async function changeQty(productId: string, quantity: number): Promise<void> {
     return;
   }
   try {
-    cart.value = await mallApi.updateCart(productId, quantity);
+    cart.value = normalizeCart(await mallApi.updateCart(productId, quantity));
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '修改数量失败', icon: 'none' });
   }
@@ -194,7 +205,7 @@ async function changeQty(productId: string, quantity: number): Promise<void> {
 
 async function remove(productId: string): Promise<void> {
   try {
-    cart.value = await mallApi.removeCart(productId);
+    cart.value = normalizeCart(await mallApi.removeCart(productId));
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '删除失败', icon: 'none' });
   }
