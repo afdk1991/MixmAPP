@@ -19,7 +19,7 @@
           </view>
         </view>
 
-        <text class="pass-label mono">MixmAPP 公民编号 / CITIZEN NO.</text>
+        <text class="pass-label mono">星际联邦通行证公民编号 / CITIZEN NO.</text>
         <text class="pass-no mono">{{ user.accountNo }}</text>
         <text class="pass-id mono">数字 ID · {{ user.id }}</text>
 
@@ -61,7 +61,7 @@
         </view>
         <view class="row"><text class="k">昵称</text><text class="v">{{ user.nickname }}</text></view>
         <view class="row"><text class="k">用户名</text><text class="v">{{ user.username ?? '未设置' }}</text></view>
-        <view class="row"><text class="k">MixmAPP 公民编号</text><text class="v v--mono mono">{{ user.accountNo }}</text></view>
+        <view class="row"><text class="k">通行证公民编号</text><text class="v v--mono mono">{{ user.accountNo }}</text></view>
         <view class="row"><text class="k">手机号</text><text class="v mono">{{ user.phone ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">邮箱</text><text class="v">{{ user.email ?? '未绑定' }}</text></view>
         <view class="row"><text class="k">注册时间</text><text class="v mono">{{ createdText }}</text></view>
