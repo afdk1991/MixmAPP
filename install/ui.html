@@ -61,8 +61,6 @@
     </div>
   </header>
 
-  <div class="steps" id="chips"></div>
-
   <section class="card" id="step-env">
     <h2>环境检查</h2>
     <p class="hint">确认这台机器满足最低要求；红项会被安装脚本自动补齐。</p>
@@ -145,11 +143,6 @@ let state = { dev: false };
 
 const show = (key) => {
   for (const [k] of CHIPS) $(`step-${k}`).hidden = k !== key;
-  $('chips').innerHTML = CHIPS.map(([k, label], i) => {
-    const idx = CHIPS.findIndex(([x]) => x === key);
-    const cls = k === key ? 'on' : i < idx ? 'done' : '';
-    return `<span class="chip ${cls}">${label}</span>`;
-  }).join('');
 };
 const api = async (path, body) => {
   const res = await fetch(path, { method: body ? 'POST' : 'GET', headers: H, body: body ? JSON.stringify(body) : undefined });
