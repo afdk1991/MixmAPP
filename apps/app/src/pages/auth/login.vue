@@ -123,9 +123,10 @@
         >
           <text class="oauth-name">{{ p.name }}</text>
           <text v-if="providerEnabled(p.key)" class="oauth-arrow mono">↗</text>
-          <text v-else class="oauth-off mono">未启用</text>
+          <text v-else class="oauth-off mono">{{ metaFailed ? '不可用' : '未启用' }}</text>
         </view>
       </view>
+      <text v-if="metaFailed" class="oauth-note">登录服务暂不可达，渠道状态无法确认</text>
     </view>
 
     <text class="foot mono">MIXMAPP · SINGLE SIGN-ON</text>
@@ -136,6 +137,7 @@
 import { ref, onMounted } from 'vue';
 import { authApi, ApiError, metaApi, oauthStartUrl } from '../../api/client';
 import { applyAuth, loginByOAuth, loginByPassword, loginBySms } from '../../stores/session';
+import { ROUTES } from '../../routes';
 
 const mode = ref<'password' | 'sms' | 'onekey'>('password');
 const account = ref('');
@@ -159,6 +161,8 @@ const providers = [
 
 /** 服务端 /meta 的 thirdParty 开关；未取到时一律视为未启用，不做假跳转。 */
 const providerFlags = ref<Record<string, boolean>>({});
+/** /meta 拉取失败时置位：此时不能断言「未启用」，要如实提示状态未知。 */
+const metaFailed = ref(false);
 /** 授权回跳带回的 code / 错误 / 渠道，用于完成登录或提示。 */
 const oauthCode = ref('');
 const oauthProvider = ref('');
@@ -175,6 +179,7 @@ function providerLabel(key: string): string {
 async function loadProviders(): Promise<void> {
   try {
     const meta = await metaApi.get();
+    metaFailed.value = false;
     const third = meta.thirdParty ?? {};
     providerFlags.value = {
       github: third.githubOauth === 'on',
@@ -184,6 +189,7 @@ async function loadProviders(): Promise<void> {
     };
   } catch {
     providerFlags.value = {};
+    metaFailed.value = true;
   }
 }
 
@@ -206,7 +212,7 @@ onMounted(() => {
 });
 
 function goRegister(): void {
-  uni.redirectTo({ url: '/pages/auth/register' });
+  uni.redirectTo({ url: ROUTES.register });
 }
 
 async function sendCode(): Promise<void> {
@@ -251,7 +257,7 @@ async function submit(): Promise<void> {
               return data;
             });
     uni.showToast({ title: result.user.accountNo, icon: 'none' });
-    setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 600);
+    setTimeout(() => uni.redirectTo({ url: ROUTES.me }), 600);
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '登录失败，请稍后重试';
   } finally {
@@ -276,7 +282,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
       const result = await loginByOAuth(provider);
       await applyAuth(result);
       uni.showToast({ title: '登录成功', icon: 'success' });
-      setTimeout(() => uni.redirectTo({ url: '/pages/me/index' }), 600);
+      setTimeout(() => uni.redirectTo({ url: ROUTES.me }), 600);
     } catch (e) {
       uni.showToast({ title: e instanceof Error ? e.message : '第三方登录不可用', icon: 'none' });
     }
@@ -512,6 +518,13 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 .oauth-off {
   font-size: 20rpx;
   letter-spacing: 1rpx;
+  color: $ink-4;
+}
+
+.oauth-note {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
   color: $ink-4;
 }
 
