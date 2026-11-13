@@ -501,3 +501,26 @@ Edge 无头模式的 `--window-size=430,932` 会被钳制到约 492 CSS px 宽�
 **线上复验（Pages run 43433292684，commit 7d5f209）**：docs/screenshots/live-mall-back.png 为线上商城首屏，标题栏下即「‹ 首页」控件；首页→商城「返回」回首页、直开商城「首页」eLaunch 回首页，两条路径均在线上点通。
 
 **顺带记一笔**：本机 4173 端口被并行会话的 Mim 预览占用，`serve-h5` 起来后 `EADDRINUSE` 静默失败，打开的是别人的产物（页面标题「欢迎使用 Mim」、路由 `/marketplace`）。判断「构建产物是不是自己的」不要只看端口活着：先看产物 JS 里有没有本项目标识，再用 `H5_PORT=4199` 另起一份。
+## §17 收敛为「只用腾讯云服务器」单入口（2026-11-13）
+
+**决策**：暂停所有平台托管，唯一对外入口 = 腾讯云 CVM `115.159.159.11` + 域名 `cloud.mixm.top`。
+
+**做了什么**：
+1. `gh workflow disable` 关掉 `Pages`（GitHub Pages 部署）与 `Image`（ghcr 镜像推送）；保留 `ci`（测试）、`deploy`（服务器原子发布）、`Android`（原生壳构建）、`ops-nightly`（服务器探活）。
+2. `deploy.yml` 删掉 Cloudflare `static` job；H5 不再需要外部平台，改用 `MIXMAPP_API_BASE` 默认值 `/mixmapp/api/v1`，与 API 同域。
+3. `deploy/atomic-release.sh` 新增 `WEB_ARTIFACT`：H5 与 API 在同一个 release 目录内（`releases/<STAMP>/dist` 与 `releases/<STAMP>/web`），入口缺失即视为发布失败、不切 symlink，回滚沿用原来的「指回上一版」。
+4. nginx `cloud-mixmapp.conf` 重写为单站：
+   - `/` → `root /opt/mixmapp/current/web`，`try_files $uri $uri/ /index.html`（history 深链接可用）；
+   - `/mixmapp/` → `127.0.0.1:8080`（API 前缀剥掉）；
+   - 删掉「其余路径 proxy 到 8787」的旧行为——那是另一个项目（Mim）的进程，会让两个站串台。
+   旧配置已备份到 `/root/cloud-mixmapp.conf.bak-<时间戳>`，`nginx -t` 通过后 reload。
+
+**线上验证**（`deploy` run 43434486004，commit 6b4058f）：
+- `https://cloud.mixm.top/` → 200，472,024 字节，`text/html`；
+- `https://cloud.mixm.top/pages/mall/index`（history 深链接）→ 200，同一份 HTML；
+- `https://cloud.mixm.top/mixmapp/api/v1/healthz` → 200 `{"status":"ok",...}`，`dbTarget=cloudbase`；
+- CDP 390×844 真实点击：首页点「商城」→ `/pages/mall/index`，控件「返回」→ 回到 `/`；直开商城 → 控件「首页」→ `reLaunch` 回到 `/`。
+
+**截图**：`docs/screenshots/live-tx-home.png`（首页，右侧状态为 `ONLINE / production`，说明同域 API 已连通）、`live-tx-mall.png`（商城首屏，标题栏下即「‹ 首页」）。
+
+**仍留在外部平台的残留（未删，仅停用）**：GitHub Pages 站点、CloudBase 静态托管、ghcr 镜像。真要删除需再确认，避免误删仍在被引用的地址。

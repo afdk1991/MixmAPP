@@ -7,16 +7,16 @@
 |---|---|---|---|
 | GitHub 仓库 | 源码权威仓 | ✅ | <https://github.com/afdk1991/MixmAPP>（公开，`main` 分支；已在仓库里扫过，无密钥文件，只有 `.env.example`） |
 | Gitee 仓库（码云镜像） | 国内镜像 | ⏳ | 需 Gitee 账号的私人令牌；`.gitee/pipeline.yml` 已就绪 |
-| GitHub Pages | 静态端公网 | ✅ | **主仓直接托管**：<https://afdk1991.github.io/MixmAPP/>（`pages.yml` run 43194503748，HTTP 200，DOM 含 `data-page`） |
+| GitHub Pages | 静态端公网（已暂停 2026-11-13） | ⏸ 工作流 `pages.yml` 已 disable | 收敛单服务器前曾用主仓托管：<https://afdk1991.github.io/MixmAPP/>（`pages.yml` run 43194503748，HTTP 200，DOM 含 `data-page`） |
 | GitHub Packages（ghcr） | 镜像仓库 | ✅ | `ghcr.io/afdk1991/mixmapp:latest`（`image.yml` run 43194504120，镜像内真起容器跑迁移 + `/api/v1/readyz`） |
 | 腾讯云 EdgeOne Pages | 单文件静态托管 | ⏳ 受平台接口限制 | `deploy-html` 只接受**内联 HTML 正文**，本仓单文件产物 348 KB 需整段塞进调用参数，实际不可行；单文件产物本身已产出（`release/mixmapp-h5-single.html`），改由 CloudBase 静态托管上线 |
-| 腾讯云 CloudBase 静态托管 | H5 公网 | ✅ | 项目名 `MixmAPP`：<https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com>（HTTP 200，411,774 字节）；构建 `buildId 2612270861` 状态 `SUCCESS`，链路 `getUploadUrl → PUT zip → deployApp`。旧名 `mixmapp-h5` 应用已删除，旧域名返回 404 |
+| 腾讯云 CloudBase 静态托管 | H5 公网（已暂停 2026-11-13） | ⏸ 停用，H5 改由云服务器提供 | 收敛前曾上线，名 `MixmAPP` 项目名 `MixmAPP`：<https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com>（HTTP 200，411,774 字节）；构建 `buildId 2612270861` 状态 `SUCCESS`，链路 `getUploadUrl → PUT zip → deployApp`。旧名 `mixmapp-h5` 应用已删除，旧域名返回 404 |
 | Cloudflare Pages / Workers | 静态端 + Worker | ⏳ | 需 `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`；`deploy.yml` 对应 job 现为显式 SKIP |
 | Cloudflare `_worker.js` 同源入口 | 静态 + API 同源 | ⏳ | 同上；还需把 `/api/*` 反代到 API 源（`infra/nginx/mixmapp-api.conf` 可作蓝本） |
 | Vercel | 静态端 / Serverless | ⏳ | 需 `VERCEL_TOKEN`（及 `VERCEL_ORG_ID`/`PROJECT_ID`） |
 | Sealos | 容器化部署 API | ⏳ 镜像已就绪 | 直接拉 `ghcr.io/afdk1991/mixmapp:latest`；需 Sealos 账号或部署 token |
 | IGA Pages | 静态托管 | ⏳ | 需 `iga` CLI（≥1.1.0）+ 登录态或 AK/SK |
-| 腾讯云自建服务器（生产终点） | API + 静态 | ⏳ | 需 `DEPLOY_SSH_KEY`、`DEPLOY_HOST`、`DEPLOY_USER`；`deploy/atomic-release.sh` 与回滚脚本已就绪 |
+| 腾讯云自建服务器（**唯一生产入口**） | H5 + API 同域 | ✅ | <https://cloud.mixm.top/>（HTTP 200，472 KB，history 深链接 200）；API `https://cloud.mixm.top/mixmapp/api/v1/healthz` 200；`deploy` 工作流 run 43434486004，H5 与 API 同一 release 原子发布 |
 
 ## 平台命名规范（本轮统一）
 
