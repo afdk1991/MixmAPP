@@ -47,9 +47,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     bodyLimit: 2 * 1024 * 1024,
   });
 
-  // 本地上传通道：二进制请求体按 Buffer 收，单文件上限 25MB（与 nginx client_max_body_size 对齐）。
+  // 本地上传通道：任意非 JSON 请求体按 Buffer 收，单文件上限 25MB（与 nginx client_max_body_size 对齐）。
+  // 上传地址上的 content-type 由前端按文件类型给（image/png、text/plain 等），故用通配。
   app.addContentTypeParser(
-    'application/octet-stream',
+    '*',
     { parseAs: 'buffer', bodyLimit: 25 * 1024 * 1024 },
     (_request, body, done) => done(null, body),
   );
