@@ -30,7 +30,7 @@
             <text class="hl-line">一张通行证</text>
             <text class="hl-line hl-accent">通行所有星域</text>
           </view>
-          <text class="lede">Web · Android · iOS · 鸿蒙 —— 注册即签发星际联邦通行证，并分配全局唯一的 MixmAPP 公民编号</text>
+          <text class="lede">Web · Android · iOS · 鸿蒙 —— 注册即签发星际联邦通行证，并分配星际联邦通行证唯一的 MixmAPP 公民编号</text>
 
           <view class="stats">
             <view class="stat">
