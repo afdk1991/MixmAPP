@@ -48,11 +48,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build H5
-        run: pnpm --filter @mixmapp/app build:h5
+      - name: Build H5（注入壳内 API 源）
+        # 壳的 WebView 从 https://localhost 加载本地资源，必须把 API 绝对地址写进 HTML，
+        # 否则所有请求落到 https://localhost/api/v1（全站离线）。可用仓库变量覆盖。
+        env:
+          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || 'https://cloud.mixm.top/mixmapp/api/v1' }}
+        run: node scripts/build-h5.mjs
 
       - name: Sync Capacitor
         run: pnpm --filter @mixmapp/mobile exec cap sync android
+
+      - name: Check shell assets
+        run: node scripts/android-check-assets.mjs
 
       - uses: actions/setup-java@v4
         with:
