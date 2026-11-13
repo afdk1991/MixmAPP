@@ -906,6 +906,13 @@ onLoad(async () => {
   }
 }
 
+/* 窄屏水印会压到标题，直接收掉 */
+@media (max-width: 767px) {
+  .hero-watermark {
+    display: none;
+  }
+}
+
 /* ---------- 宽屏：把版心当作一张证件卡浮在深压背景上 ---------- */
 @media (min-width: 768px) {
   .page.home {
