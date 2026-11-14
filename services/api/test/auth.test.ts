@@ -514,3 +514,49 @@ describe('鉴权与发号器', () => {
     expect(entry.json().ready).toBe('/api/v1/readyz');
   });
 });
+
+describe('注册隐私同意', () => {
+  const consent = {
+    version: '2026-11-15',
+    acceptedAt: '2026-11-15T10:00:00.000Z',
+    channel: 'native' as const,
+    source: 'register:phone/android',
+  };
+
+  it('同意凭证随注册写入用户记录，版本/时间/通道/来源可审计', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const phone = '13800002222';
+    const code = await requestCode(app, phone, 'register');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/phone',
+      payload: { phone, code, privacyConsent: consent },
+    });
+    expect(res.statusCode).toBe(201);
+
+    const userId = res.json().data.user.id as string;
+    const stored = await ctx.store.users.findById(userId);
+    expect(stored?.privacyConsent).not.toBeNull();
+    expect(stored?.privacyConsent?.version).toBe(consent.version);
+    expect(stored?.privacyConsent?.channel).toBe('native');
+    expect(stored?.privacyConsent?.source).toBe(consent.source);
+    expect(stored?.privacyConsent?.acceptedAt.toISOString()).toBe(consent.acceptedAt);
+  });
+
+  it('未带同意凭证的注册仍可用（旧客户端兼容），记录为 null', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register/username',
+      payload: { username: 'noconsent', password: 'Passw0rd!2026' },
+    });
+    expect(res.statusCode).toBe(201);
+
+    const stored = await ctx.store.users.findById(res.json().data.user.id as string);
+    expect(stored?.privacyConsent).toBeNull();
+  });
+});

@@ -1,5 +1,5 @@
 import { IdFactory, type IdFactoryOptions } from '@mixmapp/ids';
-import type { AuthResult, UserDto, TokenPair } from '@mixmapp/contracts';
+import type { AuthResult, UserDto, TokenPair, PrivacyConsentInput } from '@mixmapp/contracts';
 import type { Config } from '../config.js';
 import type { Store, UserRecord } from '../db/types.js';
 import type { OAuthProvider, OAuthProviderName, OAuthProfile } from '../adapters/oauth.js';
@@ -127,6 +127,7 @@ export class AuthService {
     passwordHash?: string | null;
     nickname?: string;
     avatarUrl?: string | null;
+    privacyConsent?: PrivacyConsentInput;
   }): Promise<UserRecord> {
     const generated = this.ids.next();
     const now = new Date();
@@ -148,6 +149,14 @@ export class AuthService {
       email: input.email ?? null,
       passwordHash: input.passwordHash ?? null,
       status: 'active',
+      privacyConsent: input.privacyConsent
+        ? {
+            version: input.privacyConsent.version,
+            acceptedAt: new Date(input.privacyConsent.acceptedAt),
+            channel: input.privacyConsent.channel,
+            source: input.privacyConsent.source,
+          }
+        : null,
       createdAt: now,
       updatedAt: now,
     };
@@ -170,6 +179,7 @@ export class AuthService {
     phone: string;
     code: string;
     nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
   }): Promise<AuthResult> {
     const existing = await this.store.users.findByPhone(input.phone);
     if (existing) throw AppError.conflict('该手机号已注册，请直接登录');
@@ -177,6 +187,7 @@ export class AuthService {
     const user = await this.createUser({
       phone: input.phone,
       ...(input.nickname ? { nickname: input.nickname } : {}),
+      ...(input.privacyConsent ? { privacyConsent: input.privacyConsent } : {}),
     });
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }
@@ -185,6 +196,7 @@ export class AuthService {
     email: string;
     password: string;
     nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
   }): Promise<AuthResult> {
     const existing = await this.store.users.findByEmail(input.email);
     if (existing) throw AppError.conflict('该邮箱已注册，请直接登录');
@@ -192,6 +204,7 @@ export class AuthService {
       email: input.email.toLowerCase(),
       passwordHash: await hashPassword(input.password),
       ...(input.nickname ? { nickname: input.nickname } : {}),
+      ...(input.privacyConsent ? { privacyConsent: input.privacyConsent } : {}),
     });
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }
@@ -201,6 +214,7 @@ export class AuthService {
     username: string;
     password: string;
     nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
   }): Promise<AuthResult> {
     assertUsernameAllowed(input.username, this.config.usernameDenylist);
     const existing = await this.store.users.findByUsername(input.username);
@@ -209,12 +223,17 @@ export class AuthService {
       username: input.username,
       passwordHash: await hashPassword(input.password),
       ...(input.nickname ? { nickname: input.nickname } : {}),
+      ...(input.privacyConsent ? { privacyConsent: input.privacyConsent } : {}),
     });
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }
 
   /** 游客注册：同一设备复用同一账号，避免每次进 App 都新建一个号。 */
-  async registerGuest(input: { deviceId: string; nickname?: string }): Promise<AuthResult> {
+  async registerGuest(input: {
+    deviceId: string;
+    nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
+  }): Promise<AuthResult> {
     const deviceKey = sha256Hex(input.deviceId.trim());
     const binding = await this.store.bindings.findByProvider('guest', deviceKey);
     if (binding) {
@@ -230,6 +249,7 @@ export class AuthService {
     const user = await this.createUser({
       guest: true,
       ...(input.nickname ? { nickname: input.nickname } : {}),
+      ...(input.privacyConsent ? { privacyConsent: input.privacyConsent } : {}),
     });
     await this.store.bindings.insert({
       id: this.ids.next().id,
@@ -245,7 +265,11 @@ export class AuthService {
   }
 
   /** 一键登录：手机号已注册则登录，未注册则直接建号（等同免注册）。 */
-  async oneKeyLogin(input: { token: string; nickname?: string }): Promise<AuthResult> {
+  async oneKeyLogin(input: {
+    token: string;
+    nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
+  }): Promise<AuthResult> {
     const phone = await this.onekey.resolvePhone(input.token);
     const existing = await this.store.users.findByPhone(phone);
     if (existing) {
@@ -259,6 +283,7 @@ export class AuthService {
     const user = await this.createUser({
       phone,
       ...(input.nickname ? { nickname: input.nickname } : {}),
+      ...(input.privacyConsent ? { privacyConsent: input.privacyConsent } : {}),
     });
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }

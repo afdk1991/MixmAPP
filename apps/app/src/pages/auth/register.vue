@@ -152,6 +152,19 @@
         <text class="error-text">{{ error }}</text>
       </view>
 
+      <!-- 隐私同意：注册提交前必须勾选；未勾选点提交会被拦下并高亮 -->
+      <view class="consent" :class="{ 'consent--error': consentError }" @tap="toggleConsent">
+        <view class="consent-box" :class="{ 'consent-box--on': consent }">
+          <text v-if="consent" class="consent-tick mono">✓</text>
+        </view>
+        <view class="consent-text">
+          <text class="consent-line">我已阅读并同意</text>
+          <text class="consent-link" @tap.stop="openPrivacy">《隐私政策与权限说明》</text>
+          <text class="consent-line">（版本 {{ privacyVersion }}），授权按说明处理我的账号与设备信息。</text>
+        </view>
+      </view>
+      <text v-if="consentError" class="consent-hint">请先勾选同意《隐私政策与权限说明》后再注册</text>
+
       <view
         class="btn btn--deep btn--block submit"
         :class="{ 'btn--disabled': submitting }"
@@ -210,6 +223,11 @@ import { ref } from 'vue';
 import { authApi, ApiError } from '../../api/client';
 import { applyAuth, loginByOAuth } from '../../stores/session';
 import { ROUTES } from '../../routes';
+import {
+  PRIVACY_POLICY_VERSION,
+  buildPrivacyConsent,
+  recordPrivacyConsent,
+} from '../../privacy';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
 const mode = ref<'phone' | 'email' | 'username' | 'onekey'>('phone');
@@ -226,6 +244,33 @@ const submitting = ref(false);
 const sending = ref(false);
 const counting = ref(false);
 const countdown = ref(0);
+/** 隐私政策同意：默认不勾选，注册提交前必须由用户主动勾选。 */
+const consent = ref(false);
+const consentError = ref(false);
+const privacyVersion = PRIVACY_POLICY_VERSION;
+
+/** 同意来源：标明注册方式与端，随请求上报服务端落库。 */
+function consentSource(kind: string): string {
+  const native = Boolean((globalThis as { Capacitor?: any }).Capacitor?.isNativePlatform?.());
+  return `register:${kind}/${native ? 'android' : 'web'}`;
+}
+
+function toggleConsent(): void {
+  consent.value = !consent.value;
+  if (consent.value) consentError.value = false;
+}
+
+function openPrivacy(): void {
+  uni.navigateTo({ url: ROUTES.legalPrivacy });
+}
+
+/** 未勾选同意时拦下注册，并高亮勾选行。 */
+function requireConsent(): boolean {
+  if (consent.value) return true;
+  consentError.value = true;
+  toast('请先勾选同意隐私政策与权限说明');
+  return false;
+}
 
 const providers = [
   { key: 'github' as const, name: 'GitHub' },
@@ -282,8 +327,11 @@ async function sendCode(): Promise<void> {
 
 async function submit(): Promise<void> {
   if (submitting.value) return;
+  if (!requireConsent()) return;
   error.value = '';
   submitting.value = true;
+  const source = consentSource(mode.value);
+  const privacyConsent = buildPrivacyConsent(source);
   try {
     const data =
       mode.value === 'phone'
@@ -291,24 +339,30 @@ async function submit(): Promise<void> {
             phone: phone.value,
             code: code.value,
             ...(nickname.value ? { nickname: nickname.value } : {}),
+            privacyConsent,
           })
         : mode.value === 'email'
           ? await authApi.registerByEmail({
               email: email.value,
               password: password.value,
               ...(nickname.value ? { nickname: nickname.value } : {}),
+              privacyConsent,
             })
           : mode.value === 'username'
             ? await authApi.registerByUsername({
                 username: username.value,
                 password: password.value,
                 ...(nickname.value ? { nickname: nickname.value } : {}),
+                privacyConsent,
               })
             : await authApi.oneKey({
                 token: onekeyToken.value,
                 ...(nickname.value ? { nickname: nickname.value } : {}),
+                privacyConsent,
               });
     await applyAuth(data);
+    // 服务端已随请求落库；本地再记一份，保证离线冷启动也有记录
+    await recordPrivacyConsent(source);
     uni.showToast({
       title: data.isNewUser ? `注册成功 ${data.user.accountNo}` : `登录成功 ${data.user.accountNo}`,
       icon: 'none',
@@ -325,11 +379,17 @@ async function submit(): Promise<void> {
 /** 游客入口：不填任何资料，用设备号建号（同设备重复点会恢复原账号）。 */
 async function guestStart(): Promise<void> {
   if (submitting.value) return;
+  if (!requireConsent()) return;
   error.value = '';
   submitting.value = true;
+  const source = consentSource('guest');
   try {
-    const data = await authApi.registerGuest({ deviceId: getDeviceId() });
+    const data = await authApi.registerGuest({
+      deviceId: getDeviceId(),
+      privacyConsent: buildPrivacyConsent(source),
+    });
     await applyAuth(data);
+    await recordPrivacyConsent(source);
     uni.showToast({
       title: data.isNewUser ? `游客账号 ${data.user.accountNo}` : '已恢复游客账号',
       icon: 'none',
@@ -344,9 +404,11 @@ async function guestStart(): Promise<void> {
 }
 
 async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promise<void> {
+  if (!requireConsent()) return;
   try {
     const result = await loginByOAuth(provider);
     await applyAuth(result);
+    await recordPrivacyConsent(consentSource(`oauth-${provider}`));
     toast('登录成功', 'success');
     setTimeout(() => uni.switchTab({ url: ROUTES.me }), 600);
   } catch (e) {
@@ -515,6 +577,64 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   flex: 1;
   font-size: $fs-meta;
   line-height: 1.5;
+  color: $signal;
+}
+
+/* ---------- 隐私同意（注册前置条件） ---------- */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: $sp-2;
+  margin-top: $sp-4;
+  padding: $sp-3;
+  border: 1rpx solid $paper-3;
+  border-radius: 16rpx;
+  background: $paper-2;
+}
+
+.consent--error {
+  border-color: $signal;
+}
+
+.consent-box {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34rpx;
+  height: 34rpx;
+  margin-top: 2rpx;
+  border: 2rpx solid $ink-4;
+  border-radius: 8rpx;
+  background: $shell;
+}
+
+.consent-box--on {
+  border-color: $brand;
+  background: $brand;
+}
+
+.consent-tick {
+  font-size: 22rpx;
+  line-height: 1;
+  color: $shell;
+}
+
+.consent-text {
+  flex: 1;
+  font-size: $fs-micro;
+  line-height: 1.6;
+  color: $ink-3;
+}
+
+.consent-link {
+  color: $brand;
+}
+
+.consent-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: $fs-micro;
   color: $signal;
 }
 

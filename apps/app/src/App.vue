@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app';
 import { restore } from './stores/session';
-import { hasPrivacyConsent } from './privacy';
+import { PRIVACY_GATE_MODE, resolvePrivacyConsent } from './privacy';
 import { ROUTES } from './routes';
 
-onLaunch(() => {
+onLaunch(async () => {
   restore();
   // 记录一次冷启动，便于“关于”页展示运行环境
   const launch = uni.getSystemInfoSync();
@@ -13,8 +13,12 @@ onLaunch(() => {
     model: launch.model,
     at: new Date().toISOString(),
   });
-  // 首启门禁：未同意当前版本隐私政策时，先进同意页；同意后回首页。
-  if (!hasPrivacyConsent()) {
+  // 隐私门禁：默认在注册环节取得同意（privacy.ts 的 PRIVACY_GATE_MODE='register'），
+  // 启动直接进首页/通行证，不再弹窗。若商店审核要求首次运行即展示，
+  // 把开关改成 'launch' 即可恢复下面的启动拦截。
+  if (PRIVACY_GATE_MODE !== 'launch') return;
+  const consented = await resolvePrivacyConsent();
+  if (!consented) {
     uni.reLaunch({ url: `${ROUTES.legalPrivacy}?mode=gate` });
   }
 });

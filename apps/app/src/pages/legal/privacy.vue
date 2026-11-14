@@ -5,7 +5,7 @@
     <view class="head">
       <text class="eyebrow">PRIVACY &amp; PERMISSIONS</text>
       <text class="title">隐私政策与权限说明</text>
-      <text class="sub mono">版本 {{ policyVersion }} · 更新于 2026-11-14</text>
+      <text class="sub mono">版本 {{ policyVersion }} · 更新于 2026-11-15</text>
       <view class="rule" />
     </view>
 
@@ -51,7 +51,7 @@
 
     <view class="sec">
       <text class="sec-name">六、你的权利</text>
-      <text class="para">你可以在「我的」页查看与修改账号资料、退出登录；在系统设置中清除应用数据，等同于撤回同意并删除本地数据。运营方与反馈入口见「我的 → 关于与能力」。</text>
+      <text class="para">你可以在「星际联邦通行证」页查看与修改账号资料、退出登录；在系统设置中清除应用数据，等同于撤回同意并删除本地数据。运营方与反馈入口见「星际联邦通行证 → 关于与能力」。</text>
     </view>
 
     <view v-if="gate" class="gate-bar">
@@ -81,17 +81,34 @@ onLoad((options) => {
 });
 
 function agree(): void {
-  recordPrivacyConsent();
+  // 先落盘再跳转：WebView 写入是同步的，原生兜底异步进行，不阻塞离开本页。
+  // 仅当 privacy.ts 的 PRIVACY_GATE_MODE 为 'launch' 时才会走到这个启动门禁；
+  // 默认 'register' 下同意是在注册页勾选完成并随注册请求上报服务端。
+  void recordPrivacyConsent('launch:gate');
   uni.reLaunch({ url: ROUTES.home });
 }
 
 function decline(): void {
   uni.showModal({
     title: '尚未同意隐私政策',
-    content: '同意后才能使用 MixmAPP 的账号与商城功能。你可以先阅读本页全部内容，再决定是否同意。',
-    showCancel: false,
-    confirmText: '继续阅读',
+    content:
+      '不同意将无法使用账号、商城与订单功能；本页文字仍可继续阅读。你可以稍后重新点击「同意并继续」，或退出应用后再决定。',
+    cancelText: '继续阅读',
+    confirmText: '退出应用',
+    success: (res) => {
+      if (res.confirm) exitApp();
+    },
   });
+}
+
+/** 原生壳里通过自定义 scheme 退出；网页端提示关闭标签页即可。 */
+function exitApp(): void {
+  const capacitor = (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  if (capacitor && typeof capacitor.isNativePlatform === 'function' && capacitor.isNativePlatform()) {
+    window.location.href = 'mixmapp-action://exit';
+    return;
+  }
+  uni.showToast({ title: '可直接关闭当前页面', icon: 'none' });
 }
 </script>
 
