@@ -3,14 +3,12 @@ import {
   loginByPasswordSchema,
   loginBySmsSchema,
   oauthLoginSchema,
-  OAUTH_PROVIDER_KEYS,
   oneKeySchema,
   refreshTokenSchema,
   registerByEmailSchema,
   registerByPhoneSchema,
   registerByUsernameSchema,
   registerGuestSchema,
-  type OAuthProviderKey,
 } from '@mixmapp/contracts';
 import { z } from 'zod';
 import { parse } from '../lib/validate.js';
@@ -71,12 +69,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/auth/login/oauth', async (request) => {
     const body = parse(oauthLoginSchema, request.body);
-    if (!(OAUTH_PROVIDER_KEYS as readonly string[]).includes(body.provider)) {
+    // 内置渠道与注册表里的通用渠道都认：只要存在适配器或注册项就放行，实际可用性交给状态判定。
+    if (!app.oauth[body.provider] && !app.providers.get(body.provider)) {
       throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${body.provider}`);
     }
     return {
       data: await app.auth.loginByOAuth({
-        provider: body.provider as OAuthProviderKey,
+        provider: body.provider,
         code: body.code,
       }),
     };

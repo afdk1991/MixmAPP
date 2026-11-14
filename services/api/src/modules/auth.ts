@@ -2,7 +2,7 @@ import { IdFactory, type IdFactoryOptions } from '@mixmapp/ids';
 import type { AuthResult, UserDto, TokenPair, PrivacyConsentInput } from '@mixmapp/contracts';
 import type { Config } from '../config.js';
 import type { Store, UserRecord } from '../db/types.js';
-import type { OAuthProvider, OAuthProviderName, OAuthProfile } from '../adapters/oauth.js';
+import type { OAuthProvider, OAuthProfile } from '../adapters/oauth.js';
 import { oauthCallbackUrl } from '../adapters/oauth.js';
 import type { SmsProvider, SmsPurpose } from '../adapters/sms.js';
 import type { OneKeyProvider } from '../adapters/onekey.js';
@@ -22,7 +22,7 @@ export type AuthDeps = {
   config: Config;
   store: Store;
   sms: SmsProvider;
-  oauth: Record<OAuthProviderName, OAuthProvider>;
+  oauth: Record<string, OAuthProvider>;
   onekey: OneKeyProvider;
   ids?: IdFactory;
 };
@@ -43,7 +43,7 @@ export class AuthService {
   private readonly config: Config;
   private readonly store: Store;
   private readonly sms: SmsProvider;
-  private readonly oauth: Record<OAuthProviderName, OAuthProvider>;
+  private readonly oauth: Record<string, OAuthProvider>;
   private readonly onekey: OneKeyProvider;
   private readonly ids: IdFactory;
   private readonly merges: AccountMergeService;
@@ -320,7 +320,7 @@ export class AuthService {
   }
 
   /** 统一换票入口：回调地址与发起授权时完全一致，底层异常不向路由层泄漏。 */
-  private async exchangeProfile(provider: OAuthProviderName, code: string): Promise<OAuthProfile> {
+  private async exchangeProfile(provider: string, code: string): Promise<OAuthProfile> {
     const adapter = this.oauth[provider];
     if (!adapter?.enabled) throw new AppError('PROVIDER_DISABLED', `${provider} 登录未配置`);
     try {
@@ -342,7 +342,7 @@ export class AuthService {
   /** 把第三方身份挂到已有账号；并发撞唯一约束时回退为读取已存在的绑定。 */
   private async attachBinding(
     userId: string,
-    provider: OAuthProviderName,
+    provider: string,
     profile: OAuthProfile,
   ): Promise<void> {
     try {
@@ -372,7 +372,7 @@ export class AuthService {
    * 4. 都不命中 → 才新建账号。
    */
   async loginByOAuth(input: {
-    provider: OAuthProviderName;
+    provider: string;
     code: string;
   }): Promise<AuthResult> {
     const profile = await this.exchangeProfile(input.provider, input.code);
@@ -447,7 +447,7 @@ export class AuthService {
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }
 
-  async linkOAuth(userId: string, provider: OAuthProviderName, code: string): Promise<UserDto> {
+  async linkOAuth(userId: string, provider: string, code: string): Promise<UserDto> {
     const user = await this.store.users.findById(userId);
     if (!user) throw AppError.notFound();
     if (user.status !== 'active') throw new AppError('FORBIDDEN', '账号已被冻结');
@@ -497,7 +497,7 @@ export class AuthService {
   }
 
   /** 解绑第三方账号：至少保留一种可用于找回账号的登录方式。 */
-  async unlinkOAuth(userId: string, provider: OAuthProviderName): Promise<UserDto> {
+  async unlinkOAuth(userId: string, provider: string): Promise<UserDto> {
     const user = await this.store.users.findById(userId);
     if (!user) throw AppError.notFound();
     const bindings = await this.store.bindings.listByUser(userId);

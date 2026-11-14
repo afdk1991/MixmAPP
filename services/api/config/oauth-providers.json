@@ -34,26 +34,26 @@
       "name": "微信·小程序登录",
       "category": "国内社交",
       "group": "B",
-      "adapter": "pending",
+      "adapter": "wechat_mini",
       "platforms": ["miniapp"],
       "priority": "later",
       "qualification": "企业（微信认证，类目匹配）",
-      "credentials": [],
+      "credentials": ["OAUTH_WECHAT_MINI_APP_ID", "OAUTH_WECHAT_MINI_APP_SECRET"],
       "callbackPath": "/auth/oauth/wechat_mini/callback",
-      "unavailableReason": "需小程序端 uni.login + 服务端 jscode2session，专用适配器未实现"
+      "note": "需小程序端 uni.login() 取 code；服务端 jscode2session 换 openid/unionid，union_id 与公众号/网站应用共用合并逻辑"
     },
     {
       "key": "wechat_app",
       "name": "微信·移动应用 SDK",
       "category": "国内社交",
       "group": "B",
-      "adapter": "pending",
+      "adapter": "wechat_app",
       "platforms": ["android", "ios"],
       "priority": "later",
       "qualification": "企业（开放平台移动应用 + 包名/签名指纹）",
-      "credentials": [],
+      "credentials": ["OAUTH_WECHAT_MOBILE_APP_ID", "OAUTH_WECHAT_MOBILE_APP_SECRET"],
       "callbackPath": "/auth/oauth/wechat_app/callback",
-      "unavailableReason": "需端侧 SDK、包名与签名指纹、iOS Universal Link，服务端无法单独完成"
+      "note": "端侧 SDK 取 code，服务端换 token；包名、签名指纹、iOS Universal Link 需在开放平台登记（渠道侧配置，不走服务端环境变量）"
     },
     {
       "key": "qq",
@@ -219,13 +219,13 @@
       "name": "华为账号",
       "category": "手机厂商",
       "group": "B",
-      "adapter": "pending",
+      "adapter": "huawei",
       "platforms": ["harmony", "android"],
       "priority": "later",
       "qualification": "企业开发者（华为 AGC）",
       "credentials": ["OAUTH_HUAWEI_CLIENT_ID", "OAUTH_HUAWEI_CLIENT_SECRET"],
       "callbackPath": "/auth/oauth/huawei/callback",
-      "unavailableReason": "需 AGC 应用与端侧 SDK，专用适配器未实现"
+      "note": "AGC 开启 Account Kit；服务端用 userinfo 校验 token，按 union_id 优先、手机号其次合并"
     },
     {
       "key": "xiaomi",
@@ -368,13 +368,13 @@
       "name": "飞书",
       "category": "办公",
       "group": "B",
-      "adapter": "pending",
+      "adapter": "feishu",
       "platforms": ["web", "android", "ios"],
       "priority": "later",
       "qualification": "企业（自建应用需认证 + 重定向白名单）",
       "credentials": ["OAUTH_FEISHU_APP_ID", "OAUTH_FEISHU_APP_SECRET"],
       "callbackPath": "/auth/oauth/feishu/callback",
-      "unavailableReason": "飞书 token 接口为 JSON + 嵌套 user_info，专用适配器未实现"
+      "note": "token 接口为 JSON（非表单），user_info 结果嵌套在 data.* 里，单独解包"
     },
     {
       "key": "welink",
@@ -589,13 +589,26 @@
       "name": "X / Twitter",
       "category": "国际社交",
       "group": "A",
-      "adapter": "pending",
+      "adapter": "generic",
       "platforms": ["web"],
       "priority": "skip",
       "qualification": "个人",
       "credentials": ["OAUTH_X_CLIENT_ID", "OAUTH_X_CLIENT_SECRET"],
       "callbackPath": "/auth/oauth/x_twitter/callback",
-      "unavailableReason": "OAuth2 强制 PKCE，通用适配器暂不支持（不做半实现伪装成可用）"
+      "note": "OAuth2 强制 PKCE（S256），通用适配器已带 code_verifier/code_challenge 与 state 校验",
+      "generic": {
+        "pkce": true,
+        "authorizeUrl": "https://twitter.com/i/oauth2/authorize",
+        "tokenUrl": "https://api.twitter.com/2/oauth2/token",
+        "userinfoUrl": "https://api.twitter.com/2/users/me?user.fields=profile_image_url",
+        "scope": "tweet.read users.read",
+        "tokenAuth": "basic",
+        "fieldMap": {
+          "openId": "data.id",
+          "nickname": "data.name",
+          "avatarUrl": "data.profile_image_url"
+        }
+      }
     },
     {
       "key": "instagram",

@@ -64,6 +64,22 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return { data: await app.auth.rollbackMerge(params.id) };
   });
 
+  // ===== 第三方登录渠道注册表 =====
+  /** 全量 92 条渠道：状态、缺失配置、不可用原因、运行时开关都在这里看。 */
+  app.get('/admin/oauth/providers', async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    return { data: { summary: app.providers.summary(), providers: app.providers.states() } };
+  });
+
+  /** 单独启停某个渠道：热生效（下一次请求即按新开关判定），C 类不可开启。 */
+  app.patch('/admin/oauth/providers/:key', async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    const params = request.params as { key: string };
+    const body = (request.body ?? {}) as { enabled?: unknown };
+    if (typeof body.enabled !== 'boolean') throw AppError.validation('enabled 必须是布尔值');
+    return { data: app.providers.setEnabled(params.key, body.enabled) };
+  });
+
   app.post('/admin/orders/sweep', async (request) => {
     await guard(request as unknown as { headers: Record<string, unknown> });
     const cancelled = await app.mall.sweepExpiredOrders(app.cfg.orderTtlMinutes);

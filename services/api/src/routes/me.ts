@@ -4,10 +4,8 @@ import {
   bindPhoneSchema,
   bindUsernameSchema,
   oauthLoginSchema,
-  OAUTH_PROVIDER_KEYS,
   pushTokenSchema,
   updateProfileSchema,
-  type OAuthProviderKey,
 } from '@mixmapp/contracts';
 import { IdFactory } from '@mixmapp/ids';
 import { parse } from '../lib/validate.js';
@@ -46,15 +44,12 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/me/bind/oauth', { preHandler: app.requireAuth }, async (request) => {
     const body = parse(oauthLoginSchema, request.body);
-    if (!(OAUTH_PROVIDER_KEYS as readonly string[]).includes(body.provider)) {
+    // 渠道是否存在、是否可用由服务端注册表判定；这里不再维护第二份白名单。
+    if (!app.providers.get(body.provider)) {
       throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${body.provider}`);
     }
     return {
-      data: await app.auth.linkOAuth(
-        request.userId as string,
-        body.provider as OAuthProviderKey,
-        body.code,
-      ),
+      data: await app.auth.linkOAuth(request.userId as string, body.provider, body.code),
     };
   });
 
@@ -62,15 +57,14 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     '/me/bind/oauth/:provider',
     { preHandler: app.requireAuth },
     async (request) => {
+      // 解绑按已存在的绑定关系处理：注册表渠道标识同样是普通字符串，
+      // 不因某渠道后来被停用就解绑不了历史绑定。
       const provider = request.params.provider;
-      if (!(OAUTH_PROVIDER_KEYS as readonly string[]).includes(provider)) {
+      if (!/^[a-z][a-z0-9_]{0,63}$/.test(provider)) {
         throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${provider}`);
       }
       return {
-        data: await app.auth.unlinkOAuth(
-          request.userId as string,
-          provider as OAuthProviderKey,
-        ),
+        data: await app.auth.unlinkOAuth(request.userId as string, provider),
       };
     },
   );

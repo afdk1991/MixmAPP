@@ -3,6 +3,7 @@ import { loadConfig } from '../src/config.js';
 import { MemoryStore } from '../src/db/memory.js';
 import type { OAuthProvider, OAuthProfile, OAuthProviderName } from '../src/adapters/oauth.js';
 import type { OneKeyProvider } from '../src/adapters/onekey.js';
+import type { ProviderRegistry } from '../src/modules/provider-registry.js';
 
 process.env['NODE_ENV'] = 'test';
 process.env['JWT_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
@@ -40,6 +41,7 @@ export async function makeApp(
   options: {
     oauth?: Partial<Record<OAuthProviderName, OAuthProvider>>;
     onekey?: OneKeyProvider;
+    providerRegistry?: ProviderRegistry;
   } = {},
 ) {
   const store = new MemoryStore();
@@ -55,6 +57,7 @@ export async function makeApp(
     store,
     oauth,
     ...(options.onekey ? { onekey: options.onekey } : {}),
+    ...(options.providerRegistry ? { providerRegistry: options.providerRegistry } : {}),
     logger: false,
   });
   return { app, store };

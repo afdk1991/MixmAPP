@@ -23,6 +23,7 @@ declare module 'fastify' {
     dbSwitcher?: import('../db/switchable.js').StoreSwitcher;
     sms: import('../adapters/sms.js').SmsProvider;
     oauth: Record<string, import('../adapters/oauth.js').OAuthProvider>;
+    providers: import('../modules/provider-registry.js').ProviderRegistry;
     onekey: import('../adapters/onekey.js').OneKeyProvider;
     auth: import('../modules/auth.js').AuthService;
     pay: import('../modules/pay.js').PayService;

@@ -208,8 +208,10 @@ function makeOAuthProvider(
   clientSecret: string,
   defaultScope: string,
   extra: Record<string, string> = {},
+  /** 凭证环境变量前缀；默认 OAUTH_<KEY>，个别渠道（微信移动应用）需要独立命名避免与网站应用撞车 */
+  envPrefix?: string,
 ): OAuthProviderConfig {
-  const prefix = `OAUTH_${key.toUpperCase()}`;
+  const prefix = envPrefix ?? `OAUTH_${key.toUpperCase()}`;
   const overrideRaw = str(`${prefix}_ENABLED`);
   const override =
     overrideRaw === '' ? undefined : overrideRaw === '1' || overrideRaw === 'true' || overrideRaw === 'yes';
@@ -233,10 +235,11 @@ function buildOAuthProviders(env: Config['env']): Record<OAuthProviderKey, OAuth
     'snsapi_login',
     { mode: 'qr' },
   );
+  // 公众号与开放平台扫码登录是两套应用，凭证必须分开，避免一方开通把另一方误判为可用。
   const wechatMp = makeOAuthProvider(
     'wechat_mp',
-    str('OAUTH_WECHAT_APP_ID'),
-    str('OAUTH_WECHAT_APP_SECRET'),
+    str('OAUTH_WECHAT_MP_APP_ID'),
+    str('OAUTH_WECHAT_MP_APP_SECRET'),
     'snsapi_userinfo',
     { mode: 'mp' },
   );
@@ -252,6 +255,34 @@ function buildOAuthProviders(env: Config['env']): Record<OAuthProviderKey, OAuth
 
   providers.wechat = wechat;
   providers.wechat_mp = wechatMp;
+  // 小程序与公众号/网站应用是三套独立应用，凭证必须分开；union_id 归属开放平台账号，可共用合并逻辑。
+  providers.wechat_mini = makeOAuthProvider(
+    'wechat_mini',
+    str('OAUTH_WECHAT_MINI_APP_ID'),
+    str('OAUTH_WECHAT_MINI_APP_SECRET'),
+    '',
+  );
+  // 微信移动应用 SDK 走开放平台的移动应用 AppID，与网站应用扫码登录不是同一个应用。
+  providers.wechat_app = makeOAuthProvider(
+    'wechat_app',
+    str('OAUTH_WECHAT_MOBILE_APP_ID'),
+    str('OAUTH_WECHAT_MOBILE_APP_SECRET'),
+    '',
+    {},
+    'OAUTH_WECHAT_MOBILE_APP',
+  );
+  providers.huawei = makeOAuthProvider(
+    'huawei',
+    str('OAUTH_HUAWEI_CLIENT_ID'),
+    str('OAUTH_HUAWEI_CLIENT_SECRET'),
+    'openid profile',
+  );
+  providers.feishu = makeOAuthProvider(
+    'feishu',
+    str('OAUTH_FEISHU_APP_ID'),
+    str('OAUTH_FEISHU_APP_SECRET'),
+    '',
+  );
   providers.qq = makeOAuthProvider('qq', str('OAUTH_QQ_APP_ID'), str('OAUTH_QQ_APP_KEY'), 'get_user_info');
   providers.weibo = makeOAuthProvider(
     'weibo',

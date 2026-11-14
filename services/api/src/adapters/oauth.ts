@@ -20,7 +20,8 @@ export type OAuthProfile = {
 };
 
 export type OAuthProvider = {
-  readonly name: OAuthProviderName;
+  /** 内置渠道是 OAuthProviderName，注册表渠道是任意 key，故统一为 string。 */
+  readonly name: string;
   readonly enabled: boolean;
   /** 客户端跳转型渠道（Apple）没有服务端授权页，返回 null 由前端走原生 SDK。 */
   authorizeUrl?(redirectUri: string, state: string): string | null;
@@ -38,6 +39,10 @@ export type OAuthProviderMeta = {
 export const OAUTH_PROVIDER_META: Record<OAuthProviderName, OAuthProviderMeta> = {
   wechat: { label: '微信扫码', region: 'cn', requiresCredentials: true },
   wechat_mp: { label: '微信公众号', region: 'cn', requiresCredentials: true },
+  wechat_mini: { label: '微信小程序', region: 'cn', requiresCredentials: true },
+  wechat_app: { label: '微信移动应用', region: 'cn', requiresCredentials: true },
+  huawei: { label: '华为账号', region: 'cn', requiresCredentials: true },
+  feishu: { label: '飞书', region: 'cn', requiresCredentials: true },
   qq: { label: 'QQ', region: 'cn', requiresCredentials: true },
   weibo: { label: '微博', region: 'cn', requiresCredentials: true },
   alipay: { label: '支付宝', region: 'cn', requiresCredentials: true },
@@ -183,6 +188,151 @@ const wechatMpImpl: Impl = {
       state,
     }) + '#wechat_redirect',
   exchange: wechatImpl.exchange,
+};
+
+/**
+ * 微信小程序：端侧 uni.login() 拿到 code，服务端用 jscode2session 换 openid/unionid。
+ * 不参与 H5 跳转，authorize 返回空串；session_key 只用于端侧解密，不落库、不外传。
+ */
+const wechatMiniImpl: Impl = {
+  authorize: () => '',
+  exchange: async (config, code, _redirectUri, http) => {
+    const body = await expectOk(
+      await http(
+        withQuery('https://api.weixin.qq.com/sns/jscode2session', {
+          appid: config.clientId,
+          secret: config.clientSecret,
+          js_code: code,
+          grant_type: 'authorization_code',
+        }),
+      ),
+      '微信小程序',
+    );
+    // 微信即便出错也返回 HTTP 200，真实错误码在 body.errcode 里。
+    const errcode = pick(body, 'errcode');
+    if (errcode) throw new AppError('PROVIDER_ERROR', `微信小程序登录失败（errcode ${errcode}）`);
+    const openId = pick(body, 'openid');
+    if (!openId) throw new AppError('PROVIDER_ERROR', '微信小程序未返回 openid');
+    return asProfile({
+      label: '微信小程序',
+      openId,
+      // 小程序绑定到开放平台后才会返回 unionid，与公众号/网站应用共用同一套合并逻辑。
+      unionId: pick(body, 'unionid') || null,
+      nickname: '',
+    });
+  },
+};
+
+/**
+ * 微信移动应用 SDK：端侧拉起授权后回传 code，服务端换 token 的接口与网站扫码一致。
+ * 包名 / 签名指纹 / iOS Universal Link 属于开放平台渠道侧配置，由环境变量之外的渠道后台维护，
+ * 未在开放平台登记对应信息时微信会直接拒绝换 token（errcode 40163/40029 等）。
+ */
+const wechatAppImpl: Impl = {
+  authorize: () => '',
+  exchange: wechatImpl.exchange,
+};
+
+/** 华为账号（AGC Account Kit）：授权码换 token 后，用 userinfo 做服务端校验。 */
+const huaweiImpl: Impl = {
+  authorize: (config, redirectUri, state) =>
+    withQuery('https://oauth-login.cloud.huawei.com/oauth2/v3/authorize', {
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: config.scope || 'openid profile',
+      state,
+      access_type: 'offline',
+    }),
+  exchange: async (config, code, redirectUri, http) => {
+    const token = await expectOk(
+      await http('https://oauth-login.cloud.huawei.com/oauth2/v3/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+        body: form({
+          grant_type: 'authorization_code',
+          code,
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          redirect_uri: redirectUri,
+        }),
+      }),
+      '华为账号',
+    );
+    const accessToken = pick(token, 'access_token');
+    if (!accessToken) throw new AppError('PROVIDER_ERROR', '华为账号未返回 access_token');
+    // 以 userinfo 的成功响应作为服务端令牌校验，不直接信任端侧回传的身份信息。
+    const info = await expectOk(
+      await http('https://oauth-login.cloud.huawei.com/oauth2/v3/userinfo', {
+        headers: bearer(accessToken),
+      }),
+      '华为账号',
+    );
+    const openId = pick(info, 'openid') || pick(info, 'sub');
+    if (!openId) throw new AppError('PROVIDER_ERROR', '华为账号未返回用户标识');
+    const phone = pick(info, 'phone_number');
+    const phoneVerified = info.phone_number_verified === true || info.phone_number_verified === 'true';
+    return {
+      ...asProfile({
+        label: '华为账号',
+        openId,
+        // 同一华为账号在多个应用下 openid 不同，必须靠 unionid 归并。
+        unionId: pick(info, 'unionid') || pick(info, 'union_id') || null,
+        nickname: pick(info, 'nickname') || pick(info, 'display_name'),
+        avatarUrl: pick(info, 'picture') || pick(info, 'headimgurl') || null,
+      }),
+      ...(phone && phoneVerified ? { phone, phoneVerified: true } : {}),
+    };
+  },
+};
+
+/** 飞书：token 接口是纯 JSON（不是表单），用户信息还嵌在 data.* 里，需要单独解包。 */
+const feishuImpl: Impl = {
+  authorize: (config, redirectUri, state) =>
+    withQuery('https://open.feishu.cn/open-apis/authen/v1/authorize', {
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      state,
+    }),
+  exchange: async (config, code, redirectUri, http) => {
+    const tokenRaw = await expectOk(
+      await http('https://open.feishu.cn/open-apis/authen/v2/oauth/token', {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          code,
+          redirect_uri: redirectUri,
+        }),
+      }),
+      '飞书',
+    );
+    // v1 oidc 接口把结果包在 data 里，v2 是扁平的；两种都兼容，避免渠道升级后直接失败。
+    const token = (tokenRaw.data ?? tokenRaw) as Record<string, any>;
+    const failCode = pick(tokenRaw, 'code');
+    if (failCode && failCode !== '0') throw new AppError('PROVIDER_ERROR', `飞书返回错误码 ${failCode}`);
+    const accessToken = pick(token, 'access_token');
+    if (!accessToken) throw new AppError('PROVIDER_ERROR', '飞书未返回 access_token');
+    const infoRaw = await expectOk(
+      await http('https://open.feishu.cn/open-apis/authen/v1/user_info', {
+        headers: bearer(accessToken),
+      }),
+      '飞书',
+    );
+    const infoFail = pick(infoRaw, 'code');
+    if (infoFail && infoFail !== '0') throw new AppError('PROVIDER_ERROR', `飞书用户信息返回错误码 ${infoFail}`);
+    const info = (infoRaw.data ?? infoRaw) as Record<string, any>;
+    return asProfile({
+      label: '飞书',
+      openId: pick(info, 'open_id'),
+      unionId: pick(info, 'union_id') || null,
+      nickname: pick(info, 'name') || pick(info, 'en_name'),
+      avatarUrl: pick(info, 'avatar_url') || pick(info, 'avatar_big') || null,
+    });
+  },
 };
 
 const qqImpl: Impl = {
@@ -868,6 +1018,10 @@ const mockImpl: Impl = {
 const IMPLS: Record<OAuthProviderName, Impl> = {
   wechat: wechatImpl,
   wechat_mp: wechatMpImpl,
+  wechat_mini: wechatMiniImpl,
+  wechat_app: wechatAppImpl,
+  huawei: huaweiImpl,
+  feishu: feishuImpl,
   qq: qqImpl,
   weibo: weiboImpl,
   alipay: alipayImpl,
@@ -922,11 +1076,16 @@ class ConfiguredOAuthProvider implements OAuthProvider {
   }
 }
 
-/** 回调地址：优先渠道自定义，否则按 PUBLIC_BASE_URL 拼装；发起与换 token 必须完全一致。 */
-export function oauthCallbackUrl(config: Config, provider: OAuthProviderName): string {
-  const configured = config.oauth.providers[provider]?.redirectUri?.trim();
+/**
+ * 回调地址：优先渠道自定义 redirectUri，其次注册表 callbackPath，最后按默认路径拼装。
+ * 发起授权与换 token 必须使用完全一致的地址，否则渠道会判定 redirect_uri 不匹配。
+ */
+export function oauthCallbackUrl(config: Config, provider: string, callbackPath = ''): string {
+  const providers = config.oauth.providers as unknown as Record<string, OAuthProviderConfig | undefined>;
+  const configured = providers[provider]?.redirectUri?.trim();
   if (configured) return configured;
   const base = config.publicBaseUrl.replace(/\/+$/, '');
+  if (callbackPath) return `${base}/api/v1${callbackPath.startsWith('/') ? '' : '/'}${callbackPath}`;
   return `${base}/api/v1/auth/oauth/${provider}/callback`;
 }
 

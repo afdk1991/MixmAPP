@@ -1,11 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { OAUTH_PROVIDER_KEYS, type OAuthProviderKey } from '@mixmapp/contracts';
 import { AppError } from '../lib/errors.js';
-import { OAUTH_PROVIDER_META, oauthCallbackUrl } from '../adapters/oauth.js';
-
-const isProvider = (value: string): value is OAuthProviderKey =>
-  (OAUTH_PROVIDER_KEYS as readonly string[]).includes(value);
+import { oauthCallbackUrl } from '../adapters/oauth.js';
+import { bindPkceCode } from '../adapters/oauth-generic.js';
 
 /**
  * 只允许 http/https 且命中白名单的回跳地址，避免被当成开放重定向利用。
@@ -37,22 +34,35 @@ function safeRedirect(app: FastifyInstance, raw: unknown, fallback: string): str
 
 export async function oauthRoutes(app: FastifyInstance): Promise<void> {
   /**
-   * 登录页入口清单：只返回已配置的渠道，未启用的渠道完全不下发，
-   * 前端因此不会渲染「点了必报错」的按钮。
+   * 登录页入口清单：只返回注册表里真正可用（凭证齐 + 开关开）的渠道，
+   * 未配置/已停用/平台不具备条件的渠道完全不下发，前端不会渲染点了必报错的按钮。
    */
-  app.get('/auth/oauth/providers', async () => ({
-    data: {
-      providers: OAUTH_PROVIDER_KEYS.filter((key) => app.oauth[key]?.enabled).map((key) => ({
-        key,
-        label: OAUTH_PROVIDER_META[key].label,
-        region: OAUTH_PROVIDER_META[key].region,
-        /** false 表示该渠道需要端侧 SDK 拿 code，H5 不提供跳转入口 */
-        h5: Boolean(app.oauth[key]?.authorizeUrl),
-        requiresCredentials: OAUTH_PROVIDER_META[key].requiresCredentials,
-      })),
-      onekey: { enabled: app.onekey.enabled },
-    },
-  }));
+  app.get('/auth/oauth/providers', async () => {
+    const states = new Map(app.providers.states().map((state) => [state.key, state]));
+    return {
+      data: {
+        // 以实际装配的适配器为准：注册表状态负责解释原因，适配器 enabled 决定是否可用。
+        // 表外但已注入的渠道（如本地 mock）同样按 enabled 参与，避免联调渠道被白名单误杀。
+        providers: Object.entries(app.oauth)
+          .filter(([key, adapter]) => {
+            if (!adapter?.enabled) return false;
+            return states.get(key)?.status !== 'unavailable';
+          })
+          .map(([key, adapter]) => {
+            const state = states.get(key);
+            return {
+              key,
+              label: state?.name ?? key,
+              region: state?.category.startsWith('国际') ? ('intl' as const) : ('cn' as const),
+              /** false 表示该渠道需要端侧 SDK 拿 code，H5 不提供跳转入口 */
+              h5: Boolean(adapter.authorizeUrl),
+              requiresCredentials: Boolean(state?.credentials.length),
+            };
+          }),
+        onekey: { enabled: app.onekey.enabled },
+      },
+    };
+  });
 
   /**
    * 发起授权：未配置渠道直接 503 + PROVIDER_DISABLED，
@@ -62,15 +72,22 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
     '/auth/oauth/:provider/start',
     async (request, reply) => {
       const { provider } = request.params;
-      if (!isProvider(provider)) throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${provider}`);
+      const providerState = app.providers.get(provider);
       const adapter = app.oauth[provider];
-      if (!adapter?.enabled) throw new AppError('PROVIDER_DISABLED', `${provider} 登录未配置`);
+      // 注册表内外都认：表内渠道走状态解释，表外渠道（本地 mock/测试注入）只要有适配器即放行。
+      if (!providerState && !adapter) throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${provider}`);
+      if (!adapter?.enabled) {
+        throw new AppError(
+          'PROVIDER_DISABLED',
+          `${providerState?.name ?? provider} 未启用：${providerState?.reason ?? '缺少配置或已停用'}`,
+        );
+      }
       if (!adapter.authorizeUrl) {
         throw new AppError('PROVIDER_DISABLED', `${provider} 不支持 H5 服务端拉起授权`);
       }
 
       const redirect = safeRedirect(app, request.query.redirect, app.cfg.publicBaseUrl);
-      const callback = oauthCallbackUrl(app.cfg, provider);
+      const callback = oauthCallbackUrl(app.cfg, provider, providerState?.callbackPath ?? '');
       const state = randomBytes(24).toString('hex');
       const now = new Date();
       await app.store.oauthStates.insert({
@@ -97,7 +114,10 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
     '/auth/oauth/:provider/callback',
     async (request, reply) => {
       const { provider } = request.params;
-      if (!isProvider(provider)) throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${provider}`);
+      // 表外渠道（本地 mock/测试注入）只要有适配器就允许回跳，渠道是否可用由登录换码阶段判定。
+      if (!app.providers.get(provider) && !app.oauth[provider]) {
+        throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${provider}`);
+      }
       const state = request.query.state ?? '';
       const record = await app.store.oauthStates.claim(state);
       // 未命中、已消费、已过期、或渠道不匹配都视为失效，避免 state 被串用。
@@ -109,6 +129,8 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
       if (request.query.error) {
         target.searchParams.set('oauthError', request.query.error);
       } else if (request.query.code) {
+        // PKCE 渠道：把 state 上的 code_verifier 绑到本次 code，换 token 时会一次取走。
+        bindPkceCode(provider, request.query.code, state);
         target.searchParams.set('code', request.query.code);
       }
       target.searchParams.set('oauthProvider', provider);

@@ -9,6 +9,7 @@ import { CatalogSource } from './modules/catalog-source.js';
 import { PayService } from './modules/pay.js';
 import { createSmsProvider, type SmsProvider } from './adapters/sms.js';
 import { createOAuthProviders, type OAuthProvider, type OAuthProviderName } from './adapters/oauth.js';
+import { ProviderRegistry, gatedProvider } from './modules/provider-registry.js';
 import { createOneKeyProvider, type OneKeyProvider } from './adapters/onekey.js';
 import { createMapProvider, type MapProvider } from './adapters/map.js';
 import { createStorageProvider, type StorageProvider } from './adapters/storage.js';
@@ -32,6 +33,8 @@ export type AppDeps = {
   dbSwitcher?: import('./db/switchable.js').StoreSwitcher;
   sms?: SmsProvider;
   oauth?: Partial<Record<OAuthProviderName, OAuthProvider>>;
+  /** 测试可注入自带定义/开关文件的注册表 */
+  providerRegistry?: ProviderRegistry;
   onekey?: OneKeyProvider;
   map?: MapProvider;
   storage?: StorageProvider;
@@ -84,8 +87,32 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate('catalog', catalog);
   if (deps.dbSwitcher) app.decorate('dbSwitcher', deps.dbSwitcher);
   app.decorate('sms', deps.sms ?? createSmsProvider(deps.config));
+  // 渠道注册表：92 条提供方来自 config/oauth-providers.json，状态与开关都由它推导。
+  const registry = deps.providerRegistry ?? new ProviderRegistry({ config: deps.config });
+  app.decorate('providers', registry);
+  // 启动自检：缺 AppID/AppSecret 的渠道直接判未启用并给出缺失项，不等运行期报 500。
+  const providerSummary = registry.summary();
+  app.log.info(
+    {
+      total: providerSummary.total,
+      byGroup: providerSummary.byGroup,
+      byStatus: providerSummary.byStatus,
+      ready: providerSummary.ready,
+    },
+    '第三方登录渠道注册表自检完成',
+  );
   // 测试可只注入部分渠道，其余仍由配置表补全，避免因新增渠道导致测试桩不完整。
-  app.decorate('oauth', { ...createOAuthProviders(deps.config), ...deps.oauth });
+  // 通用适配器渠道按注册表组装；所有渠道都套一层运行时开关（热生效）。
+  const builtinOauth: Record<string, OAuthProvider> = {
+    ...createOAuthProviders(deps.config),
+    ...registry.genericProviders(),
+    ...deps.oauth,
+  };
+  const oauth: Record<string, OAuthProvider> = {};
+  for (const [key, adapter] of Object.entries(builtinOauth)) {
+    oauth[key] = registry.get(key) ? gatedProvider(registry, key, adapter) : adapter;
+  }
+  app.decorate('oauth', oauth);
   app.decorate('onekey', deps.onekey ?? createOneKeyProvider(deps.config));
   app.decorate('map', deps.map ?? createMapProvider(deps.config));
   app.decorate('storage', deps.storage ?? createStorageProvider(deps.config));
