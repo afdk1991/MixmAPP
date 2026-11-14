@@ -8,11 +8,11 @@
 >
 >  内自洽，不依赖任何外部旧仓。
 
+<!-- version:begin -->
 当前构建版本：**V0.0.0-preview**（内部预览构建，未对外发布）
-
 已发布版本：无
-
 版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
+<!-- version:end -->
 
 
 

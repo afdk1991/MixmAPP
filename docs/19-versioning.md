@@ -38,7 +38,7 @@
 ```
 
 - `next` 同时写进 6 个 `package.json`（npm 只接受裸 semver，不能带 `V` 前缀）。
-- `build` 同时写进 `apps/app/src/manifest.json` 的 `versionCode`（字符串）与 `apps/mobile/android/app/build.gradle` 的 `versionCode`（数字）。Android 只要求单调递增，所以从 `100` 起，历史安装包都能被覆盖升级。
+- `build` 写进 `apps/app/src/manifest.json` 的 `versionCode`（字符串）；`apps/mobile/android/app/build.gradle` 不写字面量，构建时由 Groovy 直接解析根 `version.json`，`versionCode` 取 `build`、`versionName` 取 `next` 并按 `channel` 拼后缀。Android 只要求单调递增，所以从 `100` 起，历史安装包都能被覆盖升级。
 - 展示层（QPS 横幅、README、`APP_VERSION`）才用 `V0.0.0-preview` 这种带前缀 + 后缀的形式。
 - `released` 是「已占用」的账本；`next` 一旦出现在 `released` 里，`version:check` 直接失败。
 
@@ -85,12 +85,12 @@ README 显示「当前构建版本 V0.0.1-preview / 已发布版本 V0.0.0」。
 | `services/api/src/config.ts` | `str('APP_VERSION', '…')` 默认值 | `X.Y.Z-preview` | ✅ |
 | `apps/app/src/version.ts` | `APP_VERSION`（页面展示兜底） | `X.Y.Z-preview` | ✅（整文件生成，勿手改） |
 | `apps/app/src/manifest.json` | `versionName` / `versionCode` | 裸 `X.Y.Z` / 整数 | ✅（只改这两字段，保留原格式） |
-| `apps/mobile/android/app/build.gradle` | `versionName` / `versionCode` | 裸 `X.Y.Z` / 整数 | ✅（只改这两字段） |
+| `apps/mobile/android/app/build.gradle` | `versionName` / `versionCode` | 运行时解析根 `version.json`，不落字面量 | ✅（脚本只校验接线，不回写） |
 | `README.md` | `<!-- version:begin -->` 与 `<!-- version:end -->` 之间 | 带 `V` 前缀 | ✅ |
 
 两类写法不能混：**构建元数据用裸版本号**（npm、`manifest.versionName`、Android `versionName`——应用商店与 Gradle 只认数字形态），**展示层带 `-preview`**（README、API `APP_VERSION`、前端 `version.ts`、关于页/首页）。页面不再手写版本字面量，统一 `import { APP_VERSION } from '../../version'`。
 
-`versionCode` 由 `version.json` 的 `build` 统一驱动：两处必须相等，`version:release` 时自动 +1，`sync` 负责写回。它只增不减，保证新包能覆盖旧包安装。
+`versionCode` 由 `version.json` 的 `build` 统一驱动：manifest 由 `sync` 写回，gradle 构建时直接读 `version.json`；`version:release` 时 `build` 自动 +1。它只增不减，保证新包能覆盖旧包安装。
 
 新增工作区包时，把它的 `package.json` 路径补进 `scripts/version.mjs` 的 `PKG_FILES`，否则 `version:check` 不会覆盖它。
 

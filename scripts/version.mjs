@@ -11,7 +11,7 @@
  * 命令：
  *   node scripts/version.mjs show      打印当前版本（含展示形式）
  *   node scripts/version.mjs check     校验全部版本位是否一致（CI 门禁用）
- *   node scripts/version.mjs sync      把 version.json 同步到各处（包、env、config、manifest、gradle、前端常量、README）
+ *   node scripts/version.mjs sync      把 version.json 同步到各处（包、env、config、manifest、前端常量、README；Android gradle 直接读 version.json，不落字面量）
  *   node scripts/version.mjs bump      递增补丁号（只允许在上一版已发布之后）
  *   node scripts/version.mjs release   正式发布：占用当前号、打 tag 提示、推进到下一个 preview
  */
@@ -204,12 +204,11 @@ function sync() {
     console.log(`  · ${MANIFEST_FILE} → ${state.next} / build ${state.build}`);
   }
 
+  // Android 壳从仓库根 version.json 动态读取 versionCode/versionName，
+  // 这里绝不回写字面量——写死会把动态读取改坏，造成两处各说一套。
   const gradle = readText(GRADLE_FILE);
-  const gradleNext = replaceField(gradle, /(versionName\s+")([^"]*)(")/, state.next)
-    .replace(/versionCode\s+(\d+)/, `versionCode ${state.build}`);
-  if (gradleNext !== gradle) {
-    writeText(GRADLE_FILE, gradleNext);
-    console.log(`  · ${GRADLE_FILE} → ${state.next} / build ${state.build}`);
+  if (!/rootProject\.file\(['"]\.\.\/\.\.\/\.\.\/version\.json['"]\)/.test(gradle)) {
+    fail(`${GRADLE_FILE} 未指向仓库根 version.json，无法保持单一事实源`);
   }
 
   const readme = readText(README_FILE);
@@ -265,14 +264,21 @@ function check() {
     problems.push(`${MANIFEST_FILE} 的 versionCode=${manifestBuild}，应为 ${state.build}`);
   }
 
+  // Android 壳动态读取根 version.json：门禁只校验接线（指向文件、解析 JSON、
+  // versionCode 取自 build、versionName 取自 next+channel 后缀），不再匹配
+  // 已不存在的 versionName/versionCode 字面量。
   const gradle = readText(GRADLE_FILE);
-  const gradleName = /versionName\s+"([^"]*)"/.exec(gradle)?.[1];
-  if (gradleName !== state.next) {
-    problems.push(`${GRADLE_FILE} 的 versionName=${gradleName}，应为 ${state.next}`);
+  if (!/rootProject\.file\(['"]\.\.\/\.\.\/\.\.\/version\.json['"]\)/.test(gradle)) {
+    problems.push(`${GRADLE_FILE} 未指向仓库根 version.json（缺少 rootProject.file('../../../version.json')）`);
   }
-  const gradleBuild = /versionCode\s+(\d+)/.exec(gradle)?.[1];
-  if (gradleBuild !== String(state.build)) {
-    problems.push(`${GRADLE_FILE} 的 versionCode=${gradleBuild}，应为 ${state.build}`);
+  if (!/new\s+groovy\.json\.JsonSlurper\(\)\.parseText/.test(gradle)) {
+    problems.push(`${GRADLE_FILE} 未用 JsonSlurper 解析 version.json`);
+  }
+  if (!/versionCode\s+mixmVersionCode/.test(gradle) || !/mixmVersionCode\s*=.*mixmVersion\.build/.test(gradle)) {
+    problems.push(`${GRADLE_FILE} 的 versionCode 未取自 version.json 的 build`);
+  }
+  if (!/versionName\s+mixmVersionName/.test(gradle) || !/mixmVersionName\s*=.*mixmVersion\.next/.test(gradle)) {
+    problems.push(`${GRADLE_FILE} 的 versionName 未取自 version.json 的 next（+ channel 后缀）`);
   }
 
   const readme = readText(README_FILE);
