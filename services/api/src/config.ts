@@ -150,6 +150,18 @@ export type Config = {
     model: string;
   };
   rateLimit: { perMinute: number };
+  /**
+   * 内嵌只读商品目录源（随 API 一起发布的 catalog.json 快照）。
+   * auto：DB 里没有真实目录商品时由该源接管商城公开读；off：禁用；force：强制启用。
+   * 测试环境默认 off，保证 DB 路径既有测试可预测、且不加载 35MB 文件。
+   */
+  mall: {
+    catalogSource: {
+      mode: 'auto' | 'off' | 'force';
+      /** MALL_CATALOG_FILE：覆盖默认 catalog.json 路径（相对 cwd 或绝对路径） */
+      file: string;
+    };
+  };
   /** 待支付订单超时分钟数：超过就取消并归还库存（0 表示关闭自动取消） */
   orderTtlMinutes: number;
   /** 用户名合规词库：运营方按监管要求补充，逗号/空白分隔 */
@@ -186,7 +198,7 @@ export function loadConfig(): Config {
   return {
     env,
     appName: str('APP_NAME', 'MixmAPP'),
-    version: str('APP_VERSION', '0.0.0-preview'),
+    version: str('APP_VERSION', '0.0.0.0'),
     host: str('HOST', '0.0.0.0'),
     port: num('PORT', 8080),
     publicBaseUrl: str('PUBLIC_BASE_URL', 'http://localhost:8080'),
@@ -295,6 +307,17 @@ export function loadConfig(): Config {
       model: str('AI_MODEL', 'doubao-pro-32k'),
     },
     rateLimit: { perMinute: num('RATE_LIMIT_PER_MINUTE', 60) },
+    mall: {
+      catalogSource: {
+        mode: ((): 'auto' | 'off' | 'force' => {
+          const raw = str('MALL_CATALOG_SOURCE', env === 'test' ? 'off' : 'auto').toLowerCase();
+          if (raw === 'force') return 'force';
+          if (raw === 'off') return 'off';
+          return 'auto';
+        })(),
+        file: str('MALL_CATALOG_FILE'),
+      },
+    },
     orderTtlMinutes: num('ORDER_TTL_MINUTES', 30),
     usernameDenylist: str('USERNAME_DENYLIST')
       .split(/[,，、\s]+/)

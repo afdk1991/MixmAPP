@@ -1,15 +1,28 @@
 apply plugin: 'com.android.application'
 
-// release 签名全部来自环境变量（CI Secrets）；缺任意一项则不配置签名，release 产物即为未签名包
+// ── release 签名 ────────────────────────────────────────────────────────────
+// 环境变量（CI Secrets）优先；缺省回退到仓库根 .secrets/keystore.properties +
+// .secrets/release.keystore（该目录已 gitignore，凭证明文不入库）。四项齐全才配置签名，
+// 缺任意一项则出未签名包（CI 里 HAS_SIGNING=false 时也会显式告警）。
 def releaseStoreFile = System.getenv("ANDROID_KEYSTORE_PATH")
 def releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+
+def localKeystorePropsFile = rootProject.file('../../../.secrets/keystore.properties')
+def localKeystoreProps = new Properties()
+if (localKeystorePropsFile.exists()) {
+    localKeystoreProps.load(new FileInputStream(localKeystorePropsFile))
+}
+if (!releaseStoreFile) releaseStoreFile = rootProject.file('../../../.secrets/release.keystore').path
+if (!releaseStorePassword) releaseStorePassword = localKeystoreProps.getProperty('storePassword')
+if (!releaseKeyAlias) releaseKeyAlias = localKeystoreProps.getProperty('keyAlias')
+if (!releaseKeyPassword) releaseKeyPassword = localKeystoreProps.getProperty('keyPassword')
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 
-// 版本号只有一个事实源：仓库根 version.json（由 scripts/version.mjs 维护）。
-// versionCode 取 build 计数（单调递增，Play 要求），versionName 取 next + 通道后缀。
-// 这里不再写死数字，避免和 version.json 各说一套。
+// ── 版本号：唯一事实源是仓库根 version.json（由 scripts/version.mjs 维护）─────
+// versionCode 取 build 计数（单调递增，Play 要求）。
+// versionName：正式发布态取 released 最新正式号（裸号）；其余取 next，预览通道追加 -<channel>。
 def mixmVersionFile = rootProject.file('../../../version.json')
 if (!mixmVersionFile.exists()) {
     throw new GradleException("找不到版本单一事实源：${mixmVersionFile}（仓库根的 version.json 必须在）")
@@ -17,14 +30,42 @@ if (!mixmVersionFile.exists()) {
 def mixmVersion = new groovy.json.JsonSlurper().parseText(mixmVersionFile.text)
 def mixmVersionCode = (mixmVersion.build ?: 1) as Integer
 def mixmChannel = (mixmVersion.channel ?: 'stable') as String
-def mixmVersionName = (mixmVersion.next ?: '0.0.0') as String
-if (mixmChannel != 'stable') {
+def mixmVersionName = (mixmVersion.next ?: '0.0.0.0') as String
+// 正式发布后 version.json 的 next 是「下一个待发布工作号」（当前 0.0.0.1），
+// 而已发布正式号在 released 里（当前 0.0.0.0）。APK 必须展示已发布号，
+// 与 version:show 的 display / README / manifest / 各 package.json 对齐。
+// 注意：上面这行 mixmVersionName = ... mixmVersion.next 必须保留，
+// scripts/version.mjs check() 用正则校验 gradle 接线，删掉会让门禁失败。
+def mixmReleased = (mixmVersion.released ?: []) as List
+def formalChannels = ['stable', 'release']
+if (mixmChannel.toLowerCase() == 'release' && !mixmReleased.isEmpty()) {
+    mixmVersionName = mixmReleased.last().toString()
+} else if (!formalChannels.contains(mixmChannel.toLowerCase())) {
     mixmVersionName = mixmVersionName + '-' + mixmChannel
 }
+
+// ── API 基址：与壳内注入同源，供原生版本检查 GET /api/v1/meta 使用 ──────────
+// 优先级与 scripts/android-inject-base.mjs 保持一致：MIXMAPP_API_BASE > api-base.json > 兜底。
+def mixmApiBase = (System.getenv('MIXMAPP_API_BASE') ?: '').trim()
+if (!mixmApiBase) {
+    def mixmApiBaseFile = rootProject.file('../../../apps/mobile/api-base.json')
+    if (mixmApiBaseFile.exists()) {
+        def mixmApiCfg = new groovy.json.JsonSlurper().parseText(mixmApiBaseFile.text)
+        mixmApiBase = (mixmApiCfg.apiBase ?: '').toString().trim()
+    }
+}
+if (!mixmApiBase) mixmApiBase = 'https://cloud.mixm.top/mixmapp/api/v1'
 
 android {
     namespace "top.mixm.app"
     compileSdk rootProject.ext.compileSdkVersion
+
+    // AGP 8 起 BuildConfig 不保证默认生成；MainActivity 用到 VERSION_NAME /
+    // VERSION_CODE / MIXMAPP_API_BASE，这里显式打开，避免编译期找不到类。
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId "top.mixm.app"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -32,12 +73,22 @@ android {
         versionCode mixmVersionCode
         versionName mixmVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // 与 apps/app/src/manifest.json 的 abiFilters 对齐：只打 32/64 位 ARM，减小包体
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
+
+        // 原生启动日志 / 版本检查用的 API 源，需包成 Java 字符串字面量
+        buildConfigField "String", "MIXMAPP_API_BASE", "\"${mixmApiBase}\""
+
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
     signingConfigs {
         release {
             if (hasReleaseSigning) {
@@ -48,14 +99,34 @@ android {
             }
         }
     }
+
     buildTypes {
         release {
+            // 不开启混淆与资源压缩：Capacitor 的 JS Bridge、插件按类名反射查找与 JS 注入
+            // 依赖大量未被静态引用的符号，仓库当前 proguard-rules.pro 没有配套 keep 规则；
+            // 未经全量真机回归贸然开启会导致 JS 注入失效 / 插件找不到。等补齐 keep 规则并
+            // 回归通过后再评估打开。shrinkResources 依赖 minifyEnabled，必须保持一致。
             minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             }
         }
+    }
+
+    // 打包去重：多个 AndroidX / Capacitor 依赖常带同名 META-INF 许可文件，
+    // 不排除会在 assembleRelease 报 duplicate entry。当前无 .so 冲突，无需 jniLibs 规则。
+    // 用已在本机 AGP 8.7.2 jar 中核实存在的 PackagingOptions.exclude(String)；
+    // 新 DSL 的 packaging.resources.excludes 是 Kotlin Function1 签名，Groovy 闭包适配
+    // 在不同 AGP 版本表现不一致，本轮禁止构建验证，故采用确定性写法。
+    packagingOptions {
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+        exclude 'META-INF/ASL2.0'
     }
 }
 
