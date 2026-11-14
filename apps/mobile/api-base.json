@@ -1,3 +1,4 @@
 {
-  "apiBase": "https://api.mixm.top/mixmapp/api/v1"
+  "apiBase": "https://api.mixm.top/mixmapp/api/v1",
+  "mediaBase": "https://img.mixm.top"
 }

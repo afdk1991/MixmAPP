@@ -37,9 +37,19 @@
     <block v-else>
       <view class="list">
         <view v-for="line in cart.items" :key="line.productId" class="line">
-          <view class="cover">
-            <view class="cover-scrim" />
-            <text class="cover-char">{{ line.title.slice(0, 1) }}</text>
+          <view class="cover" :style="tintOf(line)">
+            <image
+              v-if="coverOf(line) && !isBroken(coverOf(line))"
+              class="cover-img"
+              :src="coverOf(line)"
+              mode="aspectFill"
+              lazy-load
+              @error="markBroken(coverOf(line))"
+            />
+            <block v-else>
+              <view class="cover-scrim" />
+              <text class="cover-char" :class="{ 'cover-char--on-tint': !!coverTint({ cover: line.cover }) }">{{ line.title.slice(0, 1) }}</text>
+            </block>
           </view>
           <view class="info">
             <view class="name-row">
@@ -51,6 +61,7 @@
             <view class="unit-row">
               <text v-if="isInquiryLine(line)" class="unit unit--inquiry mono">询价 · 联系报价</text>
               <text v-else-if="isOutOfStockLine(line)" class="unit unit--oos mono">缺货 · 询价确认</text>
+              <text v-else-if="isStockUnconfirmedLine(line)" class="unit unit--pending mono">货源待确认 · 可结算</text>
               <template v-else>
                 <text class="unit mono">¥{{ lineUnitPrice(line) }} / {{ line.unitName || '件' }}</text>
                 <text v-if="line.packLabel" class="stock mono">{{ line.packLabel }} · {{ line.quantity }}支</text>
@@ -93,6 +104,7 @@
         <text class="eyebrow">CHECKOUT</text>
         <text class="checkout-title">收货信息</text>
         <text class="hint">提交后库存即扣减，可在订单页查看进度。</text>
+        <text v-if="hasUnconfirmed" class="hint">{{ STOCK_UNCONFIRMED_NOTICE }}</text>
 
         <text class="label mt">收货人</text>
         <input v-model="form.receiverName" class="field" placeholder="收货人姓名" placeholder-class="field-ph" />
@@ -153,10 +165,36 @@
 import { computed, nextTick, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { CartDto, CartLineDto } from '@mixmapp/contracts';
-import { isBulkStock, INQUIRY_NOTICE, isOutOfStock, OUT_OF_STOCK_NOTICE, unitPriceText } from '../../api/mall';
-import { mallApi } from '../../api/client';
+import {
+  isBulkStock,
+  INQUIRY_NOTICE,
+  isOutOfStock,
+  isStockUnconfirmed,
+  OUT_OF_STOCK_NOTICE,
+  STOCK_UNCONFIRMED_NOTICE,
+  unitPriceText,
+} from '../../api/mall';
+import { mallApi, mediaUrl, productCover, coverTint } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
+
+/** 图片加载失败的封面：记住 URL，避免同一张坏图反复重试。 */
+const brokenCovers = ref<Set<string>>(new Set());
+/** 统一走 mediaUrl（壳内 mediaOrigin 来自 __MIXMAPP_MEDIA_BASE__），禁止直接拼相对路径。 */
+function coverOf(line: CartLine): string {
+  return productCover({ cover: line.cover });
+}
+/** 无实物图商品（cover 存的是色值）的占位底色。 */
+function tintOf(line: CartLine): Record<string, string> {
+  const tint = coverTint({ cover: line.cover });
+  return tint ? { background: tint } : {};
+}
+function isBroken(src: string): boolean {
+  return brokenCovers.value.has(src);
+}
+function markBroken(src: string): void {
+  brokenCovers.value = new Set(brokenCovers.value).add(src);
+}
 
 /** 购物车行：后端后续可能回传 priceSource，旧数据按价格是否为 0 兜底判定。 */
 type CartLine = CartLineDto & { priceSource?: 'anonymous' | 'login' | 'inquiry' };
@@ -172,6 +210,11 @@ function isInquiryLine(line: CartLine): boolean {
 /** 缺货行：非询价但库存缺失 / 0，历史加购进来的缺货商品同样不能结算。 */
 function isOutOfStockLine(line: CartLine): boolean {
   return !isInquiryLine(line) && isOutOfStock(line);
+}
+
+/** 货源待确认行：匿名视图推断缺货但无停售信号，可结算，需人工确认货源。 */
+function isStockUnconfirmedLine(line: CartLine): boolean {
+  return !isInquiryLine(line) && !isOutOfStockLine(line) && isStockUnconfirmed(line);
 }
 
 /** 被结算拦截的行：询价 + 缺货。 */
@@ -200,6 +243,7 @@ const oosLines = computed(() => cart.value.items.filter(isOutOfStockLine));
 const blockedLines = computed(() => cart.value.items.filter(isBlockedLine));
 const hasInquiry = computed(() => inquiryLines.value.length > 0);
 const hasOos = computed(() => oosLines.value.length > 0);
+const hasUnconfirmed = computed(() => cart.value.items.some(isStockUnconfirmedLine));
 const hasBlocked = computed(() => blockedLines.value.length > 0);
 const payableFen = computed(() =>
   cart.value.items.reduce((sum, line) => sum + (isBlockedLine(line) ? 0 : line.subtotalFen), 0),
@@ -399,6 +443,14 @@ onShow(() => {
   border: 1rpx solid $paper-3;
 }
 
+.cover-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .cover-scrim {
   position: absolute;
   left: 0;
@@ -480,6 +532,10 @@ onShow(() => {
 .unit--oos {
   color: $amber;
   font-weight: 600;
+}
+
+.unit--pending {
+  color: $amber;
 }
 
 .inquiry-hint {

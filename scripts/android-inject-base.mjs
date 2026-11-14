@@ -54,6 +54,32 @@ function resolveApiBase() {
 }
 
 /**
+ * 媒体源：壳内 index.html 的 origin 是 https://localhost，前端 mediaUrl() 只会把
+ * `/media/...` 拼到「媒体源 > API 源」。没有媒体源时拼到 API 域（api.mixm.top），
+ * 而图片实际托管在 img.mixm.top —— 全站商品图 404 空白的根因就在这里。
+ * 优先级：环境变量 MIXMAPP_MEDIA_BASE > apps/mobile/api-base.json 的 mediaBase。
+ */
+function resolveMediaBase() {
+  const fromEnv = (process.env['MIXMAPP_MEDIA_BASE'] ?? '').trim();
+  if (fromEnv) return { base: fromEnv, from: 'MIXMAPP_MEDIA_BASE' };
+  if (existsSync(configPath)) {
+    const raw = JSON.parse(readFileSync(configPath, 'utf8'));
+    const base = String(raw.mediaBase ?? '').trim();
+    if (base) return { base, from: 'apps/mobile/api-base.json' };
+  }
+  return { base: '', from: '(未配置)' };
+}
+
+/** 写入/覆盖 index.html 里的 window.<name> 常量，保留其它脚本不动。 */
+function upsertGlobal(html, name, value) {
+  const pattern = new RegExp(`window\\.${name}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|'[^']*'|null)`);
+  const assignment = `window.${name}=${JSON.stringify(value)}`;
+  if (pattern.test(html)) return html.replace(pattern, assignment);
+  if (!html.includes('<head>')) return '';
+  return html.replace('<head>', `<head>\n    <script>${assignment};</script>`);
+}
+
+/**
  * 与 scripts/version.mjs 的 displayVersion() 保持一致（前端 version.ts / version.*.js
  * 由该函数生成，裸号、不带 V 前缀）：
  *   release            → `${version}`（三段号）
@@ -157,6 +183,24 @@ function healthChecks(html) {
     add('error', 'API 源 /api/v1 后缀', /\/api\/v1$/.test(value), value);
   }
 
+  // ── 媒体源（致命：缺了会让 /media 相对路径打到 API 域，全站商品图 404）──
+  const media = resolveMediaBase();
+  const mediaInjected = html.includes('__MIXMAPP_MEDIA_BASE__');
+  add('error', '媒体源已注入', mediaInjected,
+    mediaInjected
+      ? `已找到注入标记（配置来源 ${media.from} → ${media.base || '(未配置)'}）`
+      : '未注入 __MIXMAPP_MEDIA_BASE__，/media/... 会被拼到 API 域，商品图全部 404');
+  const mediaMatch = /window\.__MIXMAPP_MEDIA_BASE__\s*=\s*("(?:[^"\\]|\\.)*")/.exec(html);
+  let mediaValue = '';
+  if (mediaMatch) {
+    try { mediaValue = JSON.parse(mediaMatch[1]); } catch { mediaValue = ''; }
+    add('error', '媒体源为绝对地址', /^https:\/\//.test(mediaValue), mediaValue || '取值解析失败');
+    add('error', '媒体源强制 HTTPS', /^https:\/\//.test(mediaValue), mediaValue);
+  } else {
+    add('error', '媒体源取值可解析', false,
+      mediaInjected ? '有 __MIXMAPP_MEDIA_BASE__ 但取值解析不出来' : '无注入标记');
+  }
+
   // ── viewport（告警：H5 入口由前端定稿，不硬失败以免卡住并行构建）────────
   const viewportTag =
     /<meta\s+[^>]*name=["']viewport["'][^>]*>/i.exec(html) ??
@@ -208,21 +252,22 @@ if (!CHECK_ONLY) {
     console.error(`✗ API 源不合法：${JSON.stringify(base)}（来源 ${from}），需形如 https://host[/path]/api/v1（强制 https）`);
     process.exit(1);
   }
+  const media = resolveMediaBase();
+  if (!media.base || !/^https:\/\//.test(media.base)) {
+    console.error(`✗ 媒体源不合法：${JSON.stringify(media.base)}（来源 ${media.from}），需形如 https://img.example.com（强制 https）`);
+    console.error('  缺少媒体源时，壳内 /media/... 图片会被拼到 API 域，全站商品图 404。');
+    process.exit(1);
+  }
   let html = readFileSync(indexPath, 'utf8');
-  const tag = `<script>window.__MIXMAPP_API_BASE__=${JSON.stringify(base)};</script>`;
-  if (/window\.__MIXMAPP_API_BASE__\s*=/.test(html)) {
-    html = html.replace(
-      /window\.__MIXMAPP_API_BASE__\s*=\s*("(?:[^"\\]|\\.)*"|'[^']*')/,
-      `window.__MIXMAPP_API_BASE__=${JSON.stringify(base)}`);
-    writeFileSync(indexPath, html, 'utf8');
-  } else if (html.includes('<head>')) {
-    html = html.replace('<head>', `<head>\n    ${tag}`);
-    writeFileSync(indexPath, html, 'utf8');
-  } else {
+  html = upsertGlobal(html, '__MIXMAPP_API_BASE__', base);
+  html = upsertGlobal(html, '__MIXMAPP_MEDIA_BASE__', media.base.replace(/\/+$/, ''));
+  if (!html) {
     console.error('✗ 壳内 index.html 没有 <head>，无法插入注入标签');
     process.exit(1);
   }
+  writeFileSync(indexPath, html, 'utf8');
   console.info(`[android] 已同步 API 源（${from}）：${base}`);
+  console.info(`[android] 已同步媒体源（${media.from}）：${media.base}`);
 }
 
 const checks = healthChecks(readFileSync(indexPath, 'utf8'));

@@ -47,4 +47,12 @@ button {
 image {
   display: block;
 }
+
+/* 桌面宽屏（≥1000px）改用 mx-bar 顶部导航，隐藏 uni-app 生成的底部 tabBar，
+ * 避免标签栏在宽屏中央悬浮；移动端保持原样，不受影响。 */
+@media (min-width: 1000px) {
+  uni-tabbar {
+    display: none !important;
+  }
+}
 </style>

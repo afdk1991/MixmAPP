@@ -1,6 +1,12 @@
 <template>
   <view class="page">
     <mx-bar />
+
+    <view class="page-head">
+      <text class="eyebrow">INTERSTELLAR FEDERATION</text>
+      <text class="page-title">星际联邦通行证</text>
+    </view>
+
     <block v-if="user">
       <!-- ---------- 深场通行证：页面唯一强视觉块，下沿直接切纸面 ---------- -->
       <view class="pass">
@@ -24,16 +30,27 @@
 
         <view class="pass-meta">
           <view class="pass-cell">
-            <text class="pass-k mono">持有人</text>
-            <text class="pass-v">{{ user.nickname }}</text>
+            <text class="pass-k mono">持证人</text>
+            <text class="pass-v">{{ holderText }}</text>
           </view>
           <view class="pass-cell">
-            <text class="pass-k mono">签发星历</text>
-            <text class="pass-v">{{ createdShort }}</text>
+            <text class="pass-k mono">签发方</text>
+            <text class="pass-v">MixmAPP 发号中心</text>
           </view>
           <view class="pass-cell">
-            <text class="pass-k mono">通行终端</text>
-            <text class="pass-v">6 ENDS</text>
+            <text class="pass-k mono">状态</text>
+            <text class="pass-v pass-v--ok">{{ statusText }}</text>
+          </view>
+          <view class="pass-cell">
+            <text class="pass-k mono">有效期</text>
+            <text class="pass-v">长期有效</text>
+          </view>
+        </view>
+
+        <view v-if="refreshError" class="pass-error">
+          <text class="pass-error-text mono">资料未能刷新 · {{ refreshError }}</text>
+          <view class="pass-error-retry" hover-class="is-press" @tap="reload">
+            <text class="pass-error-retry-text mono">重试</text>
           </view>
         </view>
 
@@ -179,9 +196,9 @@
 
     <block v-else>
       <view class="guest">
-        <text class="eyebrow">NO CREDENTIAL</text>
-        <text class="guest-title">登录 / 领取联邦通行证</text>
-        <text class="guest-lede">登录已有通行证，或注册即签发星际联邦通行证，并分配唯一的 MixmAPP 星际联邦通行证公民编号。</text>
+        <text class="eyebrow">NO PASS</text>
+        <text class="guest-title">未领取通行证</text>
+        <text class="guest-lede">登录已有通行证，或注册即签发星际联邦通行证，并分配唯一的 MixmAPP 公民编号。</text>
       </view>
 
       <view class="guest-actions">
@@ -221,7 +238,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
-import type { OAuthProviderKey } from '@mixmapp/contracts';
+import type { OAuthProviderId } from '@mixmapp/contracts';
 import { session, logout, refreshProfile } from '../../stores/session';
 import { meApi, ApiError } from '../../api/client';
 import { ROUTES } from '../../routes';
@@ -229,11 +246,18 @@ import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
 const user = computed(() => session.user);
-const createdShort = computed(() => {
-  if (!user.value) return '';
-  const d = new Date(user.value.createdAt);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+/** 手机号脱敏：138****8000，未绑定时不展示占位，避免通行证上出现「未绑定」这种后台口径。 */
+const maskedPhone = computed(() => {
+  const phone = user.value?.phone;
+  if (!phone) return '';
+  return phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
 });
+const holderText = computed(() => {
+  if (!user.value) return '';
+  return maskedPhone.value ? `${user.value.nickname} · ${maskedPhone.value}` : user.value.nickname;
+});
+const statusText = computed(() => (user.value?.isGuest ? '有效 · 游客' : '有效'));
+const refreshError = ref('');
 const createdText = computed(() =>
   user.value ? new Date(user.value.createdAt).toLocaleString() : '',
 );
@@ -287,7 +311,7 @@ function unbind(provider: string): void {
     success: async (res) => {
       if (!res.confirm) return;
       try {
-        await meApi.unbindOAuth(provider as OAuthProviderKey);
+        await meApi.unbindOAuth(provider as OAuthProviderId);
         await refreshProfile();
         uni.showToast({ title: '已解绑', icon: 'none' });
       } catch (e) {
@@ -300,8 +324,10 @@ function unbind(provider: string): void {
 async function reload(): Promise<void> {
   try {
     await refreshProfile();
+    refreshError.value = '';
     uni.showToast({ title: '已刷新', icon: 'none' });
-  } catch {
+  } catch (e) {
+    refreshError.value = e instanceof ApiError ? e.message : '网络异常';
     uni.showToast({ title: '刷新失败，请重新登录', icon: 'none' });
   }
 }
@@ -328,7 +354,9 @@ async function doLogout(): Promise<void> {
 
 onShow(() => {
   if (session.user) {
-    void refreshProfile().catch(() => undefined);
+    void refreshProfile()
+      .then(() => { refreshError.value = ''; })
+      .catch((e) => { refreshError.value = e instanceof ApiError ? e.message : '网络异常'; });
   }
 });
 </script>
@@ -453,11 +481,61 @@ onShow(() => {
   position: relative;
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
+  row-gap: $sp-3;
 }
 
 .pass-cell {
+  flex: 1 1 50%;
+  min-width: 0;
+  max-width: 50%;
+  padding-right: 16rpx;
+  box-sizing: border-box;
+}
+
+.pass-cell:nth-child(even) {
+  padding-right: 0;
+}
+
+.pass-v--ok {
+  color: $brand-on-deep;
+}
+
+/* 资料刷新失败：贴在卡内底部的一条可重试提示，不打断已签发的静态信息 */
+.pass-error {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $sp-3;
+  padding: 12rpx 16rpx;
+  border: 1rpx solid rgba(224, 169, 99, 0.35);
+  border-radius: $r-control;
+  background: rgba(224, 169, 99, 0.08);
+}
+
+.pass-error-text {
   flex: 1;
   min-width: 0;
+  font-size: $fs-micro;
+  line-height: 1.4;
+  color: $amber-on-deep;
+  word-break: break-all;
+}
+
+.pass-error-retry {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  padding: 4rpx 14rpx;
+  border: 1rpx solid rgba(224, 169, 99, 0.5);
+  border-radius: $r-pill;
+}
+
+.pass-error-retry-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $amber-on-deep;
 }
 
 .pass-k {

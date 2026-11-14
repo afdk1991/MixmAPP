@@ -138,6 +138,22 @@ html {
   }
 }
 
+/* 第四个 tab 的文案是「星际联邦通行证」（7 字），11px 在系统字体放大 1.3x 后约 14.3px，
+ * 7 字 ≈ 100px，顶出 90dp 的格子并折成两行、被 tabBar 固定高度裁掉。
+ * 只对这一项降字号并收字距，前三个 tab 维持配置里的字号，避免整条 tabBar 变小。
+ * 8px 是配合 1.3x 的取值：1.3x 后约 10.4px，7 字 ≈ 73px，仍在 90dp 格子里；
+ * 必须 nowrap，否则 1.0x 放得下、1.3x 会折行。
+ * 选择器用 :last-child 而不是 :nth-child(4)：.uni-tabbar 的第一个子元素是
+ * .uni-tabbar-border（见 uni-h5 的 createTabBar），tab 项从第 2 个子元素才开始。 */
+.uni-tabbar__item:last-child .uni-tabbar__label {
+  font-size: 8px !important;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 /* uni.showModal：H5 用 DOM 实现，默认白底 + 深灰字，深色下必须整体换掉。
  *
  * 注意：uni 框架的 modal 基础样式（.uni-modal{background-color:#fff}、

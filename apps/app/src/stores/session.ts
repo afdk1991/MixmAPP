@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import type { AuthResult, OAuthProviderKey, UserDto } from '@mixmapp/contracts';
+import type { AuthResult, OAuthProviderId, UserDto } from '@mixmapp/contracts';
 import { authApi, clearTokens, meApi, readTokens, writeTokens } from '../api/client';
 
 type SessionState = {
@@ -43,7 +43,7 @@ export async function loginBySms(phone: string, code: string): Promise<AuthResul
   return result;
 }
 
-export async function loginByOAuth(provider: OAuthProviderKey): Promise<AuthResult> {
+export async function loginByOAuth(provider: OAuthProviderId): Promise<AuthResult> {
   const code = getOAuthCode();
   if (!code) throw new Error('未获取到第三方授权 code：H5 需从授权回跳携带，原生端需先配置 SDK');
   const result = await authApi.loginByOAuth(provider, code);
@@ -58,10 +58,10 @@ function getOAuthCode(): string {
 }
 
 /** 回跳 URL 上带的渠道标识（由服务端 callback 注入）。 */
-export function getOAuthProvider(): OAuthProviderKey | null {
+export function getOAuthProvider(): OAuthProviderId | null {
   if (typeof window === 'undefined') return null;
   const value = new URLSearchParams(window.location.search).get('oauthProvider');
-  return value ? (value as OAuthProviderKey) : null;
+  return value ? (value as OAuthProviderId) : null;
 }
 
 /** 回跳 URL 上带的渠道错误（用户取消授权等）。 */

@@ -18,7 +18,7 @@
     </view>
 
     <block v-else-if="product">
-      <view class="hero">
+      <view class="hero" :style="heroTint ? { background: heroTint } : {}">
         <image
           v-if="mainImage && !isBroken(mainImage)"
           class="hero-img"
@@ -127,8 +127,10 @@
           <view class="delivery-row">
             <text v-if="inquiry" class="delivery-state delivery-state--inquiry mono">询价 · 联系报价</text>
             <text v-else-if="outOfStock" class="delivery-state delivery-state--oos mono">缺货 · 请联系询价</text>
+            <text v-else-if="stockUnconfirmed" class="delivery-state delivery-state--pending mono">货源待确认 · 可下单</text>
             <text v-else class="delivery-state delivery-state--stock mono">{{ stockLineText }}</text>
           </view>
+          <text v-if="stockUnconfirmed" class="hint">{{ STOCK_UNCONFIRMED_NOTICE }}</text>
           <text v-if="purchasable && purchaseHint" class="hint">{{ purchaseHint }}</text>
         </view>
 
@@ -252,14 +254,16 @@ import {
   isBulkStock,
   isInquiryProduct,
   isOutOfStock,
+  isStockUnconfirmed,
   lineTotalFen,
   OUT_OF_STOCK_NOTICE,
   priceText,
   priceUnitLabel,
   specEntries,
+  STOCK_UNCONFIRMED_NOTICE,
   unitPriceText,
 } from '../../api/mall';
-import { mallApi, mediaUrl } from '../../api/client';
+import { mallApi, mediaUrl, productCover, coverTint } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 
@@ -280,6 +284,10 @@ const inquiry = computed(() => (product.value ? isInquiryProduct(product.value) 
 const outOfStock = computed(() =>
   product.value ? !inquiry.value && isOutOfStock(product.value) : false,
 );
+/** 货源待确认：匿名视图推断缺货但无停售信号，允许下单，提示人工确认 */
+const stockUnconfirmed = computed(() =>
+  product.value ? !inquiry.value && isStockUnconfirmed(product.value) : false,
+);
 const purchasable = computed(() =>
   product.value ? !inquiry.value && !outOfStock.value : false,
 );
@@ -288,8 +296,23 @@ const stockLineText = computed(() => {
   const stock = product.value?.stock;
   return isBulkStock(stock) ? '现货' : `现货 · 余 ${stock ?? 0}`;
 });
-const images = computed(() =>
-  product.value && Array.isArray(product.value.images) ? product.value.images : [],
+/**
+ * 详情图集：只保留能当图片用的地址（自有商品的 images 可能为空、cover 可能是色值），
+ * 没有实物图时退回 cover，两者都没有就交给 hero 占位块。
+ */
+const images = computed(() => {
+  const item = product.value;
+  if (!item) return [];
+  const list = Array.isArray(item.images)
+    ? item.images.map((img) => productCover({ images: [img] })).filter(Boolean)
+    : [];
+  if (list.length) return list;
+  const cover = productCover({ cover: item.cover });
+  return cover ? [cover] : [];
+});
+/** 无实物图时的占位底色（后端 cover 存的品牌色）。 */
+const heroTint = computed(() =>
+  product.value ? coverTint({ images: product.value.images, cover: product.value.cover }) : '',
 );
 const mainImage = computed(() => activeImage.value || images.value[0] || '');
 const specs = computed(() => (product.value ? specEntries(product.value.specs) : []));
@@ -326,9 +349,11 @@ const totalText = computed(() =>
   product.value ? priceText(lineTotalFen(product.value, totalPieces.value)) : '0.00',
 );
 
+/** 折扣标签：100 也是源站给出的合法折扣（无折扣），照常显示 100%；只有源站没有该字段才留空。 */
 const discountLabel = computed(() => {
   const pct = product.value?.discountPct;
-  return pct != null && pct < 100 ? `${pct}% 折扣` : '';
+  if (pct == null || !Number.isFinite(pct) || pct <= 0) return '';
+  return pct < 100 ? `${pct}% 折扣` : `${pct}%`;
 });
 
 const promotions = computed(() =>
@@ -784,6 +809,11 @@ onLoad((options) => {
 
 .delivery-state--oos {
   color: $amber;
+}
+
+.delivery-state--pending {
+  color: $amber;
+  font-weight: 600;
 }
 
 .delivery-state--inquiry {

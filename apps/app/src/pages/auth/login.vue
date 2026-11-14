@@ -150,7 +150,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue';
-import type { OAuthProviderKey } from '@mixmapp/contracts';
+import type { OAuthProviderId } from '@mixmapp/contracts';
 import {
   authApi,
   ApiError,
@@ -246,7 +246,7 @@ function goAfterLogin(): void {
   else uni.reLaunch({ url: target });
 }
 
-async function completeOAuth(provider: OAuthProviderKey): Promise<void> {
+async function completeOAuth(provider: OAuthProviderId): Promise<void> {
   try {
     const result = await loginByOAuth(provider);
     uni.showToast({ title: result.isNewUser ? '已创建账号' : '登录成功', icon: 'none' });
