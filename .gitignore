@@ -41,3 +41,14 @@ storage/
 
 # 内置浏览器调试 profile（运行时缓存，约 81MB；不入库，也不应被仓库工具扫描）
 .edge-profile/
+
+# 本地验证/评审的临时产物（可重跑重建，体积大，不入库；归档用的证据统一放 docs/）
+/.screenshots/
+/ui-review/
+/reports/
+/.catalog-sync/
+/.workbuddy/
+/2026-*-*/
+
+# 交付文档的二进制导出件（源文档在各 docs/ 报告里，可重新导出）
+项目接管报告-2026-11-14.docx

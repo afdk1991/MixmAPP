@@ -1,0 +1,78 @@
+{
+  "l1": "成品刀刃具类",
+  "url": "https://localhost/pages/mall/index",
+  "rootList": [
+    "EG螺丝类#6160",
+    "EGM螺丝类#2251",
+    "汽车螺丝类#177",
+    "手工具类#253",
+    "膨胀类#249",
+    "成品刀刃具类#5947"
+  ],
+  "l2": [
+    "全部 成品刀刃具类",
+    "UTOOL钻头类#1119",
+    "UTOOL丝锥类#505",
+    "OSG丝锥类#610",
+    "UTOOL铣刀类#1034",
+    "UTOOL铰刀类#362",
+    "EG/MH刃具类#2317"
+  ],
+  "back": "返回 UTOOL钻头类",
+  "l3": [
+    "全部 UTOOL钻头类",
+    "UTOOL公英制普长钻#202",
+    "UTOOL公英制加长钻#136",
+    "UTOOL公英制特长钻#381",
+    "UTOOL高钴普长钻#133",
+    "UTOOL钨钢普长钻#89",
+    "UTOOL锥柄普长钻#76",
+    "UTOOL中心钻#17",
+    "UTOOL1/2柄钻#51",
+    "UTOOL套钻#8",
+    "UTOOL钻头新品#26"
+  ],
+  "pickedL2": "UTOOL钻头类",
+  "pickedL3": "UTOOL公英制普长钻",
+  "cards": 20,
+  "firstTitle": "UTOOL公制普长钻 0.3x3.5x20",
+  "filters": [
+    {
+      "label": "直径",
+      "n": 172
+    },
+    {
+      "label": "长度",
+      "n": 43
+    },
+    {
+      "label": "品牌",
+      "n": 2
+    },
+    {
+      "label": "表面处理",
+      "n": 2
+    }
+  ],
+  "filterTest": {
+    "group": "直径",
+    "picked": "0.3",
+    "cards": 1,
+    "firstTitle": "UTOOL公制普长钻 0.3x3.5x20",
+    "before": "UTOOL公制普长钻 0.3x3.5x20"
+  },
+  "seq": [
+    20,
+    40,
+    60,
+    80,
+    100,
+    120,
+    140
+  ],
+  "foot": "上拉加载更多 · 价格以服务端实时数据为准",
+  "highlight": [
+    "UTOOL公英制普长钻"
+  ],
+  "drawerReopenUrl": "https://localhost/pages/mall/index"
+}
