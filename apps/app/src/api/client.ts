@@ -150,11 +150,14 @@ function rawRequest(options: {
   data?: unknown;
   headers?: Record<string, string>;
 }): Promise<RawResponse> {
+  // uni 的 H5 适配层会给所有非 GET 请求强制补 JSON content-type，空 body 会被服务端按非法 JSON 拒掉（400）；
+  // 因此无 body 的写请求统一补一个空对象。
+  const data = options.data === undefined && options.method !== 'GET' ? {} : options.data;
   return new Promise((resolve, reject) => {
     uni.request({
       url: options.url,
       method: options.method as UniApp.RequestOptions['method'],
-      data: options.data as Record<string, unknown> | undefined,
+      data: data as Record<string, unknown> | undefined,
       header: { 'content-type': 'application/json', ...(options.headers ?? {}) },
       timeout: 15000,
       success: (res) => resolve({ statusCode: res.statusCode, data: res.data }),
