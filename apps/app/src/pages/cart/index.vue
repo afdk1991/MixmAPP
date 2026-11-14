@@ -148,7 +148,8 @@
           <text class="summary-k">特价优惠</text>
           <text class="summary-v summary-v--off mono">-¥{{ price(pricing.tejiaDiscountFen) }}</text>
         </view>
-        <view class="summary-row">
+        <!-- 满减档位未启用时命中数为 0：不展示满减行，也不展示「已享受满减」提示 -->
+        <view v-if="pricing.manjianDiscountFen > 0" class="summary-row">
           <text class="summary-k">满减优惠</text>
           <text class="summary-v summary-v--off mono">-¥{{ price(pricing.manjianDiscountFen) }}</text>
         </view>

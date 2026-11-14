@@ -545,9 +545,70 @@ describe('购物车行状态四态与三层优惠（0017）', () => {
     expect(data.pricing.payableFen).toBe(1057);
   });
 
+  it('满减档位默认停用：不命中满减，应付 = 面价 - 商城/特价取优', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    // 面价 101 分/支（1005 厘）商城 85 折；特价商品 80 折（减 20%）
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-mj-off-mall', title: '商城折扣品', priceFen: 101, priceLi: 1005, stock: 50, discountPct: 85 }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-mj-off-tejia', title: '特价品', priceFen: 100000, stock: 50, tejiaDiscountPct: 80 }),
+    );
+    const token = await register(app, '13800002205');
+    const user = await ctx.store.users.findByPhone('13800002205');
+    await seedCart(ctx.store, user!.id, [
+      { productId: 'mix-mj-off-mall', quantity: 3 },
+      { productId: 'mix-mj-off-tejia', quantity: 1 },
+    ]);
+
+    // 0017 种子三档 enabled = false：只下发启用档位 → tiers 为空，满减命中数为 0
+    const res = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    expect(res.statusCode).toBe(200);
+    const pricing = res.json().data.pricing;
+    expect(pricing.tiers).toEqual([]);
+    expect(pricing.manjianDiscountFen).toBe(0);
+    expect(pricing.manjianTier).toBeNull();
+    expect(pricing.manjianTip).toBe('');
+    // 302（面价）+ 100000 = 100302；商城 45、特价 20000
+    expect(pricing.subtotalFen).toBe(100302);
+    expect(pricing.mallDiscountFen).toBe(45);
+    expect(pricing.tejiaDiscountFen).toBe(20000);
+    expect(pricing.discountTotalFen).toBe(pricing.mallDiscountFen + pricing.tejiaDiscountFen);
+    // 面价 - 商城/特价取优：100302 - 45 - 20000 = 80257
+    expect(pricing.payableFen).toBe(pricing.subtotalFen - pricing.mallDiscountFen - pricing.tejiaDiscountFen);
+    expect(pricing.payableFen).toBe(80257);
+
+    // 下单同口径：订单 totalFen 不含满减
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '赵六',
+        receiverPhone: '13800002205',
+        address: '浙江省宁波市江北区满减路 5 号',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const order = created.json().data;
+    expect(order.totalFen).toBe(80257);
+    expect(order.manjianDiscountFen).toBe(0);
+    expect(order.discountTotalFen).toBe(20045);
+  });
+
   it('满减按档位匹配，命中最高档时给出「已享受最高折扣」，订单落三层优惠快照', async () => {
     const ctx = await makeApp();
     app = ctx.app;
+    /*
+     * 0017 种子里三档是本地占位值、默认停用；本用例模拟「源站真实档位到位、改表启用」后的行为，
+     * 在内存 Store 上临时启用三档，不改动停用默认值本身。
+     */
+    ctx.store.mall.manjianTiers.listEnabled = async () => [
+      { id: 'mj_tier_1', minFen: 50000, maxFen: 100000, percent: 1, label: '满 500 元减免 1%', enabled: true, sortNo: 1 },
+      { id: 'mj_tier_2', minFen: 100000, maxFen: 300000, percent: 2, label: '满 1000 元减免 2%', enabled: true, sortNo: 2 },
+      { id: 'mj_tier_3', minFen: 300000, maxFen: null, percent: 3, label: '满 3000 元减免 3%', enabled: true, sortNo: 3 },
+    ];
     await ctx.store.mall.products.insert(
       product({ id: 'mix-mj-1', title: '满减品', priceFen: 10000, stock: 100 }),
     );

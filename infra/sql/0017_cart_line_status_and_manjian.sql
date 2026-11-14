@@ -45,7 +45,9 @@ comment on column orders.discount_total_fen is '优惠合计（分）= 商城 + 
 -- ---------------------------------------------------------------------------
 -- 说明：源站未开放满减档位接口，这里先落「可配置档位表」；
 -- min_fen 含、max_fen 不含，max_fen 为 null 表示无上限。
--- 以下种子值是本地占位配置，待源站档位数据开放后由运营在此表校正（改数据不改代码）。
+-- 以下三档是本地占位值，不是源站真实档位：未拿到源站档位前全部 enabled = false（停用），
+-- 停用时满减命中数为 0、manjian_discount_fen = 0，前端不展示满减行与「已享受满减」提示。
+-- 待源站真实档位开放后，在本表按真实档位改数据并置 enabled = true 即启用（改数据不改代码）。
 create table if not exists mall_manjian_tiers (
   id          text primary key,
   min_fen     integer not null check (min_fen >= 0),
@@ -68,9 +70,9 @@ comment on column mall_manjian_tiers.enabled is '是否启用；停用档位不�
 
 insert into mall_manjian_tiers (id, min_fen, max_fen, percent, label, enabled, sort_no)
 values
-  ('mj_tier_1', 50000,  100000, 1.00, '满 500 元减免 1%', true, 1),
-  ('mj_tier_2', 100000, 300000, 2.00, '满 1000 元减免 2%', true, 2),
-  ('mj_tier_3', 300000, null,   3.00, '满 3000 元减免 3%', true, 3)
+  ('mj_tier_1', 50000,  100000, 1.00, '满 500 元减免 1%', false, 1),
+  ('mj_tier_2', 100000, 300000, 2.00, '满 1000 元减免 2%', false, 2),
+  ('mj_tier_3', 300000, null,   3.00, '满 3000 元减免 3%', false, 3)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------

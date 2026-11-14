@@ -21,12 +21,13 @@ const clone = <T>(value: T): T => structuredClone(value);
 
 /**
  * 满减梯度档位默认值（与 infra/sql/0017 的种子一致）。
- * 源站满减档位接口未开放，这里是本地可配置占位值；改档位优先改库表，不动代码。
+ * 源站满减档位接口未开放，这里是本地占位值，不是源站真实档位；默认全部停用（enabled = false），
+ * 停用时满减命中数为 0，购物车不展示满减行与提示。拿到源站真实档位后改库表启用，不动代码。
  */
 const MEMORY_MANJIAN_TIERS: ManjianTierRecord[] = [
-  { id: 'mj_tier_1', minFen: 50000, maxFen: 100000, percent: 1, label: '满 500 元减免 1%', enabled: true, sortNo: 1 },
-  { id: 'mj_tier_2', minFen: 100000, maxFen: 300000, percent: 2, label: '满 1000 元减免 2%', enabled: true, sortNo: 2 },
-  { id: 'mj_tier_3', minFen: 300000, maxFen: null, percent: 3, label: '满 3000 元减免 3%', enabled: true, sortNo: 3 },
+  { id: 'mj_tier_1', minFen: 50000, maxFen: 100000, percent: 1, label: '满 500 元减免 1%', enabled: false, sortNo: 1 },
+  { id: 'mj_tier_2', minFen: 100000, maxFen: 300000, percent: 2, label: '满 1000 元减免 2%', enabled: false, sortNo: 2 },
+  { id: 'mj_tier_3', minFen: 300000, maxFen: null, percent: 3, label: '满 3000 元减免 3%', enabled: false, sortNo: 3 },
 ];
 
 /** 内存驱动：本机开发与自动化测试默认用它，零外部依赖。 */
@@ -494,7 +495,9 @@ export class MemoryStore implements Store {
      * 单测直接覆盖档位匹配与取整口径，不需要连 PG。
      */
     manjianTiers: {
-      listEnabled: async (): Promise<ManjianTierRecord[]> => clone(MEMORY_MANJIAN_TIERS),
+      // 与 PG 的 `where enabled = true` 对齐：停用档位不参与匹配
+      listEnabled: async (): Promise<ManjianTierRecord[]> =>
+        clone(MEMORY_MANJIAN_TIERS.filter((tier) => tier.enabled)),
     },
     orders: {
       insert: async (order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord> => {
