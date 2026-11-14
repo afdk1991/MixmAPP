@@ -182,6 +182,14 @@ export type Config = {
       /** MALL_CATALOG_FILE：覆盖默认 catalog.json 路径（相对 cwd 或绝对路径） */
       file: string;
     };
+    /**
+     * MALL_SOURCE_STOCK_GATE：库存拦截总闸（同一个环境变量决定三档行为）
+     * - `false` / `off`：一律不按源站库存拦截（旧放行行为）
+     * - `true` / 未设置（默认）：分级判定 —— 明确停售/下架/无货才拦，
+     *   仅匿名视图推断的「缺货」放行并打「货源待确认」标记
+     * - `strict`：恢复旧的全拦截（缺货/无货/下架/停售一律拦）
+     */
+    sourceStockMode: 'off' | 'tier' | 'strict';
   };
   /** 待支付订单超时分钟数：超过就取消并归还库存（0 表示关闭自动取消） */
   orderTtlMinutes: number;
@@ -487,6 +495,16 @@ export function loadConfig(): Config {
         })(),
         file: str('MALL_CATALOG_FILE'),
       },
+      /**
+       * 一个环境变量三档回退：MALL_SOURCE_STOCK_GATE=false 全放行，
+       * =strict 回到旧的全拦截，true/未设置走分级判定。
+       */
+      sourceStockMode: ((): 'off' | 'tier' | 'strict' => {
+        const raw = str('MALL_SOURCE_STOCK_GATE', 'tier').trim().toLowerCase();
+        if (raw === 'strict') return 'strict';
+        if (raw === 'false' || raw === '0' || raw === 'off' || raw === 'no') return 'off';
+        return 'tier';
+      })(),
     },
     orderTtlMinutes: num('ORDER_TTL_MINUTES', 30),
     usernameDenylist: str('USERNAME_DENYLIST')

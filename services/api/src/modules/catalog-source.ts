@@ -43,6 +43,8 @@ type RawProduct = {
   sourceKey: string;
   sourceId?: string | null;
   sourceUrl?: string | null;
+  /** 源站库存状态原文，如「缺货」「下架」 */
+  sourceInvStatus?: string | null;
   name: string;
   subtitle?: string | null;
   brand?: string | null;
@@ -319,6 +321,9 @@ export class CatalogSource {
         ...(priceSource ? { priceSource } : {}),
         ...(p.priceCapturedAt ? { priceCapturedAt: p.priceCapturedAt } : {}),
         ...(p.sourceUrl ? { sourceUrl: p.sourceUrl } : {}),
+        ...(p.sourceInvStatus ? { sourceInvStatus: p.sourceInvStatus } : {}),
+        // 快照库存恒为 0（需登录才可见），因此目录源一律不可售
+        inStock: false,
       };
       items.push(dto);
 

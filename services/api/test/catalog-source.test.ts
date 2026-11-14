@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 function cfg(mode: 'auto' | 'off' | 'force', file: string = fixture): Config {
-  return { ...testConfig, mall: { catalogSource: { mode, file } } };
+  return { ...testConfig, mall: { catalogSource: { mode, file }, sourceStockMode: 'off' } };
 }
 
 async function makeApp(config: Config, store = new MemoryStore()) {

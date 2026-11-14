@@ -31,12 +31,14 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     const catalogSource = await app.catalog.status();
+    const catalogSync = await app.store.ops.lastCatalogSyncRun().catch(() => null);
     const checks: Record<string, string> = {
       db,
       dbTarget: app.cfg.dbTarget,
       dbHost: dbHostOf(app.cfg.databaseUrl),
       dbSource: app.cfg.databaseUrlSource,
       catalogSource: catalogSource.source,
+      catalogSync: catalogSync ? catalogSync.status : 'none',
       sms: app.cfg.sms.provider,
       pay:
         capabilitySnapshot(app.cfg)['wechatPay'] === 'on' ||
@@ -53,6 +55,8 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
       uptimeSec: Math.round(process.uptime()),
       checks,
       catalogSource,
+      /** 最近一次目录同步：run_id / 起止时间 / 成败 / 失败摘要 / 统计 */
+      catalogSync,
       time: new Date().toISOString(),
     };
     return reply.code(ok ? 200 : 503).send(report);
