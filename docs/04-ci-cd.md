@@ -96,7 +96,7 @@ schedule（每日 02:20）
 ```
 
 服务：`mixmapp-api.service`（systemd，`Restart=always`，读取 `/etc/mixmapp/api.env`，暴露 8080）。
-反代（2026-11-14 改版）：`infra/nginx/api.mixm.top.conf`（`/mixmapp/` 剥前缀、`/api/` 原样 → 127.0.0.1:8080）；站点入口 `infra/nginx/www.mixm.top.conf`，裸域 301 `infra/nginx/mixm.top.conf`，切换期 legacy `infra/nginx/cloud.mixm.top.conf`。
+反代（2026-11-14 改版）：`infra/nginx/api.mixm.top.conf`（`/mixmapp/` 剥前缀、`/api/` 原样 → 127.0.0.1:8080）；站点入口 `infra/nginx/www.mixm.top.conf`，裸域 301 `infra/nginx/mixm.top.conf`。`cloud.mixm.top` 已于 2026-11-15 退役，不再有 legacy 域。
 
 ### 原子发布流程（`deploy/atomic-release.sh`）
 
@@ -126,7 +126,7 @@ bash /opt/mixmapp/deploy/rollback.sh 2    # 回退 2 个版本
 sudo useradd -r -s /usr/sbin/nologin mixmapp
 sudo mkdir -p /opt/mixmapp/{releases,deploy} /var/log/mixmapp /etc/mixmapp
 sudo cp infra/systemd/mixmapp-api.service /etc/systemd/system/
-sudo cp infra/nginx/{www,api,img,mixm}.mixm.top.conf /etc/nginx/conf.d/   # 切换期另保留 cloud.mixm.top.conf
+sudo cp infra/nginx/{www,api,img,mixm}.mixm.top.conf /etc/nginx/conf.d/   # cloud.mixm.top 已于 2026-11-15 退役，不再复制 legacy conf
 sudo systemctl daemon-reload && sudo systemctl enable mixmapp-api
 
 # 环境变量（权限 600）

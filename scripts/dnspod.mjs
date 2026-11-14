@@ -74,7 +74,7 @@ async function call(action, payload) {
 async function listWithRetry(zone, offset, limit) {
   const payload = { Domain: zone, Limit: limit, Offset: offset };
   let lastErr;
-  for (let i = 0; i < 12; i += 1) {
+  for (let i = 0; i < 30; i += 1) {
     try {
       return await call('DescribeRecordList', payload);
     } catch (e) {

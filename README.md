@@ -22,10 +22,10 @@
 | 裸域（301 → `www`） | <https://mixm.top> |
 | 生产 API / 支付回调 | <https://api.mixm.top/mixmapp/api/v1> |
 | 静态资源与图片 | <https://img.mixm.top/> |
-| 切换期 legacy（已发布 APK 仍在用，待下线） | <https://cloud.mixm.top/> |
+| 已退役（2026-11-15 删解析/vhost/证书） | ~~<https://cloud.mixm.top/>~~ |
 | 域名注册表（单一真源） | [deploy/domains.json](deploy/domains.json) |
 
-主域是 `mixm.top`，主入口是 `www.mixm.top`，裸域 `mixm.top` 301 到 www；API 与支付回调在 `api.mixm.top`，静态资源在 `img.mixm.top`。`cloud.mixm.top` 自 2026-11-14 起不再是主入口与 API 宿主，只在切换期作 legacy 双跑（已发布 APK 与存量支付回调仍指向它），确认零流量后下线——步骤见 [切换与回退序列](2026-11-14/deploy-domains/outputs/切换与回退序列.md)。DNSPod 导出表（`dnspod_records_2026-11-05_21-42-26.xls`）里这些主机只有主机名与备注，记录类型/记录值为空，属「表内主机、待建解析」；同根域的 `mim` / `data` / `gy` 属其他项目，不在本仓配置。`mix.top`（少一个 m）不是本项目域名，功能路径禁止出现，改完跑 `pnpm domains:check` 校验。
+主域是 `mixm.top`，主入口是 `www.mixm.top`，裸域 `mixm.top` 301 到 www；API 与支付回调在 `api.mixm.top`，静态资源在 `img.mixm.top`。`cloud.mixm.top` 已于 2026-11-15 退役：DNSPod 三条解析、Nginx vhost、独立证书、cloudbase 回源顺位与 CORS 白名单全部删除，存量旧 APK 内嵌基址会失联（已批准的后果）。DNSPod 导出表（`dnspod_records_2026-11-05_21-42-26.xls`）里这些主机只有主机名与备注，记录类型/记录值为空，属「表内主机、待建解析」；同根域的 `mim` / `data` / `gy` 属其他项目，不在本仓配置。`mix.top`（少一个 m）不是本项目域名，功能路径禁止出现，改完跑 `pnpm domains:check` 校验。
 
 ***
 

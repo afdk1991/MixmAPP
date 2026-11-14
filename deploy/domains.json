@@ -36,7 +36,8 @@
   "apiBase": "https://api.mixm.top/mixmapp/api/v1",
   "notifyBase": "https://api.mixm.top/mixmapp/api/v1",
   "counts": {
-    "active": 5,
+    "active": 4,
+    "retired": 1,
     "sharedZone": 3,
     "platformVerification": 7,
     "planned": 38,
@@ -137,31 +138,18 @@
       "landing": [
         "`infra/nginx/img.mixm.top.conf` → `server_name`"
       ],
-      "note": "Nginx 直出 /var/lib/mixmapp/storage/；切换期仍保留 cloud.mixm.top/media/ 作回退。"
-    },
+      "note": "Nginx 直出 /var/lib/mixmapp/storage/；cloud.mixm.top/media/ 已随 cloud 于 2026-11-15 退役一并移除，无回退域。"
+    }
+  ],
+  "retired": [
     {
       "fqdn": "cloud.mixm.top",
       "host": "cloud",
       "zone": "mixm.top",
-      "sourceRows": [
-        19,
-        20,
-        101
-      ],
-      "line": "默认",
-      "ttl": 600,
-      "recordType": null,
-      "value": null,
-      "remark": "云服务模块入口｜私有云盘 / 网盘系统",
-      "role": "legacy-dual-run",
-      "projectUsage": "legacy_dual_run",
-      "dnsState": "in_use",
-      "landing": [
-        "`infra/nginx/cloud.mixm.top.conf` → `server_name`（切换期 legacy 双跑）",
-        "`cloudbase/functions/mixmapp-api-proxy/index.js` → 回退候选（仅切换期）"
-      ],
-      "conflict": "表内备注为「云服务模块入口｜私有云盘 / 网盘系统」，与 MixmAPP 实际用途不一致；记录类型/值为空，真实解析需控制台核对。",
-      "note": "2026-11-14 起不再是主入口、也不再是 API 宿主。切换期必须与 www/api 同时可用，承载已发布 APK 与历史支付回调；确认零流量后按下线清单移除。"
+      "retiredAt": "2026-11-15",
+      "role": "retired",
+      "dnsState": "removed",
+      "note": "解析三条已删（含暂停模板条）、Nginx vhost 已删、独立证书已删、cloudbase 回源顺位与 CORS 白名单已移除；域名 mixm.top 的 zone 本身保留。"
     }
   ],
   "sharedZone": [
@@ -1947,17 +1935,17 @@
     "$comment": "主域 + 子域职责分配（2026-11-14 定案改版）。只允许使用 xls 表内主机名，不新增任何域名；laal.top 明确不参与。recordType/value 仍为 null，绑定前必须在 DNSPod 控制台核对。切换序列见 2026-11-14/deploy-domains/outputs/切换与回退序列.md。",
     "primaryZone": "mixm.top",
     "primaryHost": "www.mixm.top",
-    "primaryReason": "2026-11-14 定案：主入口迁到 www.mixm.top，裸域 mixm.top 只做 301 到 www。www 在 xls 表内（sourceRows 5/6，备注「主站常规访问入口｜官方门户网站」），语义与官网 / H5 正式站一致；cloud.mixm.top 降级为切换期 legacy，不再作主入口、也不再作 API 宿主。主域只能是 mixm.top——laal.top 与本项目无关，mix.top 是拼写域。",
+    "primaryReason": "2026-11-14 定案：主入口迁到 www.mixm.top，裸域 mixm.top 只做 301 到 www。www 在 xls 表内（sourceRows 5/6，备注「主站常规访问入口｜官方门户网站」），语义与官网 / H5 正式站一致；cloud.mixm.top 已于 2026-11-15 退役（解析 / vhost / 证书 / cloudbase 回源 / CORS 全删），不再作主入口、也不再作 API 宿主。主域只能是 mixm.top——laal.top 与本项目无关，mix.top 是拼写域。",
     "rootRedirect": {
       "from": "mixm.top",
       "to": "https://www.mixm.top",
       "status": 301,
       "config": "infra/nginx/mixm.top.conf"
     },
-    "enabledThisRound": ["www.mixm.top", "api.mixm.top", "img.mixm.top"],
-    "enabledThisRoundReason": "三个主机均在 xls 表内，且服务端能力已存在：www 复用现有 H5 产物与 Nginx root，api 复用同一 Fastify 上游（infra/nginx/api.mixm.top.conf），img 复用 /var/lib/mixmapp/storage/ 直出。不引入新业务代码，只做 vhost 拆分与解析/证书。",
-    "retiringThisRound": ["cloud.mixm.top"],
-    "retiringNote": "cloud 不是立即删除：切换期必须与 www/api 同时可用（已发布 APK 与历史支付回调硬指向它）。下线前置是「www/api 的 healthz、meta 均正常 + 客户端基址切换并发版 + 支付回调改配并验签 + access.log 中 cloud 流量归零」。",
+    "enabledThisRound": ["www.mixm.top", "api.mixm.top", "img.mixm.top", "mixm.top"],
+    "enabledThisRoundReason": "三个子域均在 xls 表内，且服务端能力已存在：www 复用现有 H5 产物与 Nginx root，api 复用同一 Fastify 上游（infra/nginx/api.mixm.top.conf），img 复用 /var/lib/mixmapp/storage/ 直出。裸域 mixm.top 于 2026-11-15 启用 A → 115.159.159.11 并扩 SAN，仅做 80/443 → https://www.mixm.top 的 301。不引入新业务代码，只做 vhost 拆分与解析/证书。",
+    "retiringThisRound": [],
+    "retiringNote": "cloud.mixm.top 已于 2026-11-15 退役完成：DNS 三条删除、Nginx vhost 删除、独立证书删除、cloudbase 回源顺位与 CORS 白名单移除。存量旧 APK 内嵌 cloud 基址会失联，属用户已批准的后果。",
     "platformAssignments": [
       {
         "slug": "web-h5",
@@ -1968,7 +1956,7 @@
         "status": "to_enable",
         "role": "H5 正式入口（Nginx root /opt/mixmapp/current/web，history 深链接回退 index.html）；裸域 mixm.top 301 到此处",
         "prerequisites": ["解析：www → 同一台服务器（115.159.159.11）", "证书：www.mixm.top（可用 mixm.top 泛域名证书）", "备案：mixm.top 根域已备案", "Nginx：infra/nginx/www.mixm.top.conf 已就绪", "签名：无需"],
-        "cutover": "新建解析与证书 → 双跑验证 → 切 CORS → 确认无流量后才下线 cloud 的 H5 角色"
+        "cutover": "已启用并验证；cloud 的 H5 角色已于 2026-11-15 随退役删除"
       },
       {
         "slug": "api",
@@ -1978,7 +1966,7 @@
         "inTable": true,
         "status": "to_enable",
         "role": "独立 API 网关：Nginx location /mixmapp/ → 127.0.0.1:8080（剥前缀），/api/ → 同上游（原样）；与 www 跨域，需 CORS 白名单",
-        "prerequisites": ["解析：api → 同一台服务器", "证书：api.mixm.top", "Nginx：infra/nginx/api.mixm.top.conf 已就绪", "CORS：CORS_ORIGINS 必须含 https://www.mixm.top", "双跑：cloud 的 /mixmapp/ 保留至客户端切换完成"],
+        "prerequisites": ["解析：api → 同一台服务器", "证书：api.mixm.top", "Nginx：infra/nginx/api.mixm.top.conf 已就绪", "CORS：CORS_ORIGINS 必须含 https://www.mixm.top", "cloud 已于 2026-11-15 退役，双跑期结束"],
         "cutover": "api 双跑验证通过前，不得让新 APK 产物指向 api"
       },
       {
@@ -1999,8 +1987,8 @@
         "inTable": true,
         "status": "to_enable",
         "role": "App / 小程序 / 鸿蒙统一 api-base（apps/mobile/api-base.json 与 android.yml 的 MIXMAPP_API_BASE 指向它）；capacitor://localhost 等壳来源由 API 内置白名单处理",
-        "prerequisites": ["先完成 api.mixm.top 双跑与 healthz/meta 验证", "再改 apps/mobile/api-base.json 并重新出包（已发布 APK 仍指向 cloud，不能强切）", "app.mixm.top 专属网关保持 planned_no_dns"],
-        "cutover": "新 APK 出包必须在 api 双跑通过之后；旧 APK 靠 cloud 双跑兜底"
+        "prerequisites": ["先完成 api.mixm.top 双跑与 healthz/meta 验证", "再改 apps/mobile/api-base.json 并重新出包（存量旧 APK 因 cloud 退役已失联，无法强切）", "app.mixm.top 专属网关保持 planned_no_dns"],
+        "cutover": "新 APK 出包必须在 api 双跑通过之后；旧 APK 随 cloud 退役失联，新包只走 api"
       },
       {
         "slug": "static-img",
@@ -2009,8 +1997,8 @@
         "fqdn": "img.mixm.top",
         "inTable": true,
         "status": "to_enable",
-        "role": "图片与静态资源独立域，Nginx 直出 /var/lib/mixmapp/storage/；切换期保留 cloud.mixm.top/media/ 作回退",
-        "prerequisites": ["证书：img.mixm.top（可用 mixm.top 泛域名证书）", "解析：img → 同一台服务器", "Nginx：infra/nginx/img.mixm.top.conf 已就绪", "签名：无需", "回滚：删解析即回到 cloud.mixm.top/media/"]
+        "role": "图片与静态资源独立域，Nginx 直出 /var/lib/mixmapp/storage/；cloud.mixm.top/media/ 已于 2026-11-15 随 cloud 退役移除",
+        "prerequisites": ["证书：img.mixm.top（含于 mixmapp-domains SAN）", "解析：img → 同一台服务器", "Nginx：infra/nginx/img.mixm.top.conf 已就绪", "签名：无需", "回滚：删解析即下线，无回退域（cloud 已退役）"]
       },
       {
         "slug": "docs",
@@ -2039,7 +2027,7 @@
         "fqdn": "fwq.mixm.top",
         "inTable": true,
         "status": "planned_no_dns",
-        "role": "规划：运维监控面板（表内备注）；健康检查改走 api.mixm.top/mixmapp/api/v1/healthz（GitHub Actions ops-nightly 每日巡检），双跑期 cloud 与 api 各查一次",
+        "role": "规划：运维监控面板（表内备注）；健康检查改走 api.mixm.top/mixmapp/api/v1/healthz（GitHub Actions ops-nightly 每日巡检），cloud 已于 2026-11-15 退役，只查 api",
         "prerequisites": ["证书", "解析", "需先有监控面板服务", "如需公网暴露须加访问控制", "HEALTH_BASE_URL 变量在切换完成后改为 api.mixm.top"]
       },
       {
@@ -2049,8 +2037,8 @@
         "fqdn": "api.mixm.top/mixmapp/api/v1/pay/notify/{wechat,alipay}",
         "inTable": true,
         "status": "to_enable",
-        "role": "回调迁到 api.mixm.top 的 notify 路径；双跑期 cloud 的同一路径必须保持可用，防止存量订单回调 404",
-        "prerequisites": ["api.mixm.top 双跑通过", "微信/支付宝商户平台同步改回调地址并重新验签", "改为 api 后 cloud 的 notify 至少保留一个完整对账周期", "pay.mixm.top 保持 planned_no_dns（不单开支付网关）"],
+        "role": "回调迁到 api.mixm.top 的 notify 路径；cloud 已于 2026-11-15 退役，存量订单回调若仍指向 cloud 会失效，需在商户平台确认已改配",
+        "prerequisites": ["api.mixm.top 双跑通过", "微信/支付宝商户平台同步改回调地址并重新验签", "cloud 已于 2026-11-15 退役，不再保留 notify 兜底", "pay.mixm.top 保持 planned_no_dns（不单开支付网关）"],
         "cutover": "最高风险步骤：改配后用沙箱或小额单验证签名与到账，再观察对账"
       },
       {
@@ -2069,13 +2057,13 @@
       { "platform": "腾讯云自建服务器（Nginx）", "domain": "mixm.top", "environment": "正式（301 → www）", "status": "to_enable" },
       { "platform": "腾讯云自建服务器（Nginx）", "domain": "api.mixm.top", "environment": "正式", "status": "to_enable" },
       { "platform": "腾讯云自建服务器（Nginx）", "domain": "img.mixm.top", "environment": "正式", "status": "to_enable" },
-      { "platform": "腾讯云自建服务器（Nginx）", "domain": "cloud.mixm.top", "environment": "正式（legacy 双跑）", "status": "active_legacy_dual_run" },
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "cloud.mixm.top", "environment": "已退役", "status": "retired_2026-11-15" },
       { "platform": "腾讯云自建服务器（Nginx）", "domain": "test.mixm.top", "environment": "预览/灰度", "status": "planned_no_dns" },
       { "platform": "腾讯云自建服务器（Nginx）", "domain": "dev.mixm.top", "environment": "开发", "status": "planned_no_dns" },
       { "platform": "GitHub Pages", "domain": "afdk1991.github.io/MixmAPP/", "environment": "预览", "status": "active_outside_table" },
       { "platform": "CloudBase 静态托管", "domain": "mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com", "environment": "预览", "status": "suspended_outside_table" },
-      { "platform": "CloudBase 云函数 mixmapp-api-proxy", "domain": "(回源 api.mixm.top；双跑期保留 cloud 候选)", "environment": "正式", "status": "to_reconfigure" },
-      { "platform": "Android（Capacitor 壳）", "domain": "已发布 APK → cloud.mixm.top/mixmapp/api/v1；新包 → api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "dual_base_transition" },
+      { "platform": "CloudBase 云函数 mixmapp-api-proxy", "domain": "(回源 api.mixm.top；cloud 候选已于 2026-11-15 移除)", "environment": "正式", "status": "reconfigured" },
+      { "platform": "Android（Capacitor 壳）", "domain": "存量旧 APK → cloud.mixm.top/mixmapp/api/v1（已随 cloud 退役失联）；新包 → api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "api_only" },
       { "platform": "微信小程序", "domain": "api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "build_only_not_published" },
       { "platform": "鸿蒙 App", "domain": "api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "build_only_not_published" },
       { "platform": "Gitee 镜像", "domain": null, "environment": "—", "status": "no_credentials" },

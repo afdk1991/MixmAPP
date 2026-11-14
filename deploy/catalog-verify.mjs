@@ -8,7 +8,7 @@
  *   LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
  *     STORAGE_DIR=/var/lib/mixmapp/storage node deploy/catalog-verify.mjs  # 生产机本地资产硬验收
  *   CATALOG_FILE=... STORAGE_DIR=... node deploy/catalog-verify.mjs https://www.mixm.top  # 全项
- *   双跑期可显式传 https://cloud.mixm.top 做新旧对照。
+ *   cloud.mixm.top 已于 2026-11-15 退役，不再作对照入口；需要对照时用 API_BASE 显式指定。
  *
  * 环境变量：
  *   API_BASE              显式指定 API 根；缺省自动探测 /mixmapp/api/v1 与 /api/v1

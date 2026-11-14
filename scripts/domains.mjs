@@ -13,7 +13,7 @@
  *
  * 校验目标（防止 2026-11-13 的 `cloud.mix.top` 少一个 m 事故复发）：
  *   1. api-base.json 的 apiBase 与注册表一致（2026-11-14 起为 api.mixm.top）；
- *   2. Nginx server_name：www.mixm.top 与 api.mixm.top 必须存在，cloud 作为 legacy 双跑保留；
+ *   2. Nginx server_name：www / api / 裸域 mixm.top 必须存在（cloud 已于 2026-11-15 退役，不再校验）；
  *   3. .env.example 的支付回调指向注册表 apiBase（api.mixm.top）；
  *   4. 功能路径内不出现禁止字符串（拼写域 / 表外域 / laal.top）；
  *   5. 规划主机不与在用/共享/验证记录重名；
@@ -83,7 +83,7 @@ function check(reg) {
     if (apiBase !== reg.apiBase) fail(`apps/mobile/api-base.json apiBase=${apiBase}，注册表=${reg.apiBase}`);
   }
 
-  // 3. Nginx server_name：新主入口与 API 宿主必须存在；cloud 作为 legacy 双跑保留
+  // 3. Nginx server_name：主入口、API 宿主与裸域 301 必须存在（cloud 已于 2026-11-15 退役，不再校验）
   const nginxTargets = [
     ['infra/nginx/www.mixm.top.conf', /server_name\s+www\.mixm\.top\s*;/],
     ['infra/nginx/api.mixm.top.conf', /server_name\s+api\.mixm\.top\s*;/],
@@ -93,12 +93,6 @@ function check(reg) {
     const content = readMaybe(rel);
     if (content === null) fail(`缺少 ${rel}`);
     else if (!re.test(content)) fail(`${rel} 缺少预期的 server_name`);
-  }
-  const legacyNginx = readMaybe('infra/nginx/cloud.mixm.top.conf');
-  if (legacyNginx === null) {
-    warnings.push('缺少 infra/nginx/cloud.mixm.top.conf（切换期 legacy 双跑仍需要它）');
-  } else if (!/server_name\s+cloud\.mixm\.top\s*;/.test(legacyNginx)) {
-    fail('infra/nginx/cloud.mixm.top.conf 缺少 server_name cloud.mixm.top;（双跑期不能删）');
   }
 
   // 4. .env.example 支付回调落在生产 API 入口
@@ -119,7 +113,6 @@ function check(reg) {
     'infra/nginx/api.mixm.top.conf',
     'infra/nginx/mixm.top.conf',
     'infra/nginx/img.mixm.top.conf',
-    'infra/nginx/cloud.mixm.top.conf',
     'infra/systemd/mixmapp-api.service',
     'cloudbase/functions/mixmapp-api-proxy/index.js',
     'cloudbase/functions/mixmapp-api-proxy/package.json',

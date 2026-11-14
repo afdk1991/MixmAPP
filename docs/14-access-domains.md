@@ -4,6 +4,10 @@
 实测位置：中国大陆网络（宁波，不跳过证书校验）
 实测方法：`Resolve-DnsName` / DNSPod 权威 NS 直查 + `curl` 状态码与内容类型 + `python ssl` 读取证书 CN/SAN + 抓取静态站 HTML 内嵌的 API 基址（逐字符比对）
 
+> **2026-11-15 状态更新（优先于下文）**：`cloud.mixm.top` 已退役——DNSPod 解析（`cloud`、`cloud.mixm.top`、暂停模板条共 3 条）已删、
+> Nginx vhost 已删、独立证书已删、cloudbase 回源顺位与 `CORS_ORIGINS` 已移除；`laal.top` 记录已清空（zone 仍留在 DNSPod 名下）。
+> 下文表格中的 cloud 行仅作 2026-11-13 的历史实测留存；当前在用入口为 `www` / `api` / `img` 与裸域 301。
+
 > **重要命名提醒（本次事故根因）**：本项目域名是 `mixm.top`（m-i-x-m），生产 API 主机是 `cloud.mixm.top`。
 > 仓库历史文档、README、以及生产机 nginx 配置里曾大量出现 `cloud.mix.top`（少一个 m）。`mix.top`（m-i-x）是**另一个域名**，
 > 解析到 AWS 停放服务（`13.248.169.48` / `76.223.54.146`），与本项目无关——此前“国内 TLS alert 112 / GA 不可达”的结论全部来自这个错误域名。
@@ -44,17 +48,17 @@
 |---|---|---|---|
 | `mim.mixm.top` | A → 115.159.159.11 | ✅ 200，`<title>Mim</title>` | Mim 主站（自建服务器，nginx vhost `mim.conf`） |
 | `data.mixm.top` | CNAME → `data.mixm.top.pages.dnsoe5.com`（腾讯云 EdgeOne；落地 114.237.67.60） | ✅ 200，`<title>Mim</title>` | Mim 前端（EdgeOne CDN） |
-| `cloud.mixm.top` | A → 115.159.159.11 | ✅ 200 JSON，证书 SAN 正确 | MixmAPP 生产 API 入口（本次修复） |
+| `cloud.mixm.top` | A → 115.159.159.11 | ⛔ 已退役（2026-11-15 解析/vhost/证书全删） | 原 MixmAPP 生产 API 入口，现由 `api.mixm.top` 承载 |
 | `gy.mixm.top` | CNAME → `gale-engine-landing-6j02gsvv.edgeone.cool` → `…pages.dnsoe5.com`（落地 61.170.82.52） | 418 | 疾风引擎落地页（EdgeOne Pages），边缘节点拦截页 |
-| `mixm.top`（根域） | 无 A / CNAME | ❌ 无法打开 | 规划为「主站统一跳转门户」，尚未落地 |
+| `mixm.top`（根域） | A → 115.159.159.11 | ✅ 301 → `https://www.mixm.top` | 主站统一跳转门户（2026-11-15 落地） |
 
-DNSPod `mixm.top` 区里与 cloud 相关的记录共 3 条：`cloud` A 115.159.159.11（开启）、`cloud.mixm.top` A 115.159.159.11（开启，备注「云服务模块入口」）、`cloud` A 103.0.113.20（暂停，模板遗留）。**无需改 DNS。**
+DNSPod `mixm.top` 区里与 cloud 相关的记录共 3 条：`cloud` A 115.159.159.11（开启）、`cloud.mixm.top` A 115.159.159.11（开启，备注「云服务模块入口」）、`cloud` A 103.0.113.20（暂停，模板遗留）。**2026-11-15：上述三条已全部删除（含暂停模板条）；裸域 `@` A 已启用为 115.159.159.11。**
 
 ## 四、规划但尚未建解析的子域
 
 来源：仓库根目录 `dnspod_records_2026-11-05_21-42-26.xls`（`mixm.top` 表，103 行原始记录、53 个唯一主机）。该表「记录类型」「记录值」「状态」列为空，属命名模板而非可导入的真实解析；下表为逐条用途。
 
-机器可读版本见 [deploy/domains.json](../deploy/domains.json)：在用 1 个（`cloud`）+ 同根域其他项目 3 个（`mim`/`data`/`gy`）+ EdgeOne 验证 7 条 + 规划未解析 42 个。仓库改动后执行 `pnpm domains:check` 校验一致性。
+机器可读版本见 [deploy/domains.json](../deploy/domains.json)：在用 0 个（`cloud` 已于 2026-11-15 退役，见 `retired`）+ 同根域其他项目 3 个（`mim`/`data`/`gy`）+ EdgeOne 验证 7 条 + 规划未解析 42 个。仓库改动后执行 `pnpm domains:check` 校验一致性。
 
 | 类别 | 主机记录 | 规划用途（取自 xls 备注） | 解析状态 |
 |---|---|---|---|
