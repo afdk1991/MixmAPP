@@ -1,4 +1,5 @@
 import type { ProductDto } from '@mixmapp/contracts';
+import { apiRequest } from './client';
 
 /**
  * 商城导入商品的前端本地类型。
@@ -31,6 +32,10 @@ export type MallProductDto = ProductDto & {
   discountPct?: number;
   /** 特价，厘/支 */
   salePriceLi?: number;
+  /** 源站特价折扣百分比（tejiaD2N2）：有值时商城折扣划掉，改展示特价折扣 */
+  tejiaDiscountPct?: number;
+  /** 登录可见门禁：true 表示匿名视角，折后价 / 库存 / 库存状态由服务端屏蔽 */
+  loginVisibleRequired?: boolean;
   /** 类目属性（按类目实际存在形态，空值不入库） */
   attributes?: Record<string, string>;
   /** 优惠活动文案与有效期 */
@@ -87,14 +92,16 @@ export function isInquiryProduct(
 
 /**
  * 缺货判定：**源站状态优先**，其次才看假设库存。
+ * - 登录门禁（匿名视角）：库存被服务端隐藏，不能据此判缺货，先放行给「登录可见」占位。
  * - `inStock === false`：源站明确缺货/下架，直接判缺货，禁止加购 / 下单。
  * - `inStock === true`：源站有货，`stock` 只表示可售上限，不再据此判缺货。
  * - 后端没给 `inStock` 时退回旧口径：库存缺失或 `stock <= 0` 视为缺货。
  * 注意与询价区分：询价看 `priceSource / priceFen`，缺货看 `inStock / stock`，两者互不覆盖。
  */
 export function isOutOfStock(
-  product: Pick<MallProductDto, 'stock' | 'inStock'>,
+  product: Pick<MallProductDto, 'stock' | 'inStock' | 'loginVisibleRequired'>,
 ): boolean {
+  if (product.loginVisibleRequired) return false;
   if (typeof product.inStock === 'boolean') return !product.inStock;
   return product.stock == null || product.stock <= 0;
 }
@@ -211,3 +218,87 @@ export function formatCapturedAt(iso?: string): string {
 
 /** 询价商品的统一说明文案：详情弹窗 / 加购拦截共用。 */
 export const INQUIRY_NOTICE = '该商品为目录选品，价格需联系报价确认，暂不支持直接加入购物车或下单。';
+
+/** 源站未登录时的统一占位文案（disbasePrc / bpInvQty / invStatus 三列同文案）。 */
+export const LOGIN_VISIBLE_TEXT = '登录可见';
+
+/**
+ * 登录可见门禁判定（源站 /b2b/ 规则）：未登录时 disbasePrc（折后千支价）、
+ * bpInvQty（库存）、invStatus（库存状态）都显示「登录可见」，不暴露真实数值。
+ * 服务端已在匿名视角把 stock 归 0 并下发该标记，前端据此渲染占位。
+ */
+export function isLoginGated(
+  product: Pick<MallProductDto, 'loginVisibleRequired'>,
+): boolean {
+  return product.loginVisibleRequired === true;
+}
+
+/**
+ * 千支面价（元/千支），对应源站列表列 `basePrcD3N2`。
+ * priceLi 是「厘/支」：1 元 = 1000 厘，1000 支合计正好等于 priceLi 元，故数值与源站一致；
+ * 旧数据没有 priceLi 时用 priceFen（分/支）×10 回落（1000 支 = priceFen×1000 分 = priceFen×10 元）。
+ */
+export function perThousandBaseYuan(
+  product: Pick<MallProductDto, 'priceLi' | 'priceFen'>,
+): number | null {
+  const li = product.priceLi;
+  if (li != null && li > 0) return li;
+  const fen = product.priceFen;
+  if (fen == null || fen <= 0) return null;
+  return fen * 10;
+}
+
+/**
+ * 折后千支价（元/千支），对应源站列 `disbasePrc` = basePrcD3N2 × disD2N2 / 100。
+ * 有 salePriceLi（面价×折扣）时直接换算，避免二次四舍五入。
+ */
+export function perThousandDiscountYuan(
+  product: Pick<MallProductDto, 'priceLi' | 'priceFen' | 'discountPct' | 'salePriceLi'>,
+): number | null {
+  const sale = product.salePriceLi;
+  if (sale != null && sale > 0) return sale;
+  const base = perThousandBaseYuan(product);
+  const pct = product.discountPct;
+  if (base == null || pct == null || pct <= 0) return null;
+  return (base * pct) / 100;
+}
+
+/** 千支价格文案：整数不带小数（源站 basePrcD3N2 多为整数），非整数保留两位。 */
+export function yuanText(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '';
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+/** 商品列表查询参数（与 /mall/products 契约一致）。 */
+export type MallProductQuery = {
+  category?: string;
+  cat?: string;
+  dims?: string;
+  lens?: string;
+  brand?: string;
+  std?: string;
+  grd?: string;
+  mtl?: string;
+  ttt?: string;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+/**
+ * 商品列表（可选登录态）：与 mallApi.listProducts 的 `auth: false` 不同，
+ * 这里会带上 accessToken，服务端才能按登录视角下发折后千支价与库存；
+ * 未登录时不带令牌，仍可浏览，只是 disbasePrc / bpInvQty / invStatus 显示「登录可见」。
+ */
+export function fetchMallProducts(query: MallProductQuery = {}): Promise<MallProductDto[]> {
+  const qs = Object.entries(query)
+    .filter(([, value]) => value !== undefined && value !== '')
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&');
+  return apiRequest<MallProductDto[]>(`/mall/products${qs ? `?${qs}` : ''}`);
+}
+
+/** 商品详情（可选登录态），门禁口径同 fetchMallProducts。 */
+export function fetchMallProduct(productId: string): Promise<MallProductDto> {
+  return apiRequest<MallProductDto>(`/mall/products/${encodeURIComponent(productId)}`);
+}

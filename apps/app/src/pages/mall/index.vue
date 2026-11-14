@@ -157,10 +157,35 @@
                 <text v-if="priceUnitLabel(product)" class="p-unit mono">{{ priceUnitLabel(product) }}</text>
                 <text v-if="product.originalPriceFen > 0" class="p-old mono">¥{{ priceText(product.originalPriceFen) }}</text>
               </view>
+              <!-- 源站列表关键列：basePrcD3N2 千支面价 / disD2N2 商城折扣 / disbasePrc 折后千支价 -->
+              <view v-if="!isInquiryProduct(product)" class="p-thousand">
+                <text v-if="baseThousandText(product)" class="p-thousand-item mono">
+                  千支面价 ¥{{ baseThousandText(product) }}
+                </text>
+                <text v-if="discountPctText(product)" class="p-thousand-item mono">
+                  {{ discountPctText(product) }}% 折扣
+                </text>
+                <!-- 未登录：disbasePrc 在源站渲染为「登录可见」，不暴露折后价 -->
+                <text
+                  v-if="isLoginGated(product)"
+                  class="p-thousand-item p-thousand-item--gated mono"
+                  hover-class="is-press"
+                  @tap.stop="goLogin"
+                >
+                  折后千支价 {{ LOGIN_VISIBLE_TEXT }}
+                </text>
+                <text v-else-if="discountThousandText(product)" class="p-thousand-item p-thousand-item--strong mono">
+                  折后千支 ¥{{ discountThousandText(product) }}
+                </text>
+              </view>
               <view class="p-meta">
                 <text v-if="packLabel(product)" class="p-pack mono">{{ packLabel(product) }}</text>
                 <view v-if="isInquiryProduct(product)" class="status-chip status-chip--inquiry">
                   <text class="status-chip-text mono">询价待报</text>
+                </view>
+                <!-- 未登录：bpInvQty（库存）与 invStatus（库存状态）同为「登录可见」占位 -->
+                <view v-else-if="isLoginGated(product)" class="status-chip status-chip--pending">
+                  <text class="status-chip-text mono">库存 · {{ LOGIN_VISIBLE_TEXT }}</text>
                 </view>
                 <view v-else-if="isOutOfStock(product)" class="status-chip status-chip--oos">
                   <text class="status-chip-text mono">缺货</text>
@@ -249,17 +274,23 @@ import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-
 import type { MallCategoryNodeDto, MallProductDto, MallSpecOptionsDto } from '../../api/mall';
 import {
   breadcrumbLabel,
+  fetchMallProducts,
   INQUIRY_NOTICE,
   isBulkStock,
   isInquiryProduct,
+  isLoginGated,
   isOutOfStock,
   isStockUnconfirmed,
   listPriceText,
+  LOGIN_VISIBLE_TEXT,
   OUT_OF_STOCK_NOTICE,
   packLabel,
+  perThousandBaseYuan,
+  perThousandDiscountYuan,
   priceText,
   priceUnitLabel,
   specEntries,
+  yuanText,
 } from '../../api/mall';
 import { mallApi, productCover, coverTint } from '../../api/client';
 import { ROUTES } from '../../routes';
@@ -558,7 +589,8 @@ async function fetchPage(reset: boolean): Promise<void> {
     loadingMore.value = true;
   }
   try {
-    const list = await mallApi.listProducts({
+    // 可选登录态：登录后服务端才下发折后千支价与真实库存（源站 disbasePrc / bpInvQty 口径）
+    const list = await fetchMallProducts({
       cat: activeCat.value || undefined,
       dims: filters.dims || undefined,
       lens: filters.lens || undefined,
@@ -652,6 +684,27 @@ function cardSpec(product: MallProductDto): string {
     .slice(0, 2)
     .map(([key, value]) => `${key} ${value}`)
     .join(' · ');
+}
+
+/** 千支面价文案（元/千支）：源站列表列 basePrcD3N2。 */
+function baseThousandText(product: MallProductDto): string {
+  return yuanText(perThousandBaseYuan(product));
+}
+
+/** 商城折扣文案：源站列 disD2N2，100 也是合法值（无折扣，照常显示）。 */
+function discountPctText(product: MallProductDto): string {
+  const pct = product.discountPct;
+  return pct != null && pct > 0 ? String(pct) : '';
+}
+
+/** 折后千支价文案（元/千支）：源站列 disbasePrc = 面价 × 折扣 / 100。 */
+function discountThousandText(product: MallProductDto): string {
+  return yuanText(perThousandDiscountYuan(product));
+}
+
+/** 匿名视角折后价 / 库存均为「登录可见」，点击占位直接去登录页。 */
+function goLogin(): void {
+  goTo(ROUTES.login);
 }
 
 function openDetail(product: MallProductDto): void {
@@ -1342,6 +1395,32 @@ onPullDownRefresh(() => {
   font-size: $fs-micro;
   color: $ink-3;
   margin-right: 12rpx;
+}
+
+/* 千支口径行：源站 basePrcD3N2 / disD2N2 / disbasePrc 三列，窄屏自动换行 */
+.p-thousand {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx 16rpx;
+  margin-top: 6rpx;
+}
+
+.p-thousand-item {
+  font-size: $fs-micro;
+  color: $ink-3;
+  letter-spacing: 1rpx;
+}
+
+/* 折后千支价：登录后主展示项 */
+.p-thousand-item--strong {
+  color: $brand-deep;
+}
+
+/* 未登录占位：可点击去登录 */
+.p-thousand-item--gated {
+  color: $amber;
+  text-decoration: underline;
 }
 
 /* 状态 chip：仅状态用 pill 圆角 */

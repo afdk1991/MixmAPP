@@ -147,6 +147,8 @@ export type ProductRecord = {
   discountPct?: number | null;
   /** 特价，厘/支 */
   salePriceLi?: number | null;
+  /** 源站特价折扣百分比（`tejiaD2N2`）。当前采集链路尚未取该列，仅在数据补齐后生效。 */
+  tejiaDiscountPct?: number | null;
   /** 优惠活动文案与有效期 */
   promotions?: Array<{ text: string; kind?: string; validFrom?: string; validTo?: string }>;
   /** 包装换算文案原文 */

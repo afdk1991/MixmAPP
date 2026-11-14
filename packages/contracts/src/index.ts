@@ -450,6 +450,18 @@ export type ProductDto = {
   discountPct?: number;
   /** 特价，厘/支 */
   salePriceLi?: number;
+  /**
+   * 源站特价折扣百分比（`tejiaD2N2`）。有值时源站会同时展示「商城折扣（划掉）+ 特价折扣」，
+   * 折后价改按特价口径计算。数据侧暂未采集该列，字段缺失时前端不做特价呈现。
+   */
+  tejiaDiscountPct?: number;
+  /**
+   * 登录可见门禁（源站 /b2b/ 前端规则）：未登录时 `disbasePrc`（折后千支价）、
+   * `bpInvQty`（库存）、`invStatus`（库存状态）渲染为「登录可见」。
+   * 为 true 表示当前是匿名视角且服务端已屏蔽：`stock` 归 0，`sourceInvStatus` /
+   * `stockConfidence` / `inStock` / `salePriceLi` 不下发。面价 `priceLi` 与折扣 `discountPct` 保持公开。
+   */
+  loginVisibleRequired?: boolean;
   /** 类目属性（品牌/等级/材质/标准/牙别/表面处理/品名…按类目实际存在形态下发） */
   attributes?: Record<string, string>;
   /** 优惠活动：源站按促销展示时的文案与有效期 */

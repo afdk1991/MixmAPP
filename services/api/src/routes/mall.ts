@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   cartAddSchema,
   cartUpdateSchema,
@@ -6,6 +6,29 @@ import {
   productQuerySchema,
 } from '@mixmapp/contracts';
 import { parse } from '../lib/validate.js';
+
+/**
+ * 商品读接口的可选登录态判定。
+ * 源站规则：面价（basePrcD3N2）与商城折扣（disD2N2）公开；折后千支价（disbasePrc）、
+ * 库存（bpInvQty）、库存状态（invStatus）只有登录后才展示真实值。
+ * 未带令牌或令牌失效都按匿名处理，不阻断商品浏览。
+ */
+async function resolveLoggedIn(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<boolean> {
+  const header = request.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return false;
+  try {
+    // 复用全局 requireAuth：校验通过会写入 request.userId 与账号响应头
+    await app.requireAuth(request, reply);
+    return true;
+  } catch {
+    // 令牌过期/非法：回落到匿名视角（显示「登录可见」占位）
+    return false;
+  }
+}
 
 /** 商城路由：商品公开读，购物车与订单需登录。 */
 export async function mallRoutes(app: FastifyInstance): Promise<void> {
@@ -32,12 +55,18 @@ export async function mallRoutes(app: FastifyInstance): Promise<void> {
     return { data: await app.mall.listSpecOptions(c3) };
   });
 
-  app.get('/mall/products', async (request) => ({
-    data: await app.mall.listProducts(parse(productQuerySchema, request.query ?? {})),
+  app.get('/mall/products', async (request, reply) => ({
+    data: await app.mall.listProducts(
+      parse(productQuerySchema, request.query ?? {}),
+      await resolveLoggedIn(app, request, reply),
+    ),
   }));
 
-  app.get('/mall/products/:id', async (request) => ({
-    data: await app.mall.getProduct((request.params as { id: string }).id),
+  app.get('/mall/products/:id', async (request, reply) => ({
+    data: await app.mall.getProduct(
+      (request.params as { id: string }).id,
+      await resolveLoggedIn(app, request, reply),
+    ),
   }));
 
   app.get('/mall/cart', { preHandler: app.requireAuth }, async (request) => ({

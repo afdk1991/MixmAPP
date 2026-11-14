@@ -138,9 +138,45 @@ export class MallService {
     if (quantity > product.stock) throw AppError.conflict(`${product.title} 库存不足`);
   }
 
-  private toProductDto(product: ProductRecord): ProductDto {
+  /**
+   * 源站目录商品判定：只有源站镜像商品（有 priceSource / sourceUrl / sourceKey）才存在
+   * 「登录后可见」的价格与库存口径。本地自建商品保持旧契约，避免影响既有接口消费方。
+   */
+  private isSourceCatalogProduct(product: {
+    priceSource?: ProductRecord['priceSource'];
+    sourceUrl?: string | null;
+    sourceKey?: string | null;
+  }): boolean {
+    return product.priceSource != null || product.sourceUrl != null || product.sourceKey != null;
+  }
+
+  /**
+   * 源站登录可见门禁（对应 /b2b/ 列表 15 列规则）：
+   * 未登录时 `disbasePrc`（折后千支价）、`bpInvQty`（库存）、`invStatus`（库存状态）
+   * 在源站前端都渲染为「登录可见」，不暴露真实数值。
+   * 这里只在下发前屏蔽敏感字段，`MALL_SOURCE_STOCK_GATE` 三档判定本身不受影响；
+   * 面价 `basePrcD3N2`（priceLi）与商城折扣 `disD2N2`（discountPct）保持公开。
+   */
+  private maskForAnonymous(dto: ProductDto): ProductDto {
+    // salePriceLi 是「面价 × 折扣」的折后价，与 disbasePrc 等价，匿名视角一并屏蔽
+    const masked: ProductDto = { ...dto, stock: 0, loginVisibleRequired: true };
+    delete masked.salePriceLi;
+    delete masked.sourceInvStatus;
+    delete masked.stockConfidence;
+    delete masked.inStock;
+    return masked;
+  }
+
+  /** 按查看者登录态套用门禁：登录正常下发；匿名只对源站目录商品屏蔽。 */
+  private applyViewerGate(dto: ProductDto, loggedIn: boolean): ProductDto {
+    if (loggedIn) return dto;
+    if (!this.isSourceCatalogProduct(dto)) return dto;
+    return this.maskForAnonymous(dto);
+  }
+
+  private toProductDto(product: ProductRecord, loggedIn: boolean): ProductDto {
     const stockConfidence = this.stockConfidence(product);
-    return {
+    const dto: ProductDto = {
       id: product.id,
       title: product.title,
       subtitle: product.subtitle,
@@ -165,6 +201,10 @@ export class MallService {
       ...(product.priceLi != null ? { priceLi: product.priceLi } : {}),
       ...(product.discountPct != null ? { discountPct: product.discountPct } : {}),
       ...(product.salePriceLi != null ? { salePriceLi: product.salePriceLi } : {}),
+      // 源站 tejiaD2N2（特价折扣）：有值时前端把商城折扣划掉并展示特价折扣
+      ...(product.tejiaDiscountPct != null && product.tejiaDiscountPct > 0
+        ? { tejiaDiscountPct: product.tejiaDiscountPct }
+        : {}),
       ...(product.attributes && Object.keys(product.attributes).length
         ? { attributes: product.attributes }
         : {}),
@@ -182,6 +222,8 @@ export class MallService {
       ...(stockConfidence ? { stockConfidence } : {}),
       inStock: this.isInStock(product),
     };
+    // 源站登录门禁：匿名视角屏蔽折后价 / 库存 / 库存状态
+    return this.applyViewerGate(dto, loggedIn);
   }
 
   private toOrderItemDto(item: OrderItemRecord): OrderItemDto {
@@ -213,8 +255,11 @@ export class MallService {
     };
   }
 
-  async listProducts(query: ProductQueryInput): Promise<ProductDto[]> {
-    if (await this.useCatalog()) return this.catalog!.listProducts(query);
+  async listProducts(query: ProductQueryInput, loggedIn: boolean): Promise<ProductDto[]> {
+    if (await this.useCatalog()) {
+      const rows = this.catalog!.listProducts(query);
+      return rows.map((row) => this.applyViewerGate(row, loggedIn));
+    }
     const rows = await this.store.mall.products.list({
       ...(query.category ? { category: query.category } : {}),
       ...(query.cat ? { cat: query.cat } : {}),
@@ -229,18 +274,18 @@ export class MallService {
       limit: query.pageSize,
       offset: (query.page - 1) * query.pageSize,
     });
-    return rows.map((row) => this.toProductDto(row));
+    return rows.map((row) => this.toProductDto(row, loggedIn));
   }
 
-  async getProduct(productId: string): Promise<ProductDto> {
+  async getProduct(productId: string, loggedIn: boolean): Promise<ProductDto> {
     if (await this.useCatalog()) {
       const fromCatalog = this.catalog!.getProduct(productId);
-      if (fromCatalog) return fromCatalog;
+      if (fromCatalog) return this.applyViewerGate(fromCatalog, loggedIn);
       // 目录源未命中时回退数据库，兼容仍指向库内旧商品的详情链接。
     }
     const product = await this.store.mall.products.findById(productId);
     if (!product) throw AppError.notFound('商品不存在或已下架');
-    return this.toProductDto(product);
+    return this.toProductDto(product, loggedIn);
   }
 
   /** 公开分类聚合：目录源激活时只返回 6 个真实中文类目；否则走数据层全量聚合。 */

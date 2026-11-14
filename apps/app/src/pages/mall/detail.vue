@@ -71,7 +71,13 @@
             <text class="cur mono">¥</text>
             <text class="amount mono">{{ unitPrice }}</text>
             <text v-if="priceUnitLabel(product)" class="price-unit mono">{{ priceUnitLabel(product) }}</text>
-            <text v-if="discountLabel" class="price-off mono">{{ discountLabel }}</text>
+            <!-- 源站 disD2N2（商城折扣）：tejiaD2N2 存在时划掉，改展示特价折扣 -->
+            <text
+              v-if="discountLabel"
+              class="price-off mono"
+              :class="{ 'price-off--struck': !!tejiaLabel }"
+            >{{ discountLabel }}</text>
+            <text v-if="tejiaLabel" class="price-off price-off--sale mono">{{ tejiaLabel }}</text>
             <text v-if="product.originalPriceFen > 0" class="price-old mono">¥{{ priceText(product.originalPriceFen) }}</text>
           </view>
           <view v-if="!inquiry" class="amount-col">
@@ -79,7 +85,23 @@
             <text class="amount-value mono">¥{{ totalText }}</text>
           </view>
         </view>
+
+        <!-- 千支口径（源站 basePrcD3N2 面价 / disbasePrc 折后千支价）：面价与折扣公开，折后价需登录 -->
+        <view v-if="!inquiry && baseThousandText" class="thousand-row">
+          <text class="thousand-item mono">千支面价 ¥{{ baseThousandText }}</text>
+          <text
+            v-if="loginGated"
+            class="thousand-item thousand-item--gated mono"
+            hover-class="is-press"
+            @tap="goLogin"
+          >折后千支价 {{ LOGIN_VISIBLE_TEXT }}</text>
+          <text v-else-if="discountThousandText" class="thousand-item thousand-item--strong mono">
+            折后千支 ¥{{ discountThousandText }}
+          </text>
+        </view>
         <view v-if="product.packagingDesc" class="pkg-line mono">{{ product.packagingDesc }}</view>
+        <!-- 未登录：折后千支价 / 库存 / 库存状态均按源站口径显示「登录可见」 -->
+        <text v-if="loginGated" class="hint">登录后查看折后千支价、库存与库存状态（面价与商城折扣公开）。</text>
 
         <view class="rule section-rule" />
 
@@ -126,6 +148,8 @@
 
           <view class="delivery-row">
             <text v-if="inquiry" class="delivery-state delivery-state--inquiry mono">询价 · 联系报价</text>
+            <!-- 未登录：bpInvQty（库存）与 invStatus（库存状态）同为「登录可见」占位 -->
+            <text v-else-if="loginGated" class="delivery-state delivery-state--pending mono">库存 · {{ LOGIN_VISIBLE_TEXT }}</text>
             <text v-else-if="outOfStock" class="delivery-state delivery-state--oos mono">缺货 · 请联系询价</text>
             <text v-else-if="stockUnconfirmed" class="delivery-state delivery-state--pending mono">货源待确认 · 可下单</text>
             <text v-else class="delivery-state delivery-state--stock mono">{{ stockLineText }}</text>
@@ -211,7 +235,18 @@
         </view>
       </view>
 
-      <view v-if="purchasable" class="bar">
+      <!-- 未登录：折后价与库存不可见，底部条改为登录入口 -->
+      <view v-if="loginGated" class="bar bar--inquiry">
+        <view class="bar-total">
+          <text class="bar-label mono">折后价 / 库存</text>
+          <text class="bar-state mono">{{ LOGIN_VISIBLE_TEXT }}</text>
+        </view>
+        <view class="bar-btn bar-btn--primary" hover-class="is-press" @tap="goLogin">
+          <text class="bar-btn-text">登录查看</text>
+        </view>
+      </view>
+
+      <view v-else-if="purchasable" class="bar">
         <view class="bar-total">
           <text class="bar-label mono">合计</text>
           <text class="bar-price mono">¥{{ totalText }}</text>
@@ -249,19 +284,25 @@ import { onLoad } from '@dcloudio/uni-app';
 import type { MallProductDto } from '../../api/mall';
 import {
   breadcrumbLabel,
+  fetchMallProduct,
   formatCapturedAt,
   INQUIRY_NOTICE,
   isBulkStock,
   isInquiryProduct,
+  isLoginGated,
   isOutOfStock,
   isStockUnconfirmed,
   lineTotalFen,
+  LOGIN_VISIBLE_TEXT,
   OUT_OF_STOCK_NOTICE,
+  perThousandBaseYuan,
+  perThousandDiscountYuan,
   priceText,
   priceUnitLabel,
   specEntries,
   STOCK_UNCONFIRMED_NOTICE,
   unitPriceText,
+  yuanText,
 } from '../../api/mall';
 import { mallApi, mediaUrl, productCover, coverTint } from '../../api/client';
 import { ROUTES } from '../../routes';
@@ -356,6 +397,27 @@ const discountLabel = computed(() => {
   return pct < 100 ? `${pct}% 折扣` : `${pct}%`;
 });
 
+/** 登录可见门禁（源站 disbasePrc / bpInvQty / invStatus）：询价商品仍走询价口径 */
+const loginGated = computed(() =>
+  product.value ? !inquiry.value && isLoginGated(product.value) : false,
+);
+
+/** 千支面价（元/千支）：源站列表列 basePrcD3N2 */
+const baseThousandText = computed(() =>
+  product.value ? yuanText(perThousandBaseYuan(product.value)) : '',
+);
+
+/** 折后千支价（元/千支）：源站列 disbasePrc = basePrcD3N2 × disD2N2 / 100 */
+const discountThousandText = computed(() =>
+  product.value ? yuanText(perThousandDiscountYuan(product.value)) : '',
+);
+
+/** 源站特价折扣 tejiaD2N2：有值时商城折扣划掉，改展示特价折扣 */
+const tejiaLabel = computed(() => {
+  const pct = product.value?.tejiaDiscountPct;
+  return pct != null && pct > 0 ? `特价 ${pct}%` : '';
+});
+
 const promotions = computed(() =>
   product.value && Array.isArray(product.value.promotions) ? product.value.promotions : [],
 );
@@ -416,12 +478,18 @@ function selectUnit(code: string): void {
   quantity.value = product.value?.minOrderQty ?? 1;
 }
 
+/** 匿名视角折后价 / 库存为「登录可见」，点击占位去登录页；返回后 onShow 重新拉取即可解锁。 */
+function goLogin(): void {
+  goTo(ROUTES.login);
+}
+
 async function load(): Promise<void> {
   if (!productId.value) return;
   loading.value = true;
   error.value = '';
   try {
-    const res = await mallApi.getProduct(productId.value);
+    // 可选登录态：登录后服务端才下发折后千支价与真实库存（源站 disbasePrc / bpInvQty 口径）
+    const res = await fetchMallProduct(productId.value);
     // 离线/网关兜底会返回空值，缺 tags 时补空数组，避免模板读 tags.length 白屏
     product.value =
       res && typeof res === 'object'
@@ -984,6 +1052,44 @@ onLoad((options) => {
   background: rgba(15, 157, 143, 0.12);
   color: $brand-deep;
   font-size: 22rpx;
+}
+
+/* 源站 tejiaD2N2 存在时：商城折扣划掉，特价折扣用醒目底色 */
+.price-off--struck {
+  text-decoration: line-through;
+  color: $ink-4;
+  background: transparent;
+}
+
+.price-off--sale {
+  background: rgba(230, 126, 34, 0.14);
+  color: $amber;
+}
+
+/* 千支口径行：basePrcD3N2 千支面价 + disbasePrc 折后千支价 */
+.thousand-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx 18rpx;
+  margin-top: 10rpx;
+}
+
+.thousand-item {
+  font-size: 22rpx;
+  color: $ink-3;
+  letter-spacing: 1rpx;
+}
+
+.thousand-item--strong {
+  color: $brand-deep;
+  font-weight: 600;
+}
+
+/* 未登录占位：可点击去登录 */
+.thousand-item--gated {
+  color: $amber;
+  text-decoration: underline;
 }
 
 .pkg-line {
