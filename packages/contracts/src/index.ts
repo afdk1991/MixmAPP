@@ -563,6 +563,75 @@ export type ProductDto = {
   stockConfidence?: 'confirmed' | 'inferred';
 };
 
+/**
+ * 购物车行状态四态（源站 invStatus 口径）：
+ * - `R` 需求：目录选品 / 0 元商品，价格需人工报价，不能直接下单
+ * - `L` 缺货：按当前库存三档口径不可售（明确缺货 / 无货 / 0 库存）
+ * - `A` 到货：可售，是唯一可勾选结算的状态
+ * - `X` 下架：商品已下架或源站停售，必须从购物车移除
+ *
+ * 与既有「货源待确认」（`stockConfidence === 'inferred'`）的关系：
+ * 货源待确认不是第五种状态，而是 `A` 上的子标记 —— 归 `A`、可勾选结算，
+ * 但前端额外提示「货源待确认」；`L` 则是明确的不可勾选缺货。
+ */
+export type CartLineStatus = 'R' | 'L' | 'A' | 'X';
+
+/** 四态默认文案（服务端会连同状态一起下发，前端按需覆盖） */
+export const CART_LINE_STATUS_TEXT: Record<CartLineStatus, { label: string; hint: string }> = {
+  R: { label: '需求', hint: '需联系报价后下单' },
+  L: { label: '缺货', hint: '缺货，需确认库存后再下单' },
+  A: { label: '到货', hint: '' },
+  X: { label: '下架', hint: '已下架，请从购物车移除' },
+};
+
+/** 满减梯度档位（源站 `min~max → percent%` 口径：min 含、max 不含，max 为 null 表示无上限） */
+export type ManjianTierDto = {
+  minFen: number;
+  maxFen: number | null;
+  /** 档位折扣百分比：2 表示减免 2% */
+  percent: number;
+  label: string;
+};
+
+/** 购物车三层优惠汇总（金额一律为整数分） */
+export type CartPricingDto = {
+  /** 有效行（A 态）面价小计 */
+  subtotalFen: number;
+  /** 商城优惠：源站 disD2N2 折扣差额 */
+  mallDiscountFen: number;
+  /** 特价优惠：源站 tejiaD2N2 折扣差额（与商城优惠取优，不叠加） */
+  tejiaDiscountFen: number;
+  /** 满减优惠：按档位 percent 计算 */
+  manjianDiscountFen: number;
+  /** 优惠合计 = 商城 + 特价 + 满减 */
+  discountTotalFen: number;
+  /** 应付总额 = 面价小计 - 优惠合计 */
+  payableFen: number;
+  /** 命中的满减档位；未命中为 null */
+  manjianTier: ManjianTierDto | null;
+  /** 满减提示文案（命中档位时给出，最高档提示「已享受最高折扣」） */
+  manjianTip: string;
+  /** 全部启用档位，供前端按勾选行本地重算 */
+  tiers: ManjianTierDto[];
+};
+
+/**
+ * 满减档位匹配：金额落在 `[minFen, maxFen)` 内即命中，多档命中取 percent 最大的一档。
+ * 用整数分比较，避免浮点误差影响档位边界判定。
+ */
+export function matchManjianTier(
+  amountFen: number,
+  tiers: ManjianTierDto[],
+): ManjianTierDto | null {
+  let best: ManjianTierDto | null = null;
+  for (const tier of tiers) {
+    if (amountFen < tier.minFen) continue;
+    if (tier.maxFen != null && amountFen >= tier.maxFen) continue;
+    if (!best || tier.percent > best.percent) best = tier;
+  }
+  return best;
+}
+
 export type CartLineDto = {
   productId: string;
   title: string;
@@ -584,12 +653,30 @@ export type CartLineDto = {
   inStock?: boolean;
   /** 货源可信度；`inferred` 表示「货源待确认」，可结算但需人工确认 */
   stockConfidence?: 'confirmed' | 'inferred';
+  /** 四态行状态（R 需求 / L 缺货 / A 到货 / X 下架） */
+  lineStatus?: CartLineStatus;
+  /** 是否可勾选结算：只有 `A` 为 true */
+  selectable?: boolean;
+  /** 四态文案与操作提示（服务端统一口径，前端直接展示） */
+  lineStatusText?: string;
+  lineStatusHint?: string;
+  /** 面价小计（厘→分四舍五入），三层优惠的计算基数 */
+  faceFen?: number;
+  /** 扣减商城/特价优惠后的金额，用于满减档位匹配 */
+  netFen?: number;
+  /** 该行实际取用的商城优惠（元/分） */
+  mallDiscountFen?: number;
+  /** 该行实际取用的特价优惠（元/分），与商城优惠取优不叠加 */
+  tejiaDiscountFen?: number;
 };
 
 export type CartDto = {
   items: CartLineDto[];
   totalQuantity: number;
+  /** 全部行面价合计（含不可结算行，沿用旧口径） */
   totalFen: number;
+  /** 三层优惠汇总（只统计可结算的 A 态行） */
+  pricing: CartPricingDto;
 };
 
 export type OrderItemDto = {
@@ -604,6 +691,17 @@ export type OrderItemDto = {
   priceLi?: number;
   /** 下单时货源未确认（仅匿名视图推断缺货），需人工确认货源后再发货 */
   stockUnconfirmed?: boolean;
+  /** 下单时的行状态快照（历史订单缺省为 `A`） */
+  lineStatus?: CartLineStatus;
+};
+
+/** 下单时被拆出的失效行：不进单，随响应返回给用户明确说明 */
+export type SkippedCartLineDto = {
+  productId: string;
+  title: string;
+  lineStatus: CartLineStatus;
+  /** 失效原因（四态文案 + 该状态的处理提示） */
+  reason: string;
 };
 
 export type OrderDto = {
@@ -611,6 +709,12 @@ export type OrderDto = {
   orderNo: string;
   status: 'pending' | 'paid' | 'cancelled';
   totalFen: number;
+  /** 三层优惠快照（历史订单为 0） */
+  subtotalFen?: number;
+  mallDiscountFen?: number;
+  tejiaDiscountFen?: number;
+  manjianDiscountFen?: number;
+  discountTotalFen?: number;
   receiverName: string;
   receiverPhone: string;
   address: string;
@@ -622,6 +726,8 @@ export type OrderDto = {
   deliverySlot: string | null;
   remark: string | null;
   items: OrderItemDto[];
+  /** 下单时拆出的失效行（仅创建订单的响应带，列表/详情不带） */
+  skippedLines?: SkippedCartLineDto[];
   createdAt: string;
 };
 

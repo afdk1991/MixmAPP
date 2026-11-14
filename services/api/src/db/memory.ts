@@ -3,6 +3,7 @@ import type {
   AddressRecord,
   BindingRecord,
   CartItemRecord,
+  ManjianTierRecord,
   MergeCandidate,
   OrderItemRecord,
   OrderRecord,
@@ -17,6 +18,16 @@ import type {
 } from './types.js';
 
 const clone = <T>(value: T): T => structuredClone(value);
+
+/**
+ * 满减梯度档位默认值（与 infra/sql/0017 的种子一致）。
+ * 源站满减档位接口未开放，这里是本地可配置占位值；改档位优先改库表，不动代码。
+ */
+const MEMORY_MANJIAN_TIERS: ManjianTierRecord[] = [
+  { id: 'mj_tier_1', minFen: 50000, maxFen: 100000, percent: 1, label: '满 500 元减免 1%', enabled: true, sortNo: 1 },
+  { id: 'mj_tier_2', minFen: 100000, maxFen: 300000, percent: 2, label: '满 1000 元减免 2%', enabled: true, sortNo: 2 },
+  { id: 'mj_tier_3', minFen: 300000, maxFen: null, percent: 3, label: '满 3000 元减免 3%', enabled: true, sortNo: 3 },
+];
 
 /** 内存驱动：本机开发与自动化测试默认用它，零外部依赖。 */
 export class MemoryStore implements Store {
@@ -477,6 +488,13 @@ export class MemoryStore implements Store {
         }
         return clone(found);
       },
+    },
+    /**
+     * 满减档位（0017）：内存驱动与 0017 迁移的种子数据保持一致，
+     * 单测直接覆盖档位匹配与取整口径，不需要连 PG。
+     */
+    manjianTiers: {
+      listEnabled: async (): Promise<ManjianTierRecord[]> => clone(MEMORY_MANJIAN_TIERS),
     },
     orders: {
       insert: async (order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord> => {

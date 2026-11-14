@@ -4,19 +4,24 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import type {
   CartDto,
   CartLineDto,
+  CartLineStatus,
+  CartPricingDto,
   ImportProductInput,
+  ManjianTierDto,
   OrderCreateInput,
   OrderDto,
   OrderItemDto,
   ProductDto,
   ProductQueryInput,
+  SkippedCartLineDto,
 } from '@mixmapp/contracts';
-import { importCatalogSchema } from '@mixmapp/contracts';
+import { CART_LINE_STATUS_TEXT, importCatalogSchema, matchManjianTier } from '@mixmapp/contracts';
 import { IdFactory } from '@mixmapp/ids';
 import type { CatalogSource } from './catalog-source.js';
 import { projectRoot, type Config } from '../config.js';
 import type {
   CartItemRecord,
+  ManjianTierRecord,
   OrderItemRecord,
   OrderRecord,
   ProductRecord,
@@ -42,6 +47,23 @@ function lineTotalFen(product: Pick<ProductRecord, 'priceFen' | 'priceLi'>, quan
 function unitLabel(product: ProductRecord, packUnit: string, packQty: number): string {
   const name = product.unitOptions?.find((u) => u.code === packUnit)?.name ?? packUnit;
   return `${packQty}${name}`;
+}
+
+/**
+ * 单行折扣额（整数分）。
+ * 源站 disD2N2 / tejiaD2N2 是「折后价百分比」（85 表示按面价 85% 成交），
+ * 因此减免比例 = 100 - percent。
+ * 取整规则：Math.round 四舍五入到分 —— 面价以厘存储、换算到分可能带小数，
+ * 这里只在成行折扣处取整一次，避免后续浮点累加。
+ */
+function discountFenOf(faceFen: number, percent: number): number {
+  if (!(percent > 0) || percent >= 100) return 0;
+  return Math.round((faceFen * (100 - percent)) / 100);
+}
+
+/** 金额（分）转展示用元字符串，仅用于满减提示文案，不参与计算。 */
+function yuanText(fen: number): string {
+  return (fen / 100).toFixed(2);
 }
 
 export type ImportReport = {
@@ -238,15 +260,27 @@ export class MallService {
       ...(item.packQty != null ? { packQty: item.packQty } : {}),
       ...(item.priceLi != null ? { priceLi: item.priceLi } : {}),
       ...(item.stockUnconfirmed ? { stockUnconfirmed: true } : {}),
+      // 0017 行状态快照：下单时是 A，历史订单缺省也按 A 回显
+      ...(item.lineStatus ? { lineStatus: item.lineStatus } : {}),
     };
   }
 
-  private toOrderDto(order: OrderRecord, items: OrderItemRecord[]): OrderDto {
+  private toOrderDto(
+    order: OrderRecord,
+    items: OrderItemRecord[],
+    skippedLines?: SkippedCartLineDto[],
+  ): OrderDto {
     return {
       id: order.id,
       orderNo: order.orderNo,
       status: order.status,
       totalFen: order.totalFen,
+      // 0017 三层优惠快照；历史订单没有这些字段时按 0 回显
+      subtotalFen: order.subtotalFen ?? 0,
+      mallDiscountFen: order.mallDiscountFen ?? 0,
+      tejiaDiscountFen: order.tejiaDiscountFen ?? 0,
+      manjianDiscountFen: order.manjianDiscountFen ?? 0,
+      discountTotalFen: order.discountTotalFen ?? 0,
       receiverName: order.receiverName,
       receiverPhone: order.receiverPhone,
       address: order.address,
@@ -255,6 +289,8 @@ export class MallService {
       deliveryMethod: order.deliveryMethod,
       deliverySlot: order.deliverySlot,
       items: items.map((item) => this.toOrderItemDto(item)),
+      // 失效行只在创建订单的响应里返回，列表/详情不带
+      ...(skippedLines?.length ? { skippedLines } : {}),
       createdAt: order.createdAt.toISOString(),
     };
   }
@@ -477,13 +513,102 @@ export class MallService {
     return { urls, cover };
   }
 
+  /**
+   * 源站行状态四态（购物车口径）：R 需求 / L 缺货 / A 到货 / X 下架。
+   * 判定顺序固定为 X → R → L → A，且直接复用库存三档判定，保证既有行为不变：
+   * 1) X：商品已下架，或源站状态明确写「下架/停售」——三档模式都硬拦；
+   * 2) R：询价商品 / 0 元商品——需人工报价后才能下单；
+   * 3) L：按当前库存三档口径不可售（strict 的缺货/无货、off 的 0 库存等）；
+   * 4) A：其余可售。tier 模式下仅「匿名视图推断缺货」的行仍归 A，
+   *    同时带 stockConfidence='inferred'，前端展示「货源待确认 · 可结算」。
+   * 只有 A 可勾选结算，L/R/X 都属于失效行。
+   */
+  private cartLineStatus(product: ProductRecord): CartLineStatus {
+    const status = product.sourceInvStatus?.trim() ?? '';
+    if (product.listed === false || /下架|停售/.test(status)) return 'X';
+    if (product.priceSource === 'inquiry' || product.priceFen <= 0) return 'R';
+    if (!this.isInStock(product)) return 'L';
+    return 'A';
+  }
+
+  /**
+   * 单行三层优惠拆解（全部整数分）。
+   * - faceFen：面价小计，沿用 lineTotalFen 的厘→分四舍五入口径；
+   * - 商城优惠 vs 特价优惠：源站口径是替代关系（tejiaD2N2 出现时商城折扣被划掉），
+   *   因此取减免更多的一层，不叠加；两层都记在各自字段里，便于并列展示。
+   */
+  private lineDiscounts(
+    product: ProductRecord,
+    quantity: number,
+  ): { faceFen: number; mallDiscountFen: number; tejiaDiscountFen: number; netFen: number } {
+    const faceFen = lineTotalFen(product, quantity);
+    const mall = discountFenOf(faceFen, product.discountPct ?? 0);
+    const tejia = discountFenOf(faceFen, product.tejiaDiscountPct ?? 0);
+    const mallDiscountFen = mall >= tejia ? mall : 0;
+    const tejiaDiscountFen = tejia > mall ? tejia : 0;
+    return {
+      faceFen,
+      mallDiscountFen,
+      tejiaDiscountFen,
+      netFen: faceFen - mallDiscountFen - tejiaDiscountFen,
+    };
+  }
+
+  /**
+   * 三层优惠汇总：商城 + 特价 + 满减 → 优惠合计与应付总额。
+   * 满减按 netFen（扣完商城/特价后）匹配档位 `min~max → percent%`，
+   * 取整规则：Math.floor 向下取整到分 —— percent 是「最多减免」语义，
+   * 向下取整保证减免额不超过档位比例，也不会把应付总额减成负数。
+   */
+  private buildPricing(
+    rows: Array<{ faceFen: number; mallDiscountFen: number; tejiaDiscountFen: number; netFen: number }>,
+    tiers: ManjianTierRecord[],
+  ): CartPricingDto {
+    const subtotalFen = rows.reduce((sum, row) => sum + row.faceFen, 0);
+    const mallDiscountFen = rows.reduce((sum, row) => sum + row.mallDiscountFen, 0);
+    const tejiaDiscountFen = rows.reduce((sum, row) => sum + row.tejiaDiscountFen, 0);
+    const netFen = rows.reduce((sum, row) => sum + row.netFen, 0);
+    const tierDtos: ManjianTierDto[] = tiers.map((tier) => ({
+      minFen: tier.minFen,
+      maxFen: tier.maxFen,
+      percent: tier.percent,
+      label: tier.label,
+    }));
+    const hit = matchManjianTier(netFen, tierDtos);
+    const manjianDiscountFen = hit ? Math.floor((netFen * hit.percent) / 100) : 0;
+    const discountTotalFen = mallDiscountFen + tejiaDiscountFen + manjianDiscountFen;
+    // 命中档位提示：已是最高 percent 的档位时提示「已享受最高折扣」
+    const topPercent = tierDtos.reduce((max, tier) => Math.max(max, tier.percent), 0);
+    const manjianTip = hit
+      ? hit.percent >= topPercent
+        ? `已享受最高折扣 ${hit.percent}%，再减 ¥${yuanText(manjianDiscountFen)}`
+        : `已享受满减 ${hit.percent}%，再减 ¥${yuanText(manjianDiscountFen)}`
+      : '';
+    return {
+      subtotalFen,
+      mallDiscountFen,
+      tejiaDiscountFen,
+      manjianDiscountFen,
+      discountTotalFen,
+      // 应付总额 = 面价小计 - 优惠合计；向下取整后仍兜底不小于 0
+      payableFen: Math.max(0, subtotalFen - discountTotalFen),
+      manjianTier: hit,
+      manjianTip,
+      tiers: tierDtos,
+    };
+  }
+
   async getCart(userId: string): Promise<CartDto> {
     const items = await this.store.mall.carts.listByUser(userId);
+    const tiers = await this.store.mall.manjianTiers.listEnabled();
     const lines: CartLineDto[] = [];
     for (const item of items) {
       const product = await this.store.mall.products.findById(item.productId);
       if (!product) continue;
       const stockConfidence = this.stockConfidence(product);
+      const lineStatus = this.cartLineStatus(product);
+      const statusText = CART_LINE_STATUS_TEXT[lineStatus];
+      const discounts = this.lineDiscounts(product, item.quantity);
       lines.push({
         productId: product.id,
         title: product.title,
@@ -491,7 +616,8 @@ export class MallService {
         priceFen: product.priceFen,
         quantity: item.quantity,
         stock: product.stock,
-        subtotalFen: lineTotalFen(product, item.quantity),
+        // 面价口径不变：小计仍是厘→分四舍五入后的面价
+        subtotalFen: discounts.faceFen,
         ...(item.packUnit ? { packUnit: item.packUnit } : {}),
         ...(item.packQty != null ? { packQty: item.packQty } : {}),
         ...(product.priceLi != null ? { priceLi: product.priceLi } : {}),
@@ -501,13 +627,33 @@ export class MallService {
           : {}),
         ...(product.sourceInvStatus ? { sourceInvStatus: product.sourceInvStatus } : {}),
         ...(stockConfidence ? { stockConfidence } : {}),
-        inStock: this.isInStock(product),
+        // 四态与可勾选性：只有 A 可结算
+        lineStatus,
+        selectable: lineStatus === 'A',
+        lineStatusText: statusText.label,
+        lineStatusHint: statusText.hint,
+        faceFen: discounts.faceFen,
+        netFen: discounts.netFen,
+        mallDiscountFen: discounts.mallDiscountFen,
+        tejiaDiscountFen: discounts.tejiaDiscountFen,
+        inStock: lineStatus === 'A',
       });
     }
+    // 三层优惠只统计可结算的 A 态行；失效行不参与优惠与应付
+    const pricing = this.buildPricing(
+      lines.filter((line) => line.selectable).map((line) => ({
+        faceFen: line.faceFen ?? 0,
+        mallDiscountFen: line.mallDiscountFen ?? 0,
+        tejiaDiscountFen: line.tejiaDiscountFen ?? 0,
+        netFen: line.netFen ?? 0,
+      })),
+      tiers,
+    );
     return {
       items: lines,
       totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
       totalFen: lines.reduce((sum, line) => sum + line.subtotalFen, 0),
+      pricing,
     };
   }
 
@@ -650,15 +796,56 @@ export class MallService {
     }
 
     const fromCart = !input.items;
-    const requested =
-      input.items ??
-      (await this.store.mall.carts.listByUser(userId)).map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        ...(item.packUnit ? { packUnit: item.packUnit } : {}),
-        ...(item.packQty != null ? { packQty: item.packQty } : {}),
-      }));
-    if (requested.length === 0) throw AppError.conflict('购物车是空的，无法下单');
+    // 下单拆有效行（源站口径）：只有 A（到货）行能进单；
+    // R 需求 / L 缺货 / X 下架 一律拆到 skippedLines，随响应返回给用户明确说明。
+    const skippedLines: SkippedCartLineDto[] = [];
+    let requested: Array<{
+      productId: string;
+      quantity: number;
+      packUnit?: string;
+      packQty?: number;
+    }>;
+    if (input.items) {
+      requested = input.items;
+    } else {
+      const cartItems = await this.store.mall.carts.listByUser(userId);
+      requested = [];
+      for (const item of cartItems) {
+        const product = await this.store.mall.products.findById(item.productId);
+        if (!product) {
+          skippedLines.push({
+            productId: item.productId,
+            title: '已下架商品',
+            lineStatus: 'X',
+            reason: '商品已下架，无法下单',
+          });
+          continue;
+        }
+        const status = this.cartLineStatus(product);
+        if (status !== 'A') {
+          const text = CART_LINE_STATUS_TEXT[status];
+          skippedLines.push({
+            productId: product.id,
+            title: product.title,
+            lineStatus: status,
+            reason: `${text.label}：${text.hint}`,
+          });
+          continue;
+        }
+        requested.push({
+          productId: item.productId,
+          quantity: item.quantity,
+          ...(item.packUnit ? { packUnit: item.packUnit } : {}),
+          ...(item.packQty != null ? { packQty: item.packQty } : {}),
+        });
+      }
+    }
+    if (requested.length === 0) {
+      const detail = skippedLines.length
+        ? `：${skippedLines.map((line) => `${line.title}（${line.reason}）`).join('；')}`
+        : '';
+      throw AppError.conflict(`没有可结算的商品${detail}`);
+    }
 
     const lines: Array<{
       product: ProductRecord;
@@ -697,6 +884,13 @@ export class MallService {
       }
     }
 
+    // 三层优惠汇总：商城 + 特价 + 满减，最终 totalFen 落「应付总额」
+    const tiers = await this.store.mall.manjianTiers.listEnabled();
+    const pricing = this.buildPricing(
+      lines.map((line) => this.lineDiscounts(line.product, line.quantity)),
+      tiers,
+    );
+
     // 先扣库存再落单：任一失败即整单失败；已扣的那几行必须归还，否则库存会凭空消失。
     // 推断缺货的商品不扣估算库存，改为落单时打标、由人工确认货源。
     const deducted: typeof lines = [];
@@ -714,7 +908,7 @@ export class MallService {
       throw error;
     }
 
-    const totalFen = lines.reduce((sum, line) => sum + lineTotalFen(line.product, line.quantity), 0);
+    const totalFen = pricing.payableFen;
     const id = this.ids.next().id;
     const orderNo = `MO${Date.now().toString(36).toUpperCase()}${this.ids.next().snowflake.slice(-6)}`;
     const order: OrderRecord = {
@@ -723,6 +917,11 @@ export class MallService {
       userId,
       status: 'pending',
       totalFen,
+      subtotalFen: pricing.subtotalFen,
+      mallDiscountFen: pricing.mallDiscountFen,
+      tejiaDiscountFen: pricing.tejiaDiscountFen,
+      manjianDiscountFen: pricing.manjianDiscountFen,
+      discountTotalFen: pricing.discountTotalFen,
       receiverName,
       receiverPhone,
       address: addressText,
@@ -745,6 +944,8 @@ export class MallService {
       packQty: line.packQty ?? null,
       priceLi: line.product.priceLi ?? null,
       stockUnconfirmed: this.inferredScarce(line.product),
+      // 能进单的行一定是 A；状态快照便于历史订单追溯当时口径
+      lineStatus: 'A',
     }));
 
     try {
@@ -756,7 +957,12 @@ export class MallService {
       }
       throw error;
     }
-    if (fromCart) await this.store.mall.carts.clear(userId);
+    if (fromCart) {
+      // 只清掉已下单的有效行；失效行（R/L/X）留在购物车由用户移除或等待补货
+      for (const line of lines) {
+        await this.store.mall.carts.remove(userId, line.product.id);
+      }
+    }
     const unconfirmed = items.filter((item) => item.stockUnconfirmed);
     if (unconfirmed.length > 0) {
       // 可读摘要：运营按订单号核对货源，前端/管理端也可据 stockUnconfirmed 取同一批单
@@ -766,7 +972,14 @@ export class MallService {
           .join('、')}`,
       );
     }
-    return this.toOrderDto(order, items);
+    if (skippedLines.length > 0) {
+      console.warn(
+        `[order] 已拆出失效行 ${orderNo}（${skippedLines.length} 行）：${skippedLines
+          .map((line) => `${line.title}[${line.lineStatus}]`)
+          .join('、')}`,
+      );
+    }
+    return this.toOrderDto(order, items, skippedLines);
   }
 
   /** 超时取消：待支付且超过 TTL 的订单转为 cancelled，并把库存还回去。 */

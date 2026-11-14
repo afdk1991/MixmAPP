@@ -6,6 +6,7 @@ import type {
   CartItemRecord,
   CatalogSyncRunRecord,
   AddressRecord,
+  ManjianTierRecord,
   MergeCandidate,
   OrderItemRecord,
   OrderRecord,
@@ -1013,13 +1014,22 @@ export class PgStore implements Store {
         return rows.find((row) => row.id === id) ?? null;
       },
     },
+    /** 满减档位（0017）：只读启用档位，按 sort_no / min_fen 排序。 */
+    manjianTiers: {
+      listEnabled: async (): Promise<ManjianTierRecord[]> => {
+        const res = await this.pool.query(
+          'select * from mall_manjian_tiers where enabled = true order by sort_no asc, min_fen asc',
+        );
+        return res.rows.map((row) => mapManjianTier(row as Row));
+      },
+    },
     orders: {
       insert: async (order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord> => {
         // 网关模式没有跨语句事务，订单与明细必须在单条语句里原子落库：
         // 走 0005_place_order.sql 里的 plpgsql 函数。
         if (!this.pool.connect) {
           await this.pool.query(
-            `select place_order($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15)`,
+            `select place_order($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15,$16::jsonb)`,
             [
               order.id,
               order.orderNo,
@@ -1044,11 +1054,20 @@ export class PgStore implements Store {
                   pack_unit: item.packUnit ?? null,
                   pack_qty: item.packQty ?? null,
                   price_li: item.priceLi ?? null,
+                  line_status: item.lineStatus ?? 'A',
                 })),
               ),
               order.addressId,
               order.deliveryMethod,
               order.deliverySlot,
+              // 三层优惠快照（0017），金额均为整数分
+              JSON.stringify({
+                subtotalFen: order.subtotalFen ?? 0,
+                mallDiscountFen: order.mallDiscountFen ?? 0,
+                tejiaDiscountFen: order.tejiaDiscountFen ?? 0,
+                manjianDiscountFen: order.manjianDiscountFen ?? 0,
+                discountTotalFen: order.discountTotalFen ?? 0,
+              }),
             ],
           );
           return order;
@@ -1060,8 +1079,10 @@ export class PgStore implements Store {
           await client.query(
             `insert into orders (id, order_no, user_id, status, total_fen, receiver_name,
                receiver_phone, address, remark, created_at, paid_at,
-               address_id, delivery_method, delivery_slot)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+               address_id, delivery_method, delivery_slot,
+               subtotal_fen, mall_discount_fen, tejia_discount_fen,
+               manjian_discount_fen, discount_total_fen)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
             [
               order.id,
               order.orderNo,
@@ -1077,13 +1098,18 @@ export class PgStore implements Store {
               order.addressId,
               order.deliveryMethod,
               order.deliverySlot,
+              order.subtotalFen ?? 0,
+              order.mallDiscountFen ?? 0,
+              order.tejiaDiscountFen ?? 0,
+              order.manjianDiscountFen ?? 0,
+              order.discountTotalFen ?? 0,
             ],
           );
           for (const item of items) {
             await client.query(
               `insert into order_items (id, order_id, product_id, title, price_fen, quantity, subtotal_fen,
-                 pack_unit, pack_qty, price_li, stock_unconfirmed)
-               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+                 pack_unit, pack_qty, price_li, stock_unconfirmed, line_status)
+               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
               [
                 item.id,
                 item.orderId,
@@ -1096,6 +1122,7 @@ export class PgStore implements Store {
                 item.packQty ?? null,
                 item.priceLi ?? null,
                 item.stockUnconfirmed ?? false,
+                item.lineStatus ?? 'A',
               ],
             );
           }
@@ -1399,6 +1426,12 @@ function mapOrder(row: Row): OrderRecord {
     deliveryMethod: (row['delivery_method'] as string | null) ?? null,
     deliverySlot: (row['delivery_slot'] as string | null) ?? null,
     remark: (row['remark'] as string | null) ?? null,
+    // 0017 三层优惠快照：历史订单列为 default 0，这里统一转数字
+    subtotalFen: row['subtotal_fen'] == null ? 0 : Number(row['subtotal_fen']),
+    mallDiscountFen: row['mall_discount_fen'] == null ? 0 : Number(row['mall_discount_fen']),
+    tejiaDiscountFen: row['tejia_discount_fen'] == null ? 0 : Number(row['tejia_discount_fen']),
+    manjianDiscountFen: row['manjian_discount_fen'] == null ? 0 : Number(row['manjian_discount_fen']),
+    discountTotalFen: row['discount_total_fen'] == null ? 0 : Number(row['discount_total_fen']),
     createdAt: toDate(row['created_at']),
     paidAt: toDateOrNull(row['paid_at']),
   };
@@ -1417,6 +1450,21 @@ function mapOrderItem(row: Row): OrderItemRecord {
     packQty: row['pack_qty'] == null ? null : Number(row['pack_qty']),
     priceLi: row['price_li'] == null ? null : Number(row['price_li']),
     stockUnconfirmed: row['stock_unconfirmed'] === true,
+    // 0017 行状态快照；历史订单列缺失时按 A（到货）处理
+    lineStatus: ((row['line_status'] as string | null) ?? 'A') as OrderItemRecord['lineStatus'],
+  };
+}
+
+/** 满减档位映射（0017）。 */
+function mapManjianTier(row: Row): ManjianTierRecord {
+  return {
+    id: String(row['id']),
+    minFen: Number(row['min_fen']),
+    maxFen: row['max_fen'] == null ? null : Number(row['max_fen']),
+    percent: Number(row['percent']),
+    label: String(row['label'] ?? ''),
+    enabled: row['enabled'] === true,
+    sortNo: row['sort_no'] == null ? 0 : Number(row['sort_no']),
   };
 }
 

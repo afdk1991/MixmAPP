@@ -211,6 +211,9 @@ export type CatalogSyncRunRecord = {
   error: string | null;
 };
 
+/** 行状态四态（与 @mixmapp/contracts 的 CartLineStatus 同构，store 层不反向依赖 contracts） */
+export type StoredCartLineStatus = 'R' | 'L' | 'A' | 'X';
+
 export type OrderItemRecord = {
   id: string;
   orderId: string;
@@ -225,6 +228,23 @@ export type OrderItemRecord = {
   priceLi?: number | null;
   /** 下单时货源未确认（仅匿名视图推断缺货），需人工确认后再发货 */
   stockUnconfirmed?: boolean;
+  /** 下单时的行状态快照（0017）：R 需求 / L 缺货 / A 到货 / X 下架；历史订单为 A */
+  lineStatus?: StoredCartLineStatus;
+};
+
+/**
+ * 满减梯度档位（0017）：`min~max → percent%`，金额单位统一为分。
+ * min 含、max 不含，max 为 null 表示无上限。
+ */
+export type ManjianTierRecord = {
+  id: string;
+  minFen: number;
+  maxFen: number | null;
+  /** 档位折扣百分比，2 表示减免 2% */
+  percent: number;
+  label: string;
+  enabled: boolean;
+  sortNo: number;
 };
 
 export type OrderRecord = {
@@ -243,6 +263,12 @@ export type OrderRecord = {
   /** 配送时间段代码（见 deliveryOptions） */
   deliverySlot: string | null;
   remark: string | null;
+  /** 三层优惠快照（0017）：面价小计与各层优惠，均为整数分；历史订单缺省为 0 */
+  subtotalFen?: number;
+  mallDiscountFen?: number;
+  tejiaDiscountFen?: number;
+  manjianDiscountFen?: number;
+  discountTotalFen?: number;
   createdAt: Date;
   paidAt: Date | null;
 };
@@ -448,6 +474,11 @@ export type Store = {
        * 规避网关无事务时的两条语句竞态；id 不属于该用户时返回 null。
        */
       setDefault(userId: string, id: string): Promise<AddressRecord | null>;
+    };
+    /** 满减梯度档位（0017）：`min~max → percent%`，购物车三层优惠汇总使用 */
+    manjianTiers: {
+      /** 只取启用档位，按 sortNo 升序 */
+      listEnabled(): Promise<ManjianTierRecord[]>;
     };
     orders: {
       insert(order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord>;

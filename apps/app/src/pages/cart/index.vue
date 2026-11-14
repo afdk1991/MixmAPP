@@ -36,7 +36,24 @@
 
     <block v-else>
       <view class="list">
-        <view v-for="line in cart.items" :key="line.productId" class="line">
+        <view
+          v-for="line in cart.items"
+          :key="line.productId"
+          class="line"
+          :class="{ 'line--invalid': !isSelectable(line) }"
+        >
+          <!-- 行勾选（源站口径）：只有 A 到货行可勾选结算，R/L/X 一律不可勾选 -->
+          <view class="tick" hover-class="is-press" @tap="toggleLine(line)">
+            <view
+              class="tick-box"
+              :class="{
+                'tick-box--on': selectedIds.has(line.productId),
+                'tick-box--off': !isSelectable(line),
+              }"
+            >
+              <text v-if="selectedIds.has(line.productId)" class="tick-mark">✓</text>
+            </view>
+          </view>
           <view class="cover" :style="tintOf(line)">
             <image
               v-if="coverOf(line) && !isBroken(coverOf(line))"
@@ -54,13 +71,18 @@
           <view class="info">
             <view class="name-row">
               <text class="name">{{ line.title }}</text>
+              <!-- 四态徽章：R 需求 / L 缺货 / A 到货 / X 下架，文案优先用服务端下发口径 -->
+              <text class="state-badge" :class="`state-badge--${lineStatusOf(line).toLowerCase()}`">{{
+                line.lineStatusText || CART_LINE_STATUS_TEXT[lineStatusOf(line)].label
+              }}</text>
               <view class="remove" hover-class="is-press" @tap="remove(line.productId)">
                 <text class="remove-text mono">移除</text>
               </view>
             </view>
             <view class="unit-row">
-              <text v-if="isInquiryLine(line)" class="unit unit--inquiry mono">询价 · 联系报价</text>
-              <text v-else-if="isOutOfStockLine(line)" class="unit unit--oos mono">缺货 · 询价确认</text>
+              <text v-if="lineStatusOf(line) === 'X'" class="unit unit--gone mono">已下架 · 请移除</text>
+              <text v-else-if="isInquiryLine(line)" class="unit unit--inquiry mono">询价 · 联系报价</text>
+              <text v-else-if="isOutOfStockLine(line)" class="unit unit--oos mono">缺货 · 需确认库存</text>
               <text v-else-if="isStockUnconfirmedLine(line)" class="unit unit--pending mono">货源待确认 · 可结算</text>
               <template v-else>
                 <text class="unit mono">¥{{ lineUnitPrice(line) }} / {{ line.unitName || '件' }}</text>
@@ -68,8 +90,12 @@
                 <text v-else class="stock mono">{{ isBulkStock(line.stock) ? '现货' : `库存 ${line.stock}` }}</text>
               </template>
             </view>
+            <!-- 行级优惠：商城 / 特价取优后的一层，不叠加 -->
+            <text v-if="isSelectable(line) && lineDiscountFen(line) > 0" class="discount-tag mono">
+              {{ lineDiscountLabel(line) }}
+            </text>
             <view class="line-foot">
-              <view v-if="!isBlockedLine(line)" class="stepper">
+              <view v-if="isSelectable(line)" class="stepper">
                 <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity - stepOf(line))">
                   <text class="step-text mono">−</text>
                 </view>
@@ -78,26 +104,63 @@
                   <text class="step-text mono">+</text>
                 </view>
               </view>
-              <text v-else-if="isInquiryLine(line)" class="inquiry-hint">需联系报价后下单</text>
-              <text v-else class="inquiry-hint">缺货，请联系询价确认</text>
+              <text v-else class="inquiry-hint">{{ line.lineStatusHint || invalidHintOf(line) }}</text>
               <view class="subtotal">
                 <text class="subtotal-k mono">小计</text>
-                <text v-if="isInquiryLine(line)" class="subtotal-v subtotal-v--inquiry">询价</text>
+                <text v-if="lineStatusOf(line) === 'X'" class="subtotal-v subtotal-v--oos">下架</text>
+                <text v-else-if="isInquiryLine(line)" class="subtotal-v subtotal-v--inquiry">询价</text>
                 <text v-else-if="isOutOfStockLine(line)" class="subtotal-v subtotal-v--oos">缺货</text>
-                <text v-else class="subtotal-v mono">¥{{ price(line.subtotalFen) }}</text>
+                <text v-else class="subtotal-v mono">¥{{ price(line.faceFen ?? line.subtotalFen) }}</text>
               </view>
             </view>
           </view>
         </view>
       </view>
 
-      <view v-if="hasBlocked" class="inquiry-banner">
-        <text class="inquiry-banner-title">购物车中有 {{ blockedLines.length }} 件暂不可结算商品</text>
+      <!-- 下单拆有效行：R/L/X 失效行在此说明，勾选与结算只作用于 A 到货行 -->
+      <view v-if="invalidLines.length" class="inquiry-banner">
+        <text class="inquiry-banner-title">购物车中有 {{ invalidLines.length }} 件失效行，不会进入订单</text>
         <text class="inquiry-banner-sub">
-          <text v-if="hasInquiry">{{ inquiryLines.length }} 件需联系报价；</text>
-          <text v-if="hasOos">{{ oosLines.length }} 件缺货，需确认库存后再下单。</text>
-          这些商品暂不参与结算。
+          <text v-if="xLines.length">{{ xLines.length }} 件已下架，请从购物车移除；</text>
+          <text v-if="rLines.length">{{ rLines.length }} 件需联系报价；</text>
+          <text v-if="lLines.length">{{ lLines.length }} 件缺货，需确认库存后再下单。</text>
         </text>
+      </view>
+
+      <!-- 三层优惠汇总：商城 / 特价 / 满减，金额均为整数分换算展示 -->
+      <view class="summary">
+        <view class="summary-head">
+          <text class="summary-title">优惠汇总</text>
+          <text class="summary-op mono" hover-class="is-press" @tap="toggleAll">
+            {{ allSelected ? '取消全选' : '全选可结算' }}
+          </text>
+        </view>
+        <text class="summary-pick mono">已选 {{ selectedLines.length }} / {{ selectableLines.length }} 件可结算商品</text>
+        <view class="summary-row">
+          <text class="summary-k">商品小计</text>
+          <text class="summary-v mono">¥{{ price(pricing.subtotalFen) }}</text>
+        </view>
+        <view class="summary-row">
+          <text class="summary-k">商城优惠</text>
+          <text class="summary-v summary-v--off mono">-¥{{ price(pricing.mallDiscountFen) }}</text>
+        </view>
+        <view class="summary-row">
+          <text class="summary-k">特价优惠</text>
+          <text class="summary-v summary-v--off mono">-¥{{ price(pricing.tejiaDiscountFen) }}</text>
+        </view>
+        <view class="summary-row">
+          <text class="summary-k">满减优惠</text>
+          <text class="summary-v summary-v--off mono">-¥{{ price(pricing.manjianDiscountFen) }}</text>
+        </view>
+        <text v-if="pricing.manjianTip" class="summary-tip">{{ pricing.manjianTip }}</text>
+        <view class="summary-row summary-row--total">
+          <text class="summary-k">优惠合计</text>
+          <text class="summary-v summary-v--off mono">-¥{{ price(pricing.discountTotalFen) }}</text>
+        </view>
+        <view class="summary-row summary-row--pay">
+          <text class="summary-k summary-k--pay">应付总额</text>
+          <text class="summary-v summary-v--pay mono">¥{{ price(pricing.payableFen) }}</text>
+        </view>
       </view>
 
       <view v-if="checkoutVisible" class="checkout">
@@ -265,13 +328,12 @@
 
       <view class="bar">
         <view class="bar-total">
-          <text class="bar-label mono">共 {{ cart.totalQuantity }} 件</text>
-          <text v-if="hasBlocked" class="bar-price bar-price--muted">含不可结算 {{ blockedLines.length }} 件</text>
-          <text v-else class="bar-price mono">¥{{ price(payableFen) }}</text>
+          <text class="bar-label mono">已选 {{ selectedLines.length }} 件 · 共 {{ cart.totalQuantity }} 件</text>
+          <text class="bar-price mono">¥{{ price(pricing.payableFen) }}</text>
         </view>
         <view
           class="bar-btn"
-          :class="{ 'bar-btn--busy': submitting, 'bar-btn--disabled': hasBlocked }"
+          :class="{ 'bar-btn--busy': submitting, 'bar-btn--disabled': !selectedLines.length }"
           hover-class="is-press"
           @tap="onBarAction"
         >
@@ -285,13 +347,19 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
-import type { AddressDto, CartDto, CartLineDto, DeliveryMethodDto } from '@mixmapp/contracts';
+import type {
+  AddressDto,
+  CartDto,
+  CartLineDto,
+  CartLineStatus,
+  CartPricingDto,
+  DeliveryMethodDto,
+} from '@mixmapp/contracts';
+import { CART_LINE_STATUS_TEXT, matchManjianTier } from '@mixmapp/contracts';
 import {
   isBulkStock,
-  INQUIRY_NOTICE,
   isOutOfStock,
   isStockUnconfirmed,
-  OUT_OF_STOCK_NOTICE,
   STOCK_UNCONFIRMED_NOTICE,
   unitPriceText,
 } from '../../api/mall';
@@ -322,7 +390,25 @@ function markBroken(src: string): void {
 type CartLine = CartLineDto & { priceSource?: 'anonymous' | 'login' | 'inquiry' };
 type CartView = Omit<CartDto, 'items'> & { items: CartLine[] };
 
-const cart = ref<CartView>({ items: [], totalQuantity: 0, totalFen: 0 });
+/** 空优惠汇总：接口未返回 pricing（离线 / 旧网关兜底）时用它，避免模板读 undefined。 */
+const EMPTY_PRICING: CartPricingDto = {
+  subtotalFen: 0,
+  mallDiscountFen: 0,
+  tejiaDiscountFen: 0,
+  manjianDiscountFen: 0,
+  discountTotalFen: 0,
+  payableFen: 0,
+  manjianTier: null,
+  manjianTip: '',
+  tiers: [],
+};
+
+const cart = ref<CartView>({ items: [], totalQuantity: 0, totalFen: 0, pricing: EMPTY_PRICING });
+
+/** 勾选集合：只保存可结算行的 productId；失效行永不进入。 */
+const selectedIds = ref<Set<string>>(new Set());
+/** 用户是否手动改过勾选：未改过时每次加载默认全选可结算行。 */
+const selectionTouched = ref(false);
 
 /** 询价行：priceSource 为 inquiry，或价格缺失 / 0 元，一律不参与结算。 */
 function isInquiryLine(line: CartLine): boolean {
@@ -339,19 +425,52 @@ function isStockUnconfirmedLine(line: CartLine): boolean {
   return !isInquiryLine(line) && !isOutOfStockLine(line) && isStockUnconfirmed(line);
 }
 
-/** 被结算拦截的行：询价 + 缺货。 */
-function isBlockedLine(line: CartLine): boolean {
-  return isInquiryLine(line) || isOutOfStockLine(line);
+/**
+ * 行状态四态（源站 invStatus 口径）：
+ * 优先用服务端下发的 lineStatus；旧接口没有该字段时按既有拦截口径兜底推断。
+ */
+function lineStatusOf(line: CartLine): CartLineStatus {
+  if (line.lineStatus) return line.lineStatus;
+  if (isInquiryLine(line)) return 'R';
+  if (isOutOfStockLine(line)) return 'L';
+  return 'A';
+}
+
+/** 可勾选性：以服务端 selectable 为准（只有 A 为 true），旧接口回落到「非询价 + 有货」。 */
+function isSelectable(line: CartLine): boolean {
+  if (typeof line.selectable === 'boolean') return line.selectable;
+  return lineStatusOf(line) === 'A';
+}
+
+/** 失效行说明兜底：服务端未下发 lineStatusHint 时按四态默认文案补齐。 */
+function invalidHintOf(line: CartLine): string {
+  const status = lineStatusOf(line);
+  return CART_LINE_STATUS_TEXT[status].hint || '该商品暂不可结算';
+}
+
+/** 行级优惠额（整数分）：商城与特价取优，服务端只会给其中一层，这里相加即最终值。 */
+function lineDiscountFen(line: CartLine): number {
+  return (line.mallDiscountFen ?? 0) + (line.tejiaDiscountFen ?? 0);
+}
+
+/** 行级优惠文案：区分商城折扣与特价折扣，便于用户核对来源。 */
+function lineDiscountLabel(line: CartLine): string {
+  const source = (line.tejiaDiscountFen ?? 0) > 0 ? '特价' : '商城';
+  return `${source} -¥${price(lineDiscountFen(line))}`;
 }
 
 /** 接口返回非 JSON（离线/网关兜底）时可能是 undefined，统一收敛成合法购物车，避免模板读 items 白屏。 */
 function normalizeCart(input: unknown): CartView {
   const raw = (input ?? {}) as Partial<CartDto>;
-  if (!Array.isArray(raw.items)) return { items: [], totalQuantity: 0, totalFen: 0 };
+  if (!Array.isArray(raw.items)) {
+    return { items: [], totalQuantity: 0, totalFen: 0, pricing: EMPTY_PRICING };
+  }
   return {
     items: raw.items as CartLine[],
     totalQuantity: raw.totalQuantity ?? 0,
     totalFen: raw.totalFen ?? 0,
+    // pricing 兜底：缺字段时退回空汇总，模板始终拿到结构完整的对象
+    pricing: { ...EMPTY_PRICING, ...(raw.pricing ?? {}) },
   };
 }
 const loading = ref(false);
@@ -396,28 +515,104 @@ const deliverySummary = computed(() => {
   return [method?.name, slot?.label].filter(Boolean).join(' · ');
 });
 
-const inquiryLines = computed(() => cart.value.items.filter(isInquiryLine));
-const oosLines = computed(() => cart.value.items.filter(isOutOfStockLine));
-const blockedLines = computed(() => cart.value.items.filter(isBlockedLine));
-const hasInquiry = computed(() => inquiryLines.value.length > 0);
-const hasOos = computed(() => oosLines.value.length > 0);
+/** 可结算行 = A 到货；R/L/X 都是失效行，不可勾选、不进订单。 */
+const selectableLines = computed(() => cart.value.items.filter(isSelectable));
+/** 失效行：下单前需要向用户说明的部分。 */
+const invalidLines = computed(() => cart.value.items.filter((line) => !isSelectable(line)));
+const xLines = computed(() => invalidLines.value.filter((line) => lineStatusOf(line) === 'X'));
+const rLines = computed(() => invalidLines.value.filter((line) => lineStatusOf(line) === 'R'));
+const lLines = computed(() => invalidLines.value.filter((line) => lineStatusOf(line) === 'L'));
+/* 失效行统计见 invalidLines / xLines / rLines / lLines。 */
 const hasUnconfirmed = computed(() => cart.value.items.some(isStockUnconfirmedLine));
-const hasBlocked = computed(() => blockedLines.value.length > 0);
-const payableFen = computed(() =>
-  cart.value.items.reduce((sum, line) => sum + (isBlockedLine(line) ? 0 : line.subtotalFen), 0),
+
+/** 选中行：勾选集合里仍属于 A 态的行（防止状态变化后残留选中）。 */
+const selectedLines = computed(() =>
+  selectableLines.value.filter((line) => selectedIds.value.has(line.productId)),
+);
+const allSelected = computed(
+  () => selectableLines.value.length > 0 && selectedLines.value.length === selectableLines.value.length,
 );
 
+/** 勾选 / 取消勾选单行；失效行给出对应四态说明，不改变勾选状态。 */
+function toggleLine(line: CartLine): void {
+  if (!isSelectable(line)) {
+    uni.showToast({ title: invalidHintOf(line), icon: 'none' });
+    return;
+  }
+  selectionTouched.value = true;
+  const next = new Set(selectedIds.value);
+  if (next.has(line.productId)) next.delete(line.productId);
+  else next.add(line.productId);
+  selectedIds.value = next;
+}
+
+/** 全选 / 取消全选：只作用于可结算行。 */
+function toggleAll(): void {
+  selectionTouched.value = true;
+  selectedIds.value = allSelected.value
+    ? new Set()
+    : new Set(selectableLines.value.map((line) => line.productId));
+}
+
+/** 勾选集合与最新购物车对齐：失效行自动取消；用户没动过勾选时默认全选 A 态行。 */
+function reconcileSelection(): void {
+  const available = new Set(selectableLines.value.map((line) => line.productId));
+  const next = new Set<string>();
+  for (const id of selectedIds.value) if (available.has(id)) next.add(id);
+  if (!selectionTouched.value) for (const id of available) next.add(id);
+  selectedIds.value = next;
+}
+
+/**
+ * 三层优惠汇总（前端按勾选行本地重算，口径与后端一致）：
+ * - 商城优惠 / 特价优惠：逐行取服务端算好的整数分减免额（两者互斥，取更优一层）
+ * - 满减优惠：按小计净额（面价 - 商城/特价）匹配档位 `min~max → percent%`
+ * 取整规则：满减用 Math.floor 向下取整到分，保证减免不超过档位比例；应付额兜底不小于 0。
+ */
+const pricing = computed<CartPricingDto>(() => {
+  const tiers = cart.value.pricing.tiers;
+  const rows = selectedLines.value;
+  const subtotalFen = rows.reduce((sum, line) => sum + (line.faceFen ?? line.subtotalFen), 0);
+  const mallDiscountFen = rows.reduce((sum, line) => sum + (line.mallDiscountFen ?? 0), 0);
+  const tejiaDiscountFen = rows.reduce((sum, line) => sum + (line.tejiaDiscountFen ?? 0), 0);
+  const netFen = subtotalFen - mallDiscountFen - tejiaDiscountFen;
+  const hit = matchManjianTier(netFen, tiers);
+  // 满减取整：percent 是「最多减免比例」，整数分向下取整避免超出档位比例
+  const manjianDiscountFen = hit ? Math.floor((netFen * hit.percent) / 100) : 0;
+  const discountTotalFen = mallDiscountFen + tejiaDiscountFen + manjianDiscountFen;
+  const topPercent = tiers.reduce((max, tier) => Math.max(max, tier.percent), 0);
+  const manjianTip = hit
+    ? `${hit.percent >= topPercent ? '已享受最高折扣' : '已享受满减'} ${hit.percent}%，再减 ¥${price(manjianDiscountFen)}`
+    : '';
+  return {
+    subtotalFen,
+    mallDiscountFen,
+    tejiaDiscountFen,
+    manjianDiscountFen,
+    discountTotalFen,
+    payableFen: Math.max(0, subtotalFen - discountTotalFen),
+    manjianTier: hit,
+    manjianTip,
+    tiers,
+  };
+});
+/** 失效行汇总：banner 使用 invalidLines / xLines / rLines / lLines。 */
+/* 失效行与金额已统一由 invalidLines / pricing 计算，此处不再保留旧口径。 */
+
 const barLabel = computed(() => {
-  if (hasInquiry.value && hasOos.value) return '含询价 / 缺货商品，暂不能结算';
-  if (hasInquiry.value) return '含询价商品，暂不能结算';
-  if (hasOos.value) return '含缺货商品，暂不能结算';
+  if (!selectableLines.value.length) return '暂无可结算商品';
+  if (!selectedLines.value.length) return '请选择商品';
   if (!checkoutVisible.value) return '去结算';
   return submitting.value ? '提交中…' : '提交订单';
 });
 
 function onBarAction(): void {
-  if (hasBlocked.value) {
-    uni.showToast({ title: hasOos.value ? OUT_OF_STOCK_NOTICE : INQUIRY_NOTICE, icon: 'none' });
+  if (!selectableLines.value.length) {
+    uni.showToast({ title: '没有可结算的商品，请移除失效行', icon: 'none' });
+    return;
+  }
+  if (!selectedLines.value.length) {
+    uni.showToast({ title: '请选择要结算的商品', icon: 'none' });
     return;
   }
   if (checkoutVisible.value) {
@@ -630,11 +825,17 @@ function stepOf(line: CartLine): number {
   return 1;
 }
 
+/** 把接口返回的购物车落到本地，并同步勾选集合（失效行自动取消勾选）。 */
+function applyCart(input: unknown): void {
+  cart.value = normalizeCart(input);
+  reconcileSelection();
+}
+
 async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    cart.value = normalizeCart(await mallApi.getCart());
+    applyCart(await mallApi.getCart());
   } catch (e) {
     const message = e instanceof Error ? e.message : '购物车加载失败';
     if (message.includes('登录')) {
@@ -649,11 +850,9 @@ async function load(): Promise<void> {
 
 async function changeQty(productId: string, quantity: number): Promise<void> {
   const line = cart.value.items.find((item) => item.productId === productId);
-  if (line && isBlockedLine(line)) {
-    uni.showToast({
-      title: isOutOfStockLine(line) ? OUT_OF_STOCK_NOTICE : '询价商品不能调整数量',
-      icon: 'none',
-    });
+  // 失效行（R/L/X）不能调整数量：按四态说明提示，操作入口只保留移除
+  if (line && !isSelectable(line)) {
+    uni.showToast({ title: invalidHintOf(line), icon: 'none' });
     return;
   }
   if (quantity < 1) {
@@ -662,9 +861,7 @@ async function changeQty(productId: string, quantity: number): Promise<void> {
   }
   try {
     const packQty = line?.packQty ? Math.max(1, Math.round(quantity / stepOf(line))) : undefined;
-    cart.value = normalizeCart(
-      await mallApi.updateCart(productId, quantity, line?.packUnit, packQty),
-    );
+    applyCart(await mallApi.updateCart(productId, quantity, line?.packUnit, packQty));
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '修改数量失败', icon: 'none' });
   }
@@ -672,16 +869,16 @@ async function changeQty(productId: string, quantity: number): Promise<void> {
 
 async function remove(productId: string): Promise<void> {
   try {
-    cart.value = normalizeCart(await mallApi.removeCart(productId));
+    applyCart(await mallApi.removeCart(productId));
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '删除失败', icon: 'none' });
   }
 }
 
 async function submitOrder(): Promise<void> {
-  if (hasBlocked.value) {
-    uni.showToast({ title: hasOos.value ? OUT_OF_STOCK_NOTICE : INQUIRY_NOTICE, icon: 'none' });
-    checkoutVisible.value = false;
+  // 下单拆有效行：只提交勾选的 A 到货行，失效行留在购物车并给出说明
+  if (!selectedLines.value.length) {
+    uni.showToast({ title: '请选择要结算的商品', icon: 'none' });
     return;
   }
   const { receiverName, receiverPhone, address } = form.value;
@@ -726,10 +923,23 @@ async function submitOrder(): Promise<void> {
       ...(selectedAddressId.value ? { addressId: selectedAddressId.value } : {}),
       ...(deliveryMethod.value ? { deliveryMethod: deliveryMethod.value } : {}),
       ...(deliverySlot.value ? { deliverySlot: deliverySlot.value } : {}),
+      // 只把勾选的 A 到货行交给后端；失效行/未勾选行不会进单
+      items: selectedLines.value.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        ...(line.packUnit ? { packUnit: line.packUnit } : {}),
+        ...(line.packQty != null ? { packQty: line.packQty } : {}),
+      })),
     });
     checkoutVisible.value = false;
-    cart.value = { items: [], totalQuantity: 0, totalFen: 0 };
-    uni.showToast({ title: '下单成功', icon: 'success' });
+    // 失效行留在购物车：清空勾选，返回本页时由 onShow 重新拉取
+    selectedIds.value = new Set();
+    selectionTouched.value = false;
+    const skipped = order.skippedLines?.length ?? 0;
+    uni.showToast({
+      title: skipped ? `下单成功，${skipped} 件失效商品未进单` : '下单成功',
+      icon: 'success',
+    });
     setTimeout(() => {
       uni.navigateTo({ url: `${ROUTES.orders}?orderNo=${encodeURIComponent(order.orderNo)}` });
     }, 600);
@@ -788,6 +998,94 @@ onShow(() => {
   display: flex;
   padding: $sp-3 0;
   border-bottom: 1rpx solid $paper-3;
+}
+
+/* 行勾选：只有 A 到货行可点，R/L/X 显示为禁用态 */
+.tick {
+  width: 64rpx;
+  height: 148rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tick-box {
+  width: 40rpx;
+  height: 40rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: 8rpx;
+  background: $paper-2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tick-box--on {
+  background: $solid;
+  border-color: $solid;
+}
+
+.tick-box--off {
+  opacity: 0.35;
+}
+
+.tick-mark {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: $on-solid;
+}
+
+/* 失效行整体降饱和，避免与可结算行混淆 */
+.line--invalid .cover,
+.line--invalid .name {
+  opacity: 0.55;
+}
+
+/* 四态徽章：R 需求 / L 缺货 / A 到货 / X 下架 */
+.state-badge {
+  flex-shrink: 0;
+  margin-top: 4rpx;
+  margin-right: $sp-2;
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.state-badge--a {
+  color: $ink-3;
+  background: $paper-2;
+}
+
+.state-badge--r {
+  color: $brand-deep;
+  background: rgba(13, 25, 23, 0.06);
+}
+
+.state-badge--l {
+  color: $amber;
+  background: rgba(198, 138, 24, 0.12);
+}
+
+.state-badge--x {
+  color: $ink-4;
+  background: $paper-2;
+  text-decoration: line-through;
+}
+
+.unit--gone {
+  color: $ink-4;
+  text-decoration: line-through;
+}
+
+/* 行级优惠：商城 / 特价取优后的一层 */
+.discount-tag {
+  display: inline-block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: $amber;
 }
 
 .cover {
@@ -934,6 +1232,87 @@ onShow(() => {
   font-size: 26rpx;
   line-height: 1.6;
   color: $ink-3;
+}
+
+/* ---------- 三层优惠汇总 ---------- */
+.summary {
+  margin: $sp-3 0 $sp-4;
+  padding: $sp-3;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+  background: $paper-2;
+}
+
+.summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-title {
+  font-family: $font-display;
+  font-size: 32rpx;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
+  color: $ink;
+}
+
+.summary-op {
+  font-size: 24rpx;
+  color: $brand-deep;
+}
+
+.summary-pick {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: $ink-4;
+}
+
+.summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 12rpx;
+}
+
+.summary-k {
+  font-size: 26rpx;
+  color: $ink-3;
+}
+
+.summary-v {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: $ink;
+}
+
+.summary-v--off {
+  color: $amber;
+}
+
+.summary-tip {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: $amber;
+}
+
+.summary-row--total {
+  padding-top: 12rpx;
+  border-top: 1rpx dashed $paper-3;
+}
+
+.summary-k--pay {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: $ink;
+}
+
+.summary-v--pay {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: $ink;
 }
 
 .line-foot {

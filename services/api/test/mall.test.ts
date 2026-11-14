@@ -439,3 +439,196 @@ describe('下单幂等与超时取消', () => {
     expect(stockRestored.json().data.stock).toBe(2);
   });
 });
+
+describe('购物车行状态四态与三层优惠（0017）', () => {
+  /** 直接写购物车行：L/X 行无法通过加购接口进入（会被 assertOrderable 拦住），用于构造四态夹具。 */
+  async function seedCart(
+    store: Awaited<ReturnType<typeof makeApp>>['store'],
+    userId: string,
+    rows: Array<{ productId: string; quantity: number }>,
+  ): Promise<void> {
+    const now = new Date();
+    for (const row of rows) {
+      await store.mall.carts.upsert({
+        id: `cart-${userId}-${row.productId}`,
+        userId,
+        productId: row.productId,
+        quantity: row.quantity,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  /** 按 productId 取出购物车行；noUncheckedIndexedAccess 下用 ?? {} 兜底，避免断言处报 undefined。 */
+  function lineOf(lines: Array<Record<string, unknown>>, productId: string): Record<string, unknown> {
+    return lines.find((line) => line.productId === productId) ?? {};
+  }
+
+  it('四态判定：A 到货 / L 缺货 / R 需求 / X 下架，只有 A 可勾选结算', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-state-a', title: '正常货', priceFen: 10000, stock: 50 }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-state-l', title: '无货品', priceFen: 10000, stock: 50, sourceInvStatus: '无货' }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-state-r', title: '询价品', priceFen: 0, stock: 50, priceSource: 'inquiry' }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-state-x', title: '下架品', priceFen: 10000, stock: 50, listed: false }),
+    );
+    const token = await register(app, '13800002201');
+    const user = await ctx.store.users.findByPhone('13800002201');
+    expect(user).toBeTruthy();
+    await seedCart(ctx.store, user!.id, [
+      { productId: 'mix-state-a', quantity: 2 },
+      { productId: 'mix-state-l', quantity: 2 },
+      { productId: 'mix-state-r', quantity: 2 },
+      { productId: 'mix-state-x', quantity: 2 },
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    const lines = data.items as Array<Record<string, unknown>>;
+
+    expect(lineOf(lines, 'mix-state-a').lineStatus).toBe('A');
+    expect(lineOf(lines, 'mix-state-a').selectable).toBe(true);
+    expect(lineOf(lines, 'mix-state-l').lineStatus).toBe('L');
+    expect(lineOf(lines, 'mix-state-l').selectable).toBe(false);
+    expect(lineOf(lines, 'mix-state-r').lineStatus).toBe('R');
+    expect(lineOf(lines, 'mix-state-r').selectable).toBe(false);
+    expect(lineOf(lines, 'mix-state-x').lineStatus).toBe('X');
+    expect(lineOf(lines, 'mix-state-x').selectable).toBe(false);
+    expect(lineOf(lines, 'mix-state-x').lineStatusText).toBe('下架');
+    // 只有 A 行参与三层优惠汇总
+    expect(data.pricing.subtotalFen).toBe(20000);
+    expect(data.pricing.payableFen).toBe(20000);
+  });
+
+  it('商城 / 特价取优不叠加，厘→分只在小计与减免处取整一次', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    // 1005 厘/支 × 3 支 = 3015 厘 → 302 分（四舍五入）
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-disc-mall', title: '商城折扣品', priceFen: 101, priceLi: 1005, stock: 50, discountPct: 85 }),
+    );
+    // 特价折扣 80%（折后价百分比），减免额 = 面价 × 20%
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-disc-tejia', title: '特价品', priceFen: 1000, stock: 50, tejiaDiscountPct: 80 }),
+    );
+    const token = await register(app, '13800002202');
+    const user = await ctx.store.users.findByPhone('13800002202');
+    await seedCart(ctx.store, user!.id, [
+      { productId: 'mix-disc-mall', quantity: 3 },
+      { productId: 'mix-disc-tejia', quantity: 1 },
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    const data = res.json().data;
+    const lines = data.items as Array<Record<string, unknown>>;
+
+    expect(lineOf(lines, 'mix-disc-mall').faceFen).toBe(302);
+    expect(lineOf(lines, 'mix-disc-mall').mallDiscountFen).toBe(45);
+    expect(lineOf(lines, 'mix-disc-mall').tejiaDiscountFen).toBe(0);
+    expect(lineOf(lines, 'mix-disc-mall').netFen).toBe(257);
+    expect(lineOf(lines, 'mix-disc-tejia').tejiaDiscountFen).toBe(200);
+    expect(lineOf(lines, 'mix-disc-tejia').mallDiscountFen).toBe(0);
+    expect(data.pricing.subtotalFen).toBe(1302);
+    expect(data.pricing.mallDiscountFen).toBe(45);
+    expect(data.pricing.tejiaDiscountFen).toBe(200);
+    expect(data.pricing.manjianDiscountFen).toBe(0);
+    expect(data.pricing.discountTotalFen).toBe(245);
+    expect(data.pricing.payableFen).toBe(1057);
+  });
+
+  it('满减按档位匹配，命中最高档时给出「已享受最高折扣」，订单落三层优惠快照', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-mj-1', title: '满减品', priceFen: 10000, stock: 100 }),
+    );
+    const token = await register(app, '13800002203');
+    const user = await ctx.store.users.findByPhone('13800002203');
+    await seedCart(ctx.store, user!.id, [{ productId: 'mix-mj-1', quantity: 30 }]);
+
+    // 300000 分 = 3000 元，命中 300000 以上 3% 档；Math.floor(300000 × 3%) = 9000
+    const res = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    const pricing = res.json().data.pricing;
+    expect(pricing.subtotalFen).toBe(300000);
+    expect(pricing.manjianDiscountFen).toBe(9000);
+    expect(pricing.manjianTier.percent).toBe(3);
+    expect(pricing.manjianTip).toContain('已享受最高折扣');
+    expect(pricing.payableFen).toBe(291000);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '李四',
+        receiverPhone: '13800002203',
+        address: '浙江省宁波市鄞州区优惠路 8 号',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const order = created.json().data;
+    expect(order.totalFen).toBe(291000);
+    expect(order.subtotalFen).toBe(300000);
+    expect(order.mallDiscountFen).toBe(0);
+    expect(order.tejiaDiscountFen).toBe(0);
+    expect(order.manjianDiscountFen).toBe(9000);
+    expect(order.discountTotalFen).toBe(9000);
+    expect(order.items[0].lineStatus).toBe('A');
+  });
+
+  it('下单拆有效行：失效行不进单、留在购物车并随响应说明', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-split-a', title: '可售品', priceFen: 10000, stock: 50 }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-split-l', title: '缺货品', priceFen: 10000, stock: 50, sourceInvStatus: '无货' }),
+    );
+    const token = await register(app, '13800002204');
+    const user = await ctx.store.users.findByPhone('13800002204');
+    await seedCart(ctx.store, user!.id, [
+      { productId: 'mix-split-a', quantity: 2 },
+      { productId: 'mix-split-l', quantity: 2 },
+    ]);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '王五',
+        receiverPhone: '13800002204',
+        address: '浙江省宁波市海曙区拆分路 9 号',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const order = created.json().data;
+    expect(order.items).toHaveLength(1);
+    expect(order.items[0].productId).toBe('mix-split-a');
+    expect(order.skippedLines).toHaveLength(1);
+    expect(order.skippedLines[0].productId).toBe('mix-split-l');
+    expect(order.skippedLines[0].lineStatus).toBe('L');
+    expect(order.skippedLines[0].reason).toContain('缺货');
+    expect(order.totalFen).toBe(20000);
+
+    // 失效行留在购物车，A 行已被移除
+    const cartAfter = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    const itemsAfter = cartAfter.json().data.items as Array<{ productId: string; lineStatus: string }>;
+    expect(itemsAfter).toHaveLength(1);
+    expect(itemsAfter[0]!.productId).toBe('mix-split-l');
+    expect(itemsAfter[0]!.lineStatus).toBe('L');
+    // 库存只扣有效行
+    expect((await ctx.store.mall.products.findById('mix-split-a'))?.stock).toBe(48);
+    expect((await ctx.store.mall.products.findById('mix-split-l'))?.stock).toBe(50);
+  });
+});
