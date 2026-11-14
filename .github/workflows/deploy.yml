@@ -51,17 +51,15 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build:api
-      # 静态端 H5 与 API 同域：默认 API 前缀 /mixmapp/api/v1（同域相对路径）。
-      # 必须用变量 MIXMAPP_API_BASE 覆盖，禁止注入已失效域名 cloud.mix.top
+      # 静态端 H5 以绝对基址跨域调用后端：https://api.mixm.top/mixmapp/api/v1。
+      # 必须用仓库变量 MIXMAPP_API_BASE 注入，禁止注入已失效域名 cloud.mix.top
       # （实测 SSL 握手失败 SEC_E_ILLEGAL_MESSAGE，会让整站离线）。
-      # 2026-11-14 域名改版：api.mixm.top 双跑验证通过后，把仓库变量
-      # MIXMAPP_API_BASE 设为 https://api.mixm.top/mixmapp/api/v1，
-      # H5 即改为绝对基址跨域调用（CORS 白名单含 www）。在验证前保持相对路径，
-      # 由 www / cloud 的 Nginx 各自反代 /mixmapp/ 兜住。
+      # 2026-11-14 域名改版：api.mixm.top 已通过 S1 验证并上线，H5 改为绝对基址；
+      # 跨域由 api 侧 CORS 白名单兜住（含 https://www.mixm.top 与 Pages 入口）。
       # 本步骤每次重新构建 H5，是「替换 release/ 下旧预览产物」的必做步骤。
-      - name: 构建 H5（同域 + /mixmapp 前缀）
+      - name: 构建 H5（绝对基址 api.mixm.top）
         env:
-          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || '/mixmapp/api/v1' }}
+          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || 'https://api.mixm.top/mixmapp/api/v1' }}
         run: pnpm build:h5
 
       # 抽检新构建产物：版本号 / 预览字样 / API 基址三项都要过，防止「只改源码不重发产物」。
@@ -75,7 +73,10 @@ jobs:
           if grep -rq 'cloud\.mix\.top/mixmapp' "$H5"; then
             echo "✗ H5 产物 API 基址指向已失效域名 cloud.mix.top"; exit 1
           fi
-          echo "✓ H5 产物抽检通过（无四段号 / 无渠道后缀 / 无预览字样 / 无 cloud.mix.top）"
+          if ! grep -rq 'https://api\.mixm\.top/mixmapp/api/v1' "$H5"; then
+            echo "✗ H5 产物未内置绝对基址 https://api.mixm.top/mixmapp/api/v1"; exit 1
+          fi
+          echo "✓ H5 产物抽检通过（无四段号 / 无渠道后缀 / 无预览字样 / 基址 api.mixm.top）"
 
       - name: 生成独立可运行 API 发布包
         run: pnpm --filter @mixmapp/api deploy --prod "$GITHUB_WORKSPACE/out/api"

@@ -16,7 +16,7 @@
  *
  * 用法：
  *   pnpm build:h5
- *   MIXMAPP_API_BASE=https://cloud.mixm.top/mixmapp/api/v1 pnpm build:h5
+ *   MIXMAPP_API_BASE=https://api.mixm.top/mixmapp/api/v1 pnpm build:h5
  *   MIXMAPP_API_BASE=/mixmapp/api/v1 pnpm build:h5   # 同域自托管
  */
 import { execSync } from 'node:child_process';
@@ -56,7 +56,7 @@ const invalid = validateApiBase(apiBase);
 if (invalid) {
   console.error(`✗ 构建中止：${invalid}`);
   console.error('  静态托管 / 壳内没有后端路由，必须给出 API 源：');
-  console.error('    - 跨域静态端 / 原生壳：MIXMAPP_API_BASE=https://cloud.mixm.top/mixmapp/api/v1');
+  console.error('    - 跨域静态端 / 原生壳：MIXMAPP_API_BASE=https://api.mixm.top/mixmapp/api/v1');
   console.error('    - 同域自托管：        MIXMAPP_API_BASE=/mixmapp/api/v1');
   process.exit(1);
 }

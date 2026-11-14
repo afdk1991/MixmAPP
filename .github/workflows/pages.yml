@@ -41,9 +41,9 @@ jobs:
         env:
           MIXMAPP_H5_BASE: /MixmAPP/
           # Pages 是跨域静态托管，单文件产物必须内置绝对 API 地址。
-          # 这里用独立变量 PAGES_API_BASE，不复用主站同源的 MIXMAPP_API_BASE
-          # （其值为相对路径 /mixmapp/api/v1，仅供 cloud.mixm.top 同源部署，保住 CORS 收益）。
-          MIXMAPP_API_BASE: ${{ vars.PAGES_API_BASE || 'https://cloud.mixm.top/mixmapp/api/v1' }}
+          # 这里用独立变量 PAGES_API_BASE，不复用主站同源变量 MIXMAPP_API_BASE
+          # （其值同为绝对基址，但两处入口的回滚节奏不同）。
+          MIXMAPP_API_BASE: ${{ vars.PAGES_API_BASE || 'https://api.mixm.top/mixmapp/api/v1' }}
         run: node scripts/build-h5-single.mjs
 
       - name: 组装站点目录

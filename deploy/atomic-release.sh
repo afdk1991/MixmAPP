@@ -30,6 +30,19 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
+# 发布互斥：CI 的 concurrency 只能串行同一条 workflow，商品直送 / 手工发布走另一条路，
+# 两路同时进来会各自建 release 目录并互相覆盖 current symlink。这里用内核 flock 做
+# 进程级排他：拿到锁才动 releases/current/api.env；拿不到就整单放弃，不做任何改动。
+# 等待窗口默认 600s，覆盖「另一路正在重启 + 健康检查」的时长；超时退出码 4。
+LOCK_FILE=${LOCK_FILE:-/var/lock/mixmapp-deploy.lock}
+LOCK_WAIT=${LOCK_WAIT:-600}
+exec 9>"$LOCK_FILE"
+if ! flock -w "$LOCK_WAIT" 9; then
+  echo "✗ 发布互斥锁被占用（$LOCK_FILE，等待 ${LOCK_WAIT}s 超时），本次放弃，未做任何改动"
+  exit 4
+fi
+echo "▶ 已获取发布互斥锁 $LOCK_FILE"
+
 STAMP=$(date +%Y%m%d%H%M%S)
 RELEASE="$APP_DIR/releases/$STAMP"
 PREV=$(readlink -f "$APP_DIR/current" 2>/dev/null || true)
