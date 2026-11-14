@@ -448,8 +448,11 @@ export class PgStore implements Store {
         }
         const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
         params.push(filter.limit, filter.offset);
+        // id desc 是必要的稳定兜底：批量导入的 created_at 大量相同，
+        // 只按 sort_no/created_at 排序时同一页在不同请求间会漂移，
+        // limit/offset 翻页就会出现重复卡片 + 漏商品（15k 目录实测量出 4 重 4 漏）。
         const res = await this.pool.query(
-          `select * from products ${where} order by sort_no asc, created_at desc
+          `select * from products ${where} order by sort_no asc, created_at desc, id desc
            limit $${params.length - 1} offset $${params.length}`,
           params,
         );

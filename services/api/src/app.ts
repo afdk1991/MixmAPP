@@ -95,11 +95,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('x-account-no', claims.acc);
   });
 
-  // 轻量固定窗口限流：单 IP 每分钟，健康检查放行
+  // 轻量固定窗口限流：单 IP 每分钟，健康检查与只读目录放行
   const buckets = new Map<string, { windowStart: number; count: number }>();
   app.addHook('preHandler', async (request, reply) => {
     const path = request.url.split('?')[0];
     if (path === '/api/v1/healthz' || path === '/api/v1/readyz') return;
+    // 商品目录是 15k 量级的分页浏览，且每张封面图都算一次请求；
+    // 只读 GET 若也计入 60/分，翻两屏就会被 429 掐断，等于商城不可用。
+    if (
+      request.method === 'GET' &&
+      (path.startsWith('/api/v1/mall') || path.startsWith('/media/'))
+    ) {
+      return;
+    }
     const now = Date.now();
     const entry = buckets.get(request.ip);
     if (!entry || now - entry.windowStart >= 60_000) {
