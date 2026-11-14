@@ -158,7 +158,14 @@ describe('内嵌只读目录源（fixture 夹具）', () => {
 });
 
 describe('/media 本地直出兜底', () => {
-  it('STORAGE_DIR 指错时，仍从仓库 storage/products 兜底返回 200 图片', async () => {
+  // storage/products 被 .gitignore 排除，CI checkout 里没有图片；
+  // 无样例时跳过，避免把「本机有图、CI 无图」误判成回归。
+  const repoMediaSample = join(
+    projectRoot(),
+    'storage/products/000518191826ddfe69815af4ffe2513f1ca0de08.jpg',
+  );
+  const run = existsSync(repoMediaSample) ? it : it.skip;
+  run('STORAGE_DIR 指错时，仍从仓库 storage/products 兜底返回 200 图片', async () => {
     const app = await buildApp({
       config: {
         ...testConfig,
