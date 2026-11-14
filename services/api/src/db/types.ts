@@ -147,7 +147,7 @@ export type ProductRecord = {
   discountPct?: number | null;
   /** 特价，厘/支 */
   salePriceLi?: number | null;
-  /** 源站特价折扣百分比（`tejiaD2N2`）。当前采集链路尚未取该列，仅在数据补齐后生效。 */
+  /** 源站特价折扣百分比（`tejiaD2N2`）。0/缺失为 null 表示非特价；只透传，不参与价格派生。 */
   tejiaDiscountPct?: number | null;
   /** 优惠活动文案与有效期 */
   promotions?: Array<{ text: string; kind?: string; validFrom?: string; validTo?: string }>;
@@ -180,6 +180,22 @@ export type CartItemRecord = {
   quantity: number;
   packUnit?: string | null;
   packQty?: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** 收货地址（0014）。源站口径：省/市/区三级 + 详细地址，收货人与手机号随地址保存。 */
+export type AddressRecord = {
+  id: string;
+  userId: string;
+  receiverName: string;
+  receiverPhone: string;
+  province: string;
+  city: string;
+  district: string;
+  detail: string;
+  /** 同一用户至多一条默认地址 */
+  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -220,6 +236,12 @@ export type OrderRecord = {
   receiverName: string;
   receiverPhone: string;
   address: string;
+  /** 下单时选择的地址簿 id（手填地址的历史订单为 null） */
+  addressId: string | null;
+  /** 配送方式代码：express=快递配送 / pickup=门店自提 */
+  deliveryMethod: string | null;
+  /** 配送时间段代码（见 deliveryOptions） */
+  deliverySlot: string | null;
   remark: string | null;
   createdAt: Date;
   paidAt: Date | null;
@@ -413,6 +435,19 @@ export type Store = {
       clear(userId: string): Promise<void>;
       /** 用给定行整体替换某用户购物车（合并回滚按快照还原时使用） */
       replaceAll(userId: string, items: CartItemRecord[]): Promise<void>;
+    };
+    /** 地址簿（0014）：下单必填项，结算页选择地址后取快照写入订单 */
+    addresses: {
+      listByUser(userId: string): Promise<AddressRecord[]>;
+      findById(userId: string, id: string): Promise<AddressRecord | null>;
+      insert(address: AddressRecord): Promise<AddressRecord>;
+      update(userId: string, id: string, patch: Partial<AddressRecord>): Promise<AddressRecord | null>;
+      remove(userId: string, id: string): Promise<void>;
+      /**
+       * 设默认：一条 update 把该用户全部地址的 is_default 整体改写成「仅 id 命中为 true」，
+       * 规避网关无事务时的两条语句竞态；id 不属于该用户时返回 null。
+       */
+      setDefault(userId: string, id: string): Promise<AddressRecord | null>;
     };
     orders: {
       insert(order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord>;

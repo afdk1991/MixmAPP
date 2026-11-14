@@ -106,8 +106,127 @@
         <text class="hint">提交后库存即扣减，可在订单页查看进度。</text>
         <text v-if="hasUnconfirmed" class="hint">{{ STOCK_UNCONFIRMED_NOTICE }}</text>
 
+        <!-- 地址簿（源站口径）：结算必须从已保存地址中选择，未选不可提交 -->
+        <text class="label mt">收货地址</text>
+        <text v-if="addressesLoading" class="hint">地址加载中…</text>
+        <text v-else-if="!addresses.length" class="hint">还没有保存的地址，请先新增一个。</text>
+        <view
+          v-for="item in addresses"
+          :key="item.id"
+          class="addr-card"
+          :class="{ 'addr-card--on': item.id === selectedAddressId }"
+          hover-class="is-press"
+          @tap="selectAddress(item)"
+        >
+          <view class="addr-head">
+            <text class="addr-name">{{ item.receiverName }}</text>
+            <text class="addr-phone mono">{{ item.receiverPhone }}</text>
+            <text v-if="item.isDefault" class="addr-tag mono">默认</text>
+          </view>
+          <text class="addr-text">{{ item.fullAddress }}</text>
+          <view class="addr-ops">
+            <text v-if="!item.isDefault" class="addr-op" @tap.stop="setDefaultAddress(item)">设默认</text>
+            <text class="addr-op" @tap.stop="editAddress(item)">编辑</text>
+            <text class="addr-op" @tap.stop="removeAddress(item)">删除</text>
+          </view>
+        </view>
+        <view class="addr-add" hover-class="is-press" @tap="toggleAddressForm">
+          <text class="addr-add-text mono">{{ addressEditing ? '收起' : '+ 新增地址' }}</text>
+        </view>
+
+        <view v-if="addressEditing" class="addr-form">
+          <input
+            v-model="addrForm.receiverName"
+            class="field"
+            placeholder="收货人姓名"
+            placeholder-class="field-ph"
+          />
+          <input
+            v-model="addrForm.receiverPhone"
+            class="field field--gap"
+            type="number"
+            maxlength="11"
+            placeholder="手机号"
+            placeholder-class="field-ph"
+          />
+          <input
+            v-model="addrForm.province"
+            class="field field--gap"
+            placeholder="省（如 上海）"
+            placeholder-class="field-ph"
+          />
+          <input
+            v-model="addrForm.city"
+            class="field field--gap"
+            placeholder="市（如 上海市）"
+            placeholder-class="field-ph"
+          />
+          <input
+            v-model="addrForm.district"
+            class="field field--gap"
+            placeholder="区（如 浦东新区）"
+            placeholder-class="field-ph"
+          />
+          <textarea
+            v-model="addrForm.detail"
+            class="field field--area field--gap"
+            placeholder="详细地址（街道、门牌号）"
+            placeholder-class="field-ph"
+          />
+          <view class="form-actions">
+            <view class="btn btn--ghost form-btn" hover-class="is-press" @tap="toggleAddressForm">
+              <text class="form-btn-text">取消</text>
+            </view>
+            <view
+              class="btn btn--deep form-btn"
+              :class="{ 'btn--disabled': savingAddress }"
+              hover-class="is-press"
+              @tap="saveAddress"
+            >
+              <text class="form-btn-text form-btn-text--deep">{{ savingAddress ? '保存中…' : '保存地址' }}</text>
+            </view>
+          </view>
+        </view>
+        <text v-if="addressBlockReason" class="hint hint--warn">{{ addressBlockReason }}</text>
+
+        <!-- 配送方式与送达时间：方式决定可选时间段，两段都选才可提交 -->
+        <text class="label mt">配送方式</text>
+        <view class="chips">
+          <view
+            v-for="m in deliveryMethods"
+            :key="m.code"
+            class="chip"
+            :class="{ 'chip--on': m.code === deliveryMethod }"
+            hover-class="is-press"
+            @tap="chooseDeliveryMethod(m.code)"
+          >
+            <text class="chip-text">{{ m.name }}</text>
+          </view>
+        </view>
+        <text class="label mt">配送时间</text>
+        <view v-if="!deliveryMethod" class="hint">请先选择配送方式。</view>
+        <view v-else class="chips">
+          <view
+            v-for="s in currentSlots"
+            :key="s.code"
+            class="chip"
+            :class="{ 'chip--on': s.code === deliverySlot }"
+            hover-class="is-press"
+            @tap="chooseDeliverySlot(s.code)"
+          >
+            <text class="chip-text">{{ s.label }}</text>
+          </view>
+        </view>
+        <text v-if="deliverySummary" class="hint">已选配送：{{ deliverySummary }}</text>
+
         <text class="label mt">收货人</text>
-        <input v-model="form.receiverName" class="field" placeholder="收货人姓名" placeholder-class="field-ph" />
+        <input
+          v-model="form.receiverName"
+          class="field"
+          placeholder="收货人姓名"
+          placeholder-class="field-ph"
+          @input="onManualEdit"
+        />
         <text class="label mt">手机号</text>
         <input
           v-model="form.receiverPhone"
@@ -116,6 +235,7 @@
           maxlength="11"
           placeholder="手机号"
           placeholder-class="field-ph"
+          @input="onManualEdit"
         />
         <text class="label mt">详细地址</text>
         <textarea
@@ -123,6 +243,7 @@
           class="field field--area"
           placeholder="省市区 + 门牌号"
           placeholder-class="field-ph"
+          @input="onManualEdit"
         />
         <text class="label mt">备注（选填）</text>
         <input v-model="form.remark" class="field" placeholder="备注" placeholder-class="field-ph" />
@@ -164,7 +285,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
-import type { CartDto, CartLineDto } from '@mixmapp/contracts';
+import type { AddressDto, CartDto, CartLineDto, DeliveryMethodDto } from '@mixmapp/contracts';
 import {
   isBulkStock,
   INQUIRY_NOTICE,
@@ -175,6 +296,7 @@ import {
   unitPriceText,
 } from '../../api/mall';
 import { mallApi, mediaUrl, productCover, coverTint } from '../../api/client';
+import { addressApi } from '../../api/address';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 
@@ -238,6 +360,42 @@ const checkoutVisible = ref(false);
 const submitting = ref(false);
 const form = ref({ receiverName: '', receiverPhone: '', address: '', remark: '' });
 
+/* ---------- 结算必填项：地址簿 + 配送方式/时间 ---------- */
+const addresses = ref<AddressDto[]>([]);
+const addressesLoading = ref(false);
+/** 当前选中的地址簿地址；手动改表单字段时清空，表示改用手填地址 */
+const selectedAddressId = ref('');
+/** 不可达原因：有值时直接展示并拦截提交 */
+const addressBlockReason = ref('');
+const addressEditing = ref(false);
+const editingId = ref('');
+const savingAddress = ref(false);
+const addrForm = ref({
+  receiverName: '',
+  receiverPhone: '',
+  province: '',
+  city: '',
+  district: '',
+  detail: '',
+});
+const deliveryMethods = ref<DeliveryMethodDto[]>([]);
+const deliveryMethod = ref('');
+const deliverySlot = ref('');
+
+const selectedAddress = computed(
+  () => addresses.value.find((item) => item.id === selectedAddressId.value) ?? null,
+);
+/** 配送方式决定可选时间段：切换方式必须重选时间 */
+const currentSlots = computed(
+  () => deliveryMethods.value.find((item) => item.code === deliveryMethod.value)?.slots ?? [],
+);
+const deliverySummary = computed(() => {
+  if (!deliveryMethod.value) return '';
+  const method = deliveryMethods.value.find((item) => item.code === deliveryMethod.value);
+  const slot = method?.slots.find((item) => item.code === deliverySlot.value);
+  return [method?.name, slot?.label].filter(Boolean).join(' · ');
+});
+
 const inquiryLines = computed(() => cart.value.items.filter(isInquiryLine));
 const oosLines = computed(() => cart.value.items.filter(isOutOfStockLine));
 const blockedLines = computed(() => cart.value.items.filter(isBlockedLine));
@@ -267,8 +425,190 @@ function onBarAction(): void {
     return;
   }
   checkoutVisible.value = true;
+  void prepareCheckout();
   void nextTick(() => {
     uni.pageScrollTo({ selector: '.checkout', duration: 280, offsetTop: -72, fail: () => undefined });
+  });
+}
+
+/* ---------- 地址簿与配送（源站口径） ---------- */
+
+/** 打开结算时并行拉取地址簿与配送方式；配送方式拉取失败会让提交被拦，不会静默放行。 */
+async function prepareCheckout(): Promise<void> {
+  if (!deliveryMethods.value.length) {
+    try {
+      deliveryMethods.value = await addressApi.deliveryOptions();
+    } catch {
+      deliveryMethods.value = [];
+    }
+  }
+  await loadAddresses();
+}
+
+/** 拉取地址簿；优先选中指定地址，其次默认地址，最后第一条。 */
+async function loadAddresses(preferId?: string): Promise<void> {
+  addressesLoading.value = true;
+  try {
+    addresses.value = await addressApi.list();
+    const want = preferId ?? selectedAddressId.value;
+    const hit =
+      addresses.value.find((item) => item.id === want) ??
+      addresses.value.find((item) => item.isDefault) ??
+      addresses.value[0] ??
+      null;
+    if (hit) selectAddress(hit);
+    else {
+      selectedAddressId.value = '';
+      addressBlockReason.value = '';
+    }
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '地址加载失败', icon: 'none' });
+  } finally {
+    addressesLoading.value = false;
+  }
+}
+
+/** 选中地址：回填原有表单字段（字段保持可编辑），并立即做可达性校验。 */
+function selectAddress(item: AddressDto): void {
+  selectedAddressId.value = item.id;
+  form.value.receiverName = item.receiverName;
+  form.value.receiverPhone = item.receiverPhone;
+  form.value.address = item.fullAddress || `${item.province}${item.city}${item.district}${item.detail}`;
+  void runAddressCheck();
+}
+
+/** 手动改表单 = 放弃地址簿选择；后端只在带 addressId 时按地址簿快照下单。 */
+function onManualEdit(): void {
+  selectedAddressId.value = '';
+  addressBlockReason.value = '';
+}
+
+/** 可达性校验：不可达时把原因落到页面；接口异常不阻断填写，提交时后端还会再校验。 */
+async function runAddressCheck(): Promise<void> {
+  const item = selectedAddress.value;
+  if (!item) {
+    addressBlockReason.value = '';
+    return;
+  }
+  try {
+    const result = await addressApi.check({
+      province: item.province,
+      city: item.city,
+      district: item.district,
+      detail: item.detail,
+      ...(deliveryMethod.value ? { deliveryMethod: deliveryMethod.value } : {}),
+    });
+    addressBlockReason.value = result.reachable ? '' : result.reason ?? '该收货地址暂不可达，请更换地址';
+  } catch {
+    addressBlockReason.value = '';
+  }
+}
+
+/** 切配送方式：清空时间段并重跑可达性（门店自提仅上海）。 */
+function chooseDeliveryMethod(code: string): void {
+  deliveryMethod.value = code;
+  deliverySlot.value = '';
+  void runAddressCheck();
+}
+
+function chooseDeliverySlot(code: string): void {
+  deliverySlot.value = code;
+}
+
+function resetAddrForm(): void {
+  addrForm.value = { receiverName: '', receiverPhone: '', province: '', city: '', district: '', detail: '' };
+}
+
+function toggleAddressForm(): void {
+  addressEditing.value = !addressEditing.value;
+  if (!addressEditing.value) {
+    editingId.value = '';
+    resetAddrForm();
+  }
+}
+
+function editAddress(item: AddressDto): void {
+  editingId.value = item.id;
+  addrForm.value = {
+    receiverName: item.receiverName,
+    receiverPhone: item.receiverPhone,
+    province: item.province,
+    city: item.city,
+    district: item.district,
+    detail: item.detail,
+  };
+  addressEditing.value = true;
+}
+
+/** 新增/编辑共用保存入口：字段校验与后端 schema 保持一致。 */
+async function saveAddress(): Promise<void> {
+  if (savingAddress.value) return;
+  const value = addrForm.value;
+  const receiverName = value.receiverName.trim();
+  const receiverPhone = value.receiverPhone.trim();
+  const province = value.province.trim();
+  const city = value.city.trim();
+  const district = value.district.trim();
+  const detail = value.detail.trim();
+  if (!receiverName) {
+    uni.showToast({ title: '请填写收货人', icon: 'none' });
+    return;
+  }
+  if (!/^1[3-9]\d{9}$/.test(receiverPhone)) {
+    uni.showToast({ title: '请填写正确的手机号', icon: 'none' });
+    return;
+  }
+  if (!province || !city || !district) {
+    uni.showToast({ title: '请填写省、市、区', icon: 'none' });
+    return;
+  }
+  if (detail.length < 4) {
+    uni.showToast({ title: '请填写详细地址', icon: 'none' });
+    return;
+  }
+  savingAddress.value = true;
+  try {
+    const payload = { receiverName, receiverPhone, province, city, district, detail };
+    const saved = editingId.value
+      ? await addressApi.update(editingId.value, payload)
+      : await addressApi.create(payload);
+    addressEditing.value = false;
+    editingId.value = '';
+    resetAddrForm();
+    await loadAddresses(saved.id);
+    uni.showToast({ title: '地址已保存', icon: 'none' });
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '地址保存失败', icon: 'none' });
+  } finally {
+    savingAddress.value = false;
+  }
+}
+
+async function setDefaultAddress(item: AddressDto): Promise<void> {
+  try {
+    await addressApi.setDefault(item.id);
+    await loadAddresses(item.id);
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '设置默认地址失败', icon: 'none' });
+  }
+}
+
+function removeAddress(item: AddressDto): void {
+  uni.showModal({
+    title: '删除地址',
+    content: `确定删除「${item.fullAddress}」吗？`,
+    success: (res) => {
+      if (!res.confirm) return;
+      void (async () => {
+        try {
+          await addressApi.remove(item.id);
+          if (selectedAddressId.value === item.id) selectedAddressId.value = '';
+          await loadAddresses();
+        } catch (e) {
+          uni.showToast({ title: e instanceof Error ? e.message : '删除失败', icon: 'none' });
+        }
+      })();
+    },
   });
 }
 
@@ -345,6 +685,23 @@ async function submitOrder(): Promise<void> {
     return;
   }
   const { receiverName, receiverPhone, address } = form.value;
+  // 结算必填项拦截（源站口径）：地址簿未选中且手填地址不完整 → 不可提交
+  if (!selectedAddressId.value && address.trim().length < 4) {
+    uni.showToast({ title: '请选择收货地址', icon: 'none' });
+    return;
+  }
+  if (addressBlockReason.value) {
+    uni.showToast({ title: addressBlockReason.value, icon: 'none' });
+    return;
+  }
+  if (!deliveryMethod.value) {
+    uni.showToast({ title: '请选择配送方式', icon: 'none' });
+    return;
+  }
+  if (!deliverySlot.value) {
+    uni.showToast({ title: '请选择配送时间', icon: 'none' });
+    return;
+  }
   if (!receiverName.trim()) {
     uni.showToast({ title: '请填写收货人', icon: 'none' });
     return;
@@ -365,6 +722,10 @@ async function submitOrder(): Promise<void> {
       receiverPhone: receiverPhone.trim(),
       address: address.trim(),
       ...(form.value.remark.trim() ? { remark: form.value.remark.trim() } : {}),
+      // 地址簿选择 + 配送方式/时间段：后端据此落快照并再次校验
+      ...(selectedAddressId.value ? { addressId: selectedAddressId.value } : {}),
+      ...(deliveryMethod.value ? { deliveryMethod: deliveryMethod.value } : {}),
+      ...(deliverySlot.value ? { deliverySlot: deliverySlot.value } : {}),
     });
     checkoutVisible.value = false;
     cart.value = { items: [], totalQuantity: 0, totalFen: 0 };
@@ -656,6 +1017,121 @@ onShow(() => {
 
 .mt {
   margin-top: $sp-3;
+}
+
+/* ---------- 地址簿 / 配送方式 ---------- */
+.addr-card {
+  margin-top: $sp-2;
+  padding: $sp-3;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  background: $paper-2;
+}
+
+.addr-card--on {
+  border-color: $brand-deep;
+  background: $paper;
+}
+
+.addr-head {
+  display: flex;
+  align-items: center;
+}
+
+.addr-name {
+  font-family: $font-display;
+  font-size: 30rpx;
+  font-weight: 800;
+  color: $ink;
+}
+
+.addr-phone {
+  margin-left: $sp-2;
+  font-size: 26rpx;
+  color: $ink-3;
+}
+
+.addr-tag {
+  margin-left: auto;
+  padding: 2rpx 12rpx;
+  border: 1rpx solid $brand-deep;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: $brand-deep;
+}
+
+.addr-text {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: $ink-3;
+}
+
+.addr-ops {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12rpx;
+}
+
+.addr-op {
+  margin-left: $sp-3;
+  font-size: 24rpx;
+  color: $brand-deep;
+}
+
+.addr-add {
+  margin-top: $sp-2;
+  padding: $sp-2 0;
+}
+
+.addr-add-text {
+  font-size: 26rpx;
+  color: $brand-deep;
+}
+
+.addr-form {
+  margin-top: $sp-2;
+}
+
+.field--gap {
+  margin-top: $sp-2;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 8rpx;
+}
+
+.chip {
+  margin-right: $sp-2;
+  margin-bottom: $sp-2;
+  padding: 0 24rpx;
+  height: 68rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: 999rpx;
+  background: $paper-2;
+  display: flex;
+  align-items: center;
+}
+
+.chip--on {
+  border-color: $brand-deep;
+  background: $brand-deep;
+}
+
+.chip-text {
+  font-size: 26rpx;
+  color: $ink;
+}
+
+.chip--on .chip-text {
+  color: $on-solid;
+}
+
+.hint--warn {
+  color: $amber;
 }
 
 .form-actions {

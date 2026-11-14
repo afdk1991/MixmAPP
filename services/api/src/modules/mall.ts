@@ -25,6 +25,7 @@ import type {
 import { isSafeStorageKey } from '../adapters/storage.js';
 import { AppError } from '../lib/errors.js';
 import { parse } from '../lib/validate.js';
+import { assertDeliverySelection, checkReachability } from './address.js';
 
 export type ImportCategoryCount = { code: string; name: string; count: number };
 /** 分类树节点：level 1/2/3，id 形如 c1:002 / c2:002:007 / c3:007。 */
@@ -250,6 +251,9 @@ export class MallService {
       receiverPhone: order.receiverPhone,
       address: order.address,
       remark: order.remark,
+      addressId: order.addressId,
+      deliveryMethod: order.deliveryMethod,
+      deliverySlot: order.deliverySlot,
       items: items.map((item) => this.toOrderItemDto(item)),
       createdAt: order.createdAt.toISOString(),
     };
@@ -620,6 +624,31 @@ export class MallService {
   }
 
   private async placeOrder(userId: string, input: OrderCreateInput): Promise<OrderDto> {
+    // 结算必填项（源站口径）：
+    // 1) 选中地址簿地址时先查可达性，不可达在下单前拦住并返回原因；
+    // 2) 配送方式 + 时间段必须属于源站可选组合。
+    // 两者都只在「传了」时才校验，保证不带这些字段的旧下单调用行为不变。
+    let receiverName = input.receiverName;
+    let receiverPhone = input.receiverPhone;
+    let addressText = input.address;
+    let addressId: string | null = null;
+    if (input.addressId) {
+      const saved = await this.store.mall.addresses.findById(userId, input.addressId);
+      if (!saved) throw AppError.notFound('收货地址不存在，请重新选择');
+      const reach = checkReachability({ ...saved, deliveryMethod: input.deliveryMethod });
+      if (!reach.reachable) {
+        throw new AppError('BAD_REQUEST', reach.reason ?? '该收货地址暂不可达，请更换地址');
+      }
+      // 地址快照：写入订单行，之后地址簿被改动或删除都不影响历史订单
+      receiverName = saved.receiverName;
+      receiverPhone = saved.receiverPhone;
+      addressText = `${saved.province}${saved.city}${saved.district}${saved.detail}`;
+      addressId = saved.id;
+    }
+    if (input.deliveryMethod) {
+      assertDeliverySelection(input.deliveryMethod, input.deliverySlot ?? '');
+    }
+
     const fromCart = !input.items;
     const requested =
       input.items ??
@@ -694,10 +723,13 @@ export class MallService {
       userId,
       status: 'pending',
       totalFen,
-      receiverName: input.receiverName,
-      receiverPhone: input.receiverPhone,
-      address: input.address,
+      receiverName,
+      receiverPhone,
+      address: addressText,
       remark: input.remark ?? null,
+      addressId,
+      deliveryMethod: input.deliveryMethod ?? null,
+      deliverySlot: input.deliverySlot ?? null,
       createdAt: new Date(),
       paidAt: null,
     };

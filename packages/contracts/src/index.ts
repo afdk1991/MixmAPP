@@ -383,10 +383,47 @@ export const cartUpdateSchema = z.object({
   packQty: z.number().int().min(1).max(1000000).optional(),
 });
 
+/**
+ * 地址簿单条（0014）。字段口径对齐源站收货地址：省/市/区三级 + 详细地址，
+ * 收货人与手机号随地址一起保存，下单时直接取快照，避免地址被改动后历史订单失真。
+ */
+export const addressCreateSchema = z.object({
+  receiverName: z.string().trim().min(1).max(24),
+  receiverPhone: phoneSchema,
+  province: z.string().trim().min(2).max(24),
+  city: z.string().trim().min(2).max(24),
+  district: z.string().trim().min(2).max(24),
+  detail: z.string().trim().min(4).max(120),
+  /** 设为默认地址；同一用户只保留一条默认（落库时单语句整体改写） */
+  isDefault: z.boolean().optional(),
+});
+
+/** 部分更新：只改传了的字段，省/市/区改动同样会重新做可达性校验 */
+export const addressUpdateSchema = addressCreateSchema.partial();
+
+/**
+ * 地址可达性校验入参（源站口径）：省/市/区必填；
+ * 偏远地区、港澳台与海外源站不走常规快递，需线下询价，结算页直接拦住。
+ */
+export const addressCheckSchema = z.object({
+  province: z.string().trim().min(2).max(24),
+  city: z.string().trim().min(2).max(24),
+  district: z.string().trim().min(2).max(24),
+  detail: z.string().trim().max(120).optional(),
+  /** 配送方式：门店自提仅上海可达，传了会一并校验 */
+  deliveryMethod: z.string().trim().max(24).optional(),
+});
+
 export const orderCreateSchema = z.object({
   receiverName: z.string().trim().min(1).max(24),
   receiverPhone: phoneSchema,
   address: z.string().trim().min(4).max(160),
+  /** 地址簿 id：传了就按地址簿校验可达性，并用地址快照覆盖收货信息 */
+  addressId: z.string().min(1).max(64).optional(),
+  /** 配送方式代码（源站口径：express 快递配送 / pickup 门店自提） */
+  deliveryMethod: z.string().trim().min(1).max(24).optional(),
+  /** 配送时间段代码，必须属于所选配送方式（见 deliveryOptionsSchema） */
+  deliverySlot: z.string().trim().min(1).max(24).optional(),
   remark: z.string().trim().max(120).optional(),
   /** 不传则用购物车全部商品下单；传了就是「立即购买」 */
   items: z
@@ -410,6 +447,38 @@ export type ImportCatalogInput = z.infer<typeof importCatalogSchema>;
 export type CartAddInput = z.infer<typeof cartAddSchema>;
 export type CartUpdateInput = z.infer<typeof cartUpdateSchema>;
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
+export type AddressCreateInput = z.infer<typeof addressCreateSchema>;
+export type AddressUpdateInput = z.infer<typeof addressUpdateSchema>;
+export type AddressCheckInput = z.infer<typeof addressCheckSchema>;
+
+/** 地址簿单条（下发口径）。fullAddress 是省市区 + 详细地址拼好的快照。 */
+export type AddressDto = {
+  id: string;
+  receiverName: string;
+  receiverPhone: string;
+  province: string;
+  city: string;
+  district: string;
+  detail: string;
+  fullAddress: string;
+  isDefault: boolean;
+  createdAt: string;
+};
+
+/** 可达性校验结果：不可达时 reason 直接展示在结算页，说明为什么不能下单。 */
+export type AddressCheckResult = {
+  reachable: boolean;
+  reason?: string;
+  /** 命中的源站配送分区（常规区/偏远区/港澳台/海外），便于排查 */
+  region?: string;
+};
+
+/** 配送方式与其可选时间段（源站口径：不同方式可选时间不同）。 */
+export type DeliveryMethodDto = {
+  code: string;
+  name: string;
+  slots: Array<{ code: string; label: string }>;
+};
 
 export type ProductDto = {
   id: string;
@@ -545,6 +614,12 @@ export type OrderDto = {
   receiverName: string;
   receiverPhone: string;
   address: string;
+  /** 下单时选择的地址簿 id（手填地址的历史订单为 null） */
+  addressId: string | null;
+  /** 配送方式代码（历史订单为 null） */
+  deliveryMethod: string | null;
+  /** 配送时间段代码（历史订单为 null） */
+  deliverySlot: string | null;
   remark: string | null;
   items: OrderItemDto[];
   createdAt: string;

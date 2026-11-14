@@ -27,6 +27,7 @@ declare module 'fastify' {
     onekey: import('../adapters/onekey.js').OneKeyProvider;
     auth: import('../modules/auth.js').AuthService;
     pay: import('../modules/pay.js').PayService;
+    address: import('../modules/address.js').AddressService;
     mall: import('../modules/mall.js').MallService;
     catalog: import('../modules/catalog-source.js').CatalogSource;
     map: import('../adapters/map.js').MapProvider;

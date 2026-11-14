@@ -133,7 +133,7 @@ export async function applyChanges({ cfg, state, items, details, gallery }) {
                 sale_price_li, brand, category, category_path, category_name, specs, attributes, unit,
                 pack_qty, packaging_desc, unit_options, unit_conversions, spec_image, promotions,
                 images, cover, listed, source_status, source_on_sale, source_inv_status, price_source,
-                max_order_qty
+                max_order_qty, tejia_discount_pct
            from products
           where source_key like 'sku:%' or source_key like 'url:%'`
       );
@@ -177,11 +177,11 @@ export async function applyChanges({ cfg, state, items, details, gallery }) {
              stock_source, import_batch, attributes, price_li, discount_pct, sale_price_li,
              promotions, packaging_desc, unit_options, unit_conversions, spec_image, source_item_no,
              min_order_qty, qty_step, max_order_qty, listed, source_status, source_status_at,
-             source_on_sale, source_inv_status, synced_at
+             source_on_sale, source_inv_status, tejia_discount_pct, synced_at
            ) values (
              $1,$2,$3,$4,0,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,
              $18::jsonb,$19,$20,$21,$22,$23,$24,$25::jsonb,$26,$27,$28,$29::jsonb,$30,$31::jsonb,
-             $32::jsonb,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,now()
+             $32::jsonb,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,now()
            )
            on conflict (source_key) do nothing`,
           [
@@ -227,6 +227,8 @@ export async function applyChanges({ cfg, state, items, details, gallery }) {
             new Date().toISOString(),
             next.sourceOnSale,
             next.sourceInvStatus,
+            // 特价折扣：只透传落库，不参与价格派生
+            next.tejiaDiscountPct,
           ]
         );
         if (inserted.rowCount === 0) {

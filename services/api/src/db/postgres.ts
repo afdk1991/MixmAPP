@@ -5,6 +5,7 @@ import type {
   BindingRecord,
   CartItemRecord,
   CatalogSyncRunRecord,
+  AddressRecord,
   MergeCandidate,
   OrderItemRecord,
   OrderRecord,
@@ -920,13 +921,105 @@ export class PgStore implements Store {
         }
       },
     },
+    addresses: {
+      listByUser: async (userId: string): Promise<AddressRecord[]> => {
+        const res = await this.pool.query(
+          `select * from mall_addresses where user_id = $1
+           order by is_default desc, created_at desc`,
+          [userId],
+        );
+        return res.rows.map((row) => mapAddress(row as Row));
+      },
+      findById: async (userId: string, id: string): Promise<AddressRecord | null> => {
+        const res = await this.pool.query(
+          'select * from mall_addresses where user_id = $1 and id = $2',
+          [userId, id],
+        );
+        return res.rows[0] ? mapAddress(res.rows[0] as Row) : null;
+      },
+      insert: async (address: AddressRecord): Promise<AddressRecord> => {
+        await this.pool.query(
+          `insert into mall_addresses (id, user_id, receiver_name, receiver_phone,
+             province, city, district, detail, is_default, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [
+            address.id,
+            address.userId,
+            address.receiverName,
+            address.receiverPhone,
+            address.province,
+            address.city,
+            address.district,
+            address.detail,
+            address.isDefault,
+            address.createdAt,
+            address.updatedAt,
+          ],
+        );
+        return address;
+      },
+      update: async (
+        userId: string,
+        id: string,
+        patch: Partial<AddressRecord>,
+      ): Promise<AddressRecord | null> => {
+        const fields: string[] = [];
+        const values: unknown[] = [];
+        const push = (column: string, value: unknown): void => {
+          values.push(value);
+          fields.push(`${column} = $${values.length}`);
+        };
+        if (patch.receiverName !== undefined) push('receiver_name', patch.receiverName);
+        if (patch.receiverPhone !== undefined) push('receiver_phone', patch.receiverPhone);
+        if (patch.province !== undefined) push('province', patch.province);
+        if (patch.city !== undefined) push('city', patch.city);
+        if (patch.district !== undefined) push('district', patch.district);
+        if (patch.detail !== undefined) push('detail', patch.detail);
+        if (patch.isDefault !== undefined) push('is_default', patch.isDefault);
+        if (fields.length === 0) {
+          const res = await this.pool.query(
+            'select * from mall_addresses where user_id = $1 and id = $2',
+            [userId, id],
+          );
+          return res.rows[0] ? mapAddress(res.rows[0] as Row) : null;
+        }
+        push('updated_at', new Date());
+        values.push(userId, id);
+        const res = await this.pool.query(
+          `update mall_addresses set ${fields.join(', ')}
+           where user_id = $${values.length - 1} and id = $${values.length}
+           returning *`,
+          values,
+        );
+        return res.rows[0] ? mapAddress(res.rows[0] as Row) : null;
+      },
+      remove: async (userId: string, id: string): Promise<void> => {
+        await this.pool.query('delete from mall_addresses where user_id = $1 and id = $2', [
+          userId,
+          id,
+        ]);
+      },
+      setDefault: async (userId: string, id: string): Promise<AddressRecord | null> => {
+        // 单条 update 一次性改写该用户全部地址的 is_default：只有命中 id 的那条为 true。
+        // 网关无事务时也不会出现「先清后设」中间态导致没有默认地址。
+        const res = await this.pool.query(
+          `update mall_addresses
+             set is_default = (id = $2), updated_at = now()
+           where user_id = $1
+           returning *`,
+          [userId, id],
+        );
+        const rows = res.rows.map((row) => mapAddress(row as Row));
+        return rows.find((row) => row.id === id) ?? null;
+      },
+    },
     orders: {
       insert: async (order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord> => {
         // 网关模式没有跨语句事务，订单与明细必须在单条语句里原子落库：
         // 走 0005_place_order.sql 里的 plpgsql 函数。
         if (!this.pool.connect) {
           await this.pool.query(
-            `select place_order($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+            `select place_order($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15)`,
             [
               order.id,
               order.orderNo,
@@ -953,6 +1046,9 @@ export class PgStore implements Store {
                   price_li: item.priceLi ?? null,
                 })),
               ),
+              order.addressId,
+              order.deliveryMethod,
+              order.deliverySlot,
             ],
           );
           return order;
@@ -963,8 +1059,9 @@ export class PgStore implements Store {
           await client.query('begin');
           await client.query(
             `insert into orders (id, order_no, user_id, status, total_fen, receiver_name,
-               receiver_phone, address, remark, created_at, paid_at)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+               receiver_phone, address, remark, created_at, paid_at,
+               address_id, delivery_method, delivery_slot)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
             [
               order.id,
               order.orderNo,
@@ -977,6 +1074,9 @@ export class PgStore implements Store {
               order.remark,
               order.createdAt,
               order.paidAt,
+              order.addressId,
+              order.deliveryMethod,
+              order.deliverySlot,
             ],
           );
           for (const item of items) {
@@ -1238,6 +1338,8 @@ function mapProduct(row: Row): ProductRecord {
     priceLi: row['price_li'] == null ? null : Number(row['price_li']),
     discountPct: row['discount_pct'] == null ? null : Number(row['discount_pct']),
     salePriceLi: row['sale_price_li'] == null ? null : Number(row['sale_price_li']),
+    tejiaDiscountPct:
+      row['tejia_discount_pct'] == null ? null : Number(row['tejia_discount_pct']),
     promotions:
       (row['promotions'] as ProductRecord['promotions'] | null) ?? [],
     packagingDesc: (row['packaging_desc'] as string | null) ?? null,
@@ -1267,6 +1369,22 @@ function mapCart(row: Row): CartItemRecord {
   };
 }
 
+function mapAddress(row: Row): AddressRecord {
+  return {
+    id: row['id'] as string,
+    userId: row['user_id'] as string,
+    receiverName: row['receiver_name'] as string,
+    receiverPhone: row['receiver_phone'] as string,
+    province: row['province'] as string,
+    city: row['city'] as string,
+    district: row['district'] as string,
+    detail: row['detail'] as string,
+    isDefault: row['is_default'] === true,
+    createdAt: toDate(row['created_at']),
+    updatedAt: toDate(row['updated_at']),
+  };
+}
+
 function mapOrder(row: Row): OrderRecord {
   return {
     id: row['id'] as string,
@@ -1277,6 +1395,9 @@ function mapOrder(row: Row): OrderRecord {
     receiverName: row['receiver_name'] as string,
     receiverPhone: row['receiver_phone'] as string,
     address: row['address'] as string,
+    addressId: (row['address_id'] as string | null) ?? null,
+    deliveryMethod: (row['delivery_method'] as string | null) ?? null,
+    deliverySlot: (row['delivery_slot'] as string | null) ?? null,
     remark: (row['remark'] as string | null) ?? null,
     createdAt: toDate(row['created_at']),
     paidAt: toDateOrNull(row['paid_at']),

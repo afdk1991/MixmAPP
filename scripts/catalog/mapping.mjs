@@ -22,7 +22,8 @@ export const STOCK_BOX_MULTIPLIER = 10;
 
 /**
  * 映射表：一行 = 一个源站字段（或组合）到库字段的落地规则。
- * kind: int / percent / calc / text / bool / json
+ * kind: int / percent / calc / number / text / bool / json
+ * 注意：`number` 只做原值透传，不进 PRICE_FIELDS，不参与价格派生。
  */
 export const FIELD_MAP = [
   { source: 'basePrcD3N2', column: 'price_li', kind: 'int', note: '面价，厘/支（千支价 × 10）' },
@@ -44,6 +45,12 @@ export const FIELD_MAP = [
     column: 'source_inv_status',
     kind: 'text',
     note: '源站库存状态原文。缺货优先于假设库存：缺货即不可下单',
+  },
+  {
+    source: 'tejiaD2N2',
+    column: 'tejia_discount_pct',
+    kind: 'number',
+    note: '特价折扣百分比；0/缺失落 null。只采集透传，不参与价格派生（不进 PRICE_FIELDS）',
   },
   { source: 'onSale', column: 'source_on_sale', kind: 'bool', note: 'false = 源站下架（只标不可售，不删）' },
   { source: 'code', column: 'source_key', kind: 'text', note: 'sku:<code>；无 code 退 url:<详情URL>' },
@@ -132,6 +139,8 @@ export function normalizeBrand(rawBrand, name) {
  * - price_li：源站 basePrcD3N2（厘/支），>0 才落，否则 null（无公开价）
  * - discount_pct：源站 disD2N2 有值就落，**包含 100**；100 表示「源站明确给出无折扣」
  * - sale_price_li：有折扣字段就按折扣算，100 → 等于面价；折扣字段缺失才留空
+ * - tejiaDiscountPct：源站 tejiaD2N2 特价折扣，>0 才落。仅透传展示，
+ *   不参与 price_li / sale_price_li 的任何计算（价格派生口径保持不变）
  */
 export function normalizePrice(detail) {
   const rawPrice = Number(detail.basePrcD3N2);
@@ -143,11 +152,16 @@ export function normalizePrice(detail) {
 
   const salePriceLi = priceLi != null && discountPct != null ? Math.round((priceLi * discountPct) / 100) : null;
 
+  const tejiaNum = Number(detail.tejiaD2N2);
+  const tejiaDiscountPct =
+    Number.isFinite(tejiaNum) && tejiaNum > 0 ? Math.round(tejiaNum * 100) / 100 : null;
+
   return {
     priceLi,
     priceFen: priceLi != null ? Math.round(priceLi / 10) : 0,
     discountPct,
     salePriceLi,
+    tejiaDiscountPct,
     priceSource: priceLi != null ? 'anonymous' : 'inquiry',
   };
 }
@@ -351,6 +365,8 @@ export function diffProduct(db, next) {
   put('price_fen', num(db.price_fen), next.priceFen);
   put('discount_pct', num(db.discount_pct), next.discountPct);
   put('sale_price_li', num(db.sale_price_li), next.salePriceLi);
+  // 特价折扣只透传，变更不计入价格变更（PRICE_FIELDS 不含该列）
+  put('tejia_discount_pct', num(db.tejia_discount_pct), next.tejiaDiscountPct);
   put('price_source', db.price_source, next.priceLi != null ? 'anonymous' : 'inquiry');
   put('attributes', db.attributes, next.attributes, true);
   put('promotions', db.promotions, next.promotions, true);

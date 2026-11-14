@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import type { Config } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
+import { AddressService } from './modules/address.js';
 import { MallService } from './modules/mall.js';
 import { CatalogSource } from './modules/catalog-source.js';
 import { PayService } from './modules/pay.js';
@@ -20,6 +21,7 @@ import { verifyAccessToken } from './lib/jwt.js';
 import { authRoutes } from './routes/auth.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { mallRoutes } from './routes/mall.js';
+import { addressRoutes } from './routes/address.js';
 import { adminRoutes } from './routes/admin.js';
 import { mediaRoutes } from './routes/media.js';
 import { meRoutes } from './routes/me.js';
@@ -130,6 +132,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }),
   );
   app.decorate('pay', new PayService(deps.config, deps.store));
+  app.decorate('address', new AddressService(deps.config, deps.store));
   app.decorate('mall', new MallService(deps.config, deps.store, catalog));
 
   app.decorate('requireAuth', async (request, reply) => {
@@ -221,6 +224,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await oauthRoutes(scope);
       await meRoutes(scope);
       await mallRoutes(scope);
+      await addressRoutes(scope);
       await integrationRoutes(scope);
       await adminRoutes(scope);
     },

@@ -1,5 +1,6 @@
 import type {
   AccountMergeRecord,
+  AddressRecord,
   BindingRecord,
   CartItemRecord,
   MergeCandidate,
@@ -30,6 +31,7 @@ export class MemoryStore implements Store {
   private pushList: PushTokenRecord[] = [];
   private productList: ProductRecord[] = [];
   private cartList: CartItemRecord[] = [];
+  private addressList: AddressRecord[] = [];
   private orderList: OrderRecord[] = [];
   private orderItemList: OrderItemRecord[] = [];
   private orderRequestMap = new Map<string, { orderNo: string | null }>();
@@ -54,6 +56,7 @@ export class MemoryStore implements Store {
     this.pushList = [];
     this.productList = [];
     this.cartList = [];
+    this.addressList = [];
     this.orderList = [];
     this.orderItemList = [];
     this.orderRequestMap.clear();
@@ -425,6 +428,54 @@ export class MemoryStore implements Store {
       replaceAll: async (userId: string, items: CartItemRecord[]): Promise<void> => {
         this.cartList = this.cartList.filter((c) => c.userId !== userId);
         for (const item of items) this.cartList.push(clone({ ...item, userId }));
+      },
+    },
+    addresses: {
+      listByUser: async (userId: string): Promise<AddressRecord[]> =>
+        this.addressList
+          .filter((a) => a.userId === userId)
+          .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || b.createdAt.getTime() - a.createdAt.getTime())
+          .map(clone),
+      findById: async (userId: string, id: string): Promise<AddressRecord | null> => {
+        const found = this.addressList.find((a) => a.userId === userId && a.id === id);
+        return found ? clone(found) : null;
+      },
+      insert: async (address: AddressRecord): Promise<AddressRecord> => {
+        // 内存实现与 pg 口径一致：同一用户只保留一条默认地址
+        if (address.isDefault) {
+          for (const row of this.addressList) {
+            if (row.userId === address.userId) row.isDefault = false;
+          }
+        }
+        this.addressList.push(clone(address));
+        return clone(address);
+      },
+      update: async (
+        userId: string,
+        id: string,
+        patch: Partial<AddressRecord>,
+      ): Promise<AddressRecord | null> => {
+        const found = this.addressList.find((a) => a.userId === userId && a.id === id);
+        if (!found) return null;
+        if (patch.isDefault === true) {
+          for (const row of this.addressList) {
+            if (row.userId === userId) row.isDefault = row.id === id;
+          }
+        }
+        const next: AddressRecord = { ...found, ...patch, id: found.id, userId: found.userId };
+        Object.assign(found, next);
+        return clone(found);
+      },
+      remove: async (userId: string, id: string): Promise<void> => {
+        this.addressList = this.addressList.filter((a) => !(a.userId === userId && a.id === id));
+      },
+      setDefault: async (userId: string, id: string): Promise<AddressRecord | null> => {
+        const found = this.addressList.find((a) => a.userId === userId && a.id === id);
+        if (!found) return null;
+        for (const row of this.addressList) {
+          if (row.userId === userId) row.isDefault = row.id === id;
+        }
+        return clone(found);
       },
     },
     orders: {
