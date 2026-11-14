@@ -15,6 +15,11 @@
  *   node scripts/android-inject-base.mjs --check   # 只校验不写
  *
  * API 源取值优先级：环境变量 MIXMAPP_API_BASE > apps/mobile/api-base.json
+ *
+ * 边界：本脚本只校验「注入了没有 / 是不是绝对地址 / 后缀对不对」。壳内页面的
+ * origin 是 https://localhost（androidScheme: https），旧版 Capacitor 还可能是
+ * capacitor://localhost；这两个源是否被服务端 CORS 白名单放行，属于服务端配置，
+ * 本脚本探测不到。体检通过 ≠ 跨域放行；跨域是否放行要另用带 Origin 的请求验响应头。
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -93,3 +98,4 @@ if (problems.length) {
 }
 const m = /window\.__MIXMAPP_API_BASE__\s*=\s*("(?:[^"\\]|\\.)*")/.exec(readFileSync(indexPath, 'utf8'));
 console.info(`✓ 壳产物体检通过：${JSON.parse(m[1])}`);
+console.info('[android] 提醒：壳内 origin 为 https://localhost（旧版可能为 capacitor://localhost），需在服务端 CORS 白名单内；本脚本不探测服务端放行状态，跨域是否通请查响应头 access-control-allow-origin。');

@@ -19,6 +19,7 @@ import { authRoutes } from './routes/auth.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { mallRoutes } from './routes/mall.js';
 import { adminRoutes } from './routes/admin.js';
+import { mediaRoutes } from './routes/media.js';
 import { meRoutes } from './routes/me.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { metaRoutes } from './routes/meta.js';
@@ -154,6 +155,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     health: '/api/v1/healthz',
     ready: '/api/v1/readyz',
   }));
+
+  // 本地磁盘存储的图片直出：仅 local provider 注册；s3/dev 走各自公网地址，不在此暴露目录。
+  if (deps.config.storage.provider === 'local') {
+    await app.register(mediaRoutes);
+  }
 
   await app.register(
     async (scope) => {

@@ -9,6 +9,10 @@ import { parse } from '../lib/validate.js';
 
 /** 商城路由：商品公开读，购物车与订单需登录。 */
 export async function mallRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/mall/categories', async () => ({
+    data: await app.mall.listCategories(),
+  }));
+
   app.get('/mall/products', async (request) => ({
     data: await app.mall.listProducts(parse(productQuerySchema, request.query ?? {})),
   }));

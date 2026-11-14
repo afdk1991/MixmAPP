@@ -89,6 +89,28 @@ export type ProductRecord = {
   description: string;
   sortNo: number;
   createdAt: Date;
+  // ===== 目录导入增补字段（旧商品可空，零影响） =====
+  /** 幂等稳定键：`sku:<型号>` 或 `url:<规范化URL>`，唯一索引 */
+  sourceKey?: string | null;
+  sourceUrl?: string | null;
+  sourceId?: string | null;
+  brand?: string | null;
+  /** 完整分类路径，一级到三级 */
+  categoryPath?: string[];
+  /** 一级分类中文名 */
+  categoryName?: string | null;
+  specs?: Record<string, string>;
+  unit?: string | null;
+  packQty?: number | null;
+  priceSource?: 'anonymous' | 'login' | 'inquiry' | null;
+  priceCapturedAt?: string | null;
+  stockSource?: 'anonymous' | 'unknown' | null;
+  /**
+   * 导入批次号。重复导入同一批会刷新为本次 batch；
+   * 运营在后台人工改过 title/category/stock/sortNo 的记录会被置为 `manual`，
+   * 此后导入 upsert 不再覆盖这些运营侧字段（见 memory/postgres 的 upsert 实现）。
+   */
+  importBatch?: string | null;
 };
 
 export type CartItemRecord = {
@@ -167,7 +189,19 @@ export type Store = {
     products: {
       insert(product: ProductRecord): Promise<ProductRecord>;
       list(filter: { category?: string; keyword?: string; limit: number; offset: number }): Promise<ProductRecord[]>;
+      /**
+       * 全量按 category 真聚合（PG group by / memory 统计 Map），不经过分页 list；
+       * 返回 [{ code, name, count }]，count 为该分类全量条数。
+       */
+      aggregateCategories(): Promise<Array<{ code: string; name: string; count: number }>>;
       findById(id: string): Promise<ProductRecord | null>;
+      /**
+       * 按 sourceKey 幂等 upsert：不存在则整行插入；已存在则只刷新导入侧字段。
+       * 运营侧字段（title/category/stock/sortNo）仅在记录未被人工标记（importBatch='manual'）时刷新。
+       */
+      upsert(
+        record: ProductRecord,
+      ): Promise<{ record: ProductRecord; action: 'inserted' | 'updated' }>;
       /** 扣减库存，库存不足返回 false（并发安全由实现侧保证） */
       decrementStock(id: string, quantity: number): Promise<boolean>;
       /** 归还库存：多行下单中途失败时回滚已扣的库存，避免库存凭空消失 */

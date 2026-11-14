@@ -48,8 +48,24 @@ function dataUri(file) {
 }
 
 const BASE = process.env.MIXMAPP_H5_BASE ?? '/';
-/** 静态托管没有 /api/v1 路由，部署时把 API 源写进单文件，避免所有请求 404。 */
+/**
+ * 静态托管没有 /api/v1 路由，部署时把 API 源写进单文件，避免所有请求 404。
+ * 单文件产物只能落在纯静态平台：没有 dev proxy，也没有同域后端，因此必须是
+ * http(s) 绝对地址；缺省或相对路径都会产出「装上去就全站离线」的包，直接失败。
+ */
 const API_BASE = (process.env.MIXMAPP_API_BASE ?? '').trim();
+if (!API_BASE) {
+  console.error('✗ 构建中止：单文件 H5 只能托管在静态平台，必须设置 MIXMAPP_API_BASE 为绝对地址（如 https://cloud.mixm.top/mixmapp/api/v1）');
+  process.exit(1);
+}
+if (!/^https?:\/\//.test(API_BASE)) {
+  console.error(`✗ 单文件静态端不支持同域相对路径：${JSON.stringify(API_BASE)}，请给 http(s) 绝对地址`);
+  process.exit(1);
+}
+if (!/\/api\/v1$/.test(API_BASE)) {
+  console.error(`✗ API 源缺少 /api/v1 后缀：${API_BASE}`);
+  process.exit(1);
+}
 const manifestFile = join(root, 'apps', 'app', 'src', 'manifest.json');
 
 console.info('[single] 构建单文件版 H5…');

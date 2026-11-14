@@ -455,9 +455,109 @@ export class PgStore implements Store {
         );
         return res.rows.map((row) => mapProduct(row as Row));
       },
+      aggregateCategories: async () => {
+        const res = await this.pool.query(
+          `select category, category_name, count(*)::int as count
+             from products group by category, category_name`,
+        );
+        return res.rows.map((row) => ({
+          code: String(row['category']),
+          name: (row['category_name'] as string | null) ?? String(row['category']),
+          count: Number(row['count']),
+        }));
+      },
       findById: async (id: string): Promise<ProductRecord | null> => {
         const res = await this.pool.query('select * from products where id = $1 limit 1', [id]);
         return res.rows[0] ? mapProduct(res.rows[0] as Row) : null;
+      },
+      upsert: async (
+        product: ProductRecord,
+      ): Promise<{ record: ProductRecord; action: 'inserted' | 'updated' }> => {
+        const existing = await this.pool.query(
+          'select * from products where source_key = $1 limit 1',
+          [product.sourceKey],
+        );
+        if (!existing.rows[0]) {
+          const res = await this.pool.query(
+            `insert into products (id, title, subtitle, price_fen, original_price_fen, stock, category,
+               cover, images, tags, description, sort_no, created_at,
+               source_key, source_url, source_id, brand, category_path, category_name,
+               specs, unit, pack_qty, price_source, price_captured_at, stock_source, import_batch)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+             returning *`,
+            [
+              product.id,
+              product.title,
+              product.subtitle,
+              product.priceFen,
+              product.originalPriceFen,
+              product.stock,
+              product.category,
+              product.cover,
+              JSON.stringify(product.images),
+              JSON.stringify(product.tags),
+              product.description,
+              product.sortNo,
+              product.createdAt,
+              product.sourceKey,
+              product.sourceUrl,
+              product.sourceId,
+              product.brand,
+              (product.categoryPath ?? []).join('/'),
+              product.categoryName,
+              JSON.stringify(product.specs ?? {}),
+              product.unit,
+              product.packQty,
+              product.priceSource,
+              product.priceCapturedAt,
+              product.stockSource,
+              product.importBatch,
+            ],
+          );
+          return { record: mapProduct(res.rows[0] as Row), action: 'inserted' };
+        }
+
+        const manual = (existing.rows[0]['import_batch'] as string | null) === 'manual';
+        const res = await this.pool.query(
+          `update products set
+             subtitle = $2, price_fen = $3, original_price_fen = $4, cover = $5, images = $6,
+             tags = $7, description = $8, source_url = $9, source_id = $10, brand = $11,
+             category_path = $12, category_name = $13, specs = $14, unit = $15, pack_qty = $16,
+             price_source = $17, price_captured_at = $18, stock_source = $19, import_batch = $20,
+             title = case when $21 then title else $22 end,
+             category = case when $21 then category else $23 end,
+             stock = case when $21 then stock else $24 end,
+             sort_no = case when $21 then sort_no else $25 end
+           where source_key = $1 returning *`,
+          [
+            product.sourceKey,
+            product.subtitle,
+            product.priceFen,
+            product.originalPriceFen,
+            product.cover,
+            JSON.stringify(product.images),
+            JSON.stringify(product.tags),
+            product.description,
+            product.sourceUrl,
+            product.sourceId,
+            product.brand,
+            (product.categoryPath ?? []).join('/'),
+            product.categoryName,
+            JSON.stringify(product.specs ?? {}),
+            product.unit,
+            product.packQty,
+            product.priceSource,
+            product.priceCapturedAt,
+            product.stockSource,
+            product.importBatch,
+            manual,
+            product.title,
+            product.category,
+            product.stock,
+            product.sortNo,
+          ],
+        );
+        return { record: mapProduct(res.rows[0] as Row), action: 'updated' };
       },
       decrementStock: async (id: string, quantity: number): Promise<boolean> => {
         const res = await this.pool.query(
@@ -645,8 +745,11 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 function mapProduct(row: Row): ProductRecord {
+  const categoryPathRaw = (row['category_path'] as string | null) ?? '';
+  const capturedAt = row['price_captured_at'];
   return {
-    id: row['id'] as string,
+    // 主键恒为 text；网关/个别驱动可能把纯数字 id 以 number 回传，这里统一转回字符串，避免详情按 id 查询错位。
+    id: String(row['id']),
     title: row['title'] as string,
     subtitle: (row['subtitle'] as string | null) ?? '',
     priceFen: Number(row['price_fen']),
@@ -659,6 +762,24 @@ function mapProduct(row: Row): ProductRecord {
     description: (row['description'] as string | null) ?? '',
     sortNo: Number(row['sort_no'] ?? 0),
     createdAt: toDate(row['created_at']),
+    sourceKey: (row['source_key'] as string | null) ?? null,
+    sourceUrl: (row['source_url'] as string | null) ?? null,
+    sourceId: (row['source_id'] as string | null) ?? null,
+    brand: (row['brand'] as string | null) ?? null,
+    categoryPath: categoryPathRaw ? categoryPathRaw.split('/').filter(Boolean) : [],
+    categoryName: (row['category_name'] as string | null) ?? null,
+    specs: (row['specs'] as Record<string, string> | null) ?? {},
+    unit: (row['unit'] as string | null) ?? null,
+    packQty: row['pack_qty'] == null ? null : Number(row['pack_qty']),
+    priceSource: (row['price_source'] as ProductRecord['priceSource']) ?? null,
+    priceCapturedAt:
+      capturedAt == null
+        ? null
+        : capturedAt instanceof Date
+          ? capturedAt.toISOString()
+          : String(capturedAt),
+    stockSource: (row['stock_source'] as ProductRecord['stockSource']) ?? null,
+    importBatch: (row['import_batch'] as string | null) ?? null,
   };
 }
 

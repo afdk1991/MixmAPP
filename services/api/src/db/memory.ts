@@ -189,9 +189,63 @@ export class MemoryStore implements Store {
           .slice(filter.offset, filter.offset + filter.limit)
           .map(clone);
       },
+      aggregateCategories: async () => {
+        const byCode = new Map<string, { code: string; name: string; count: number }>();
+        for (const p of this.productList) {
+          const existing = byCode.get(p.category);
+          if (existing) existing.count += 1;
+          else byCode.set(p.category, { code: p.category, name: p.categoryName ?? p.category, count: 1 });
+        }
+        return [...byCode.values()];
+      },
       findById: async (id: string): Promise<ProductRecord | null> => {
         const found = this.productList.find((p) => p.id === id);
         return found ? clone(found) : null;
+      },
+      upsert: async (
+        product: ProductRecord,
+      ): Promise<{ record: ProductRecord; action: 'inserted' | 'updated' }> => {
+        const idx = this.productList.findIndex((p) => p.sourceKey && p.sourceKey === product.sourceKey);
+        if (idx < 0) {
+          this.productList.push(clone(product));
+          return { record: clone(product), action: 'inserted' };
+        }
+        const existing = this.productList[idx]!;
+        // 人工改过的记录被后台标记为 importBatch='manual'：运营侧字段保留，只刷新导入侧字段。
+        const manual = existing.importBatch === 'manual';
+        const next: ProductRecord = {
+          ...existing,
+          subtitle: product.subtitle,
+          priceFen: product.priceFen,
+          originalPriceFen: product.originalPriceFen,
+          cover: product.cover,
+          images: product.images,
+          tags: product.tags,
+          description: product.description,
+          sourceKey: product.sourceKey,
+          sourceUrl: product.sourceUrl,
+          sourceId: product.sourceId,
+          brand: product.brand,
+          categoryPath: product.categoryPath,
+          categoryName: product.categoryName,
+          specs: product.specs,
+          unit: product.unit,
+          packQty: product.packQty,
+          priceSource: product.priceSource,
+          priceCapturedAt: product.priceCapturedAt,
+          stockSource: product.stockSource,
+          importBatch: product.importBatch,
+          ...(manual
+            ? {}
+            : {
+                title: product.title,
+                category: product.category,
+                stock: product.stock,
+                sortNo: product.sortNo,
+              }),
+        };
+        this.productList[idx] = next;
+        return { record: clone(next), action: 'updated' };
       },
       decrementStock: async (id: string, quantity: number): Promise<boolean> => {
         const found = this.productList.find((p) => p.id === id);

@@ -49,11 +49,15 @@
               </view>
             </view>
             <view class="unit-row">
-              <text class="unit mono">¥{{ price(line.priceFen) }} / 件</text>
-              <text class="stock mono">库存 {{ line.stock }}</text>
+              <text v-if="isInquiryLine(line)" class="unit unit--inquiry mono">询价 · 联系报价</text>
+              <text v-else-if="isOutOfStockLine(line)" class="unit unit--oos mono">缺货 · 询价确认</text>
+              <template v-else>
+                <text class="unit mono">¥{{ price(line.priceFen) }} / 件</text>
+                <text class="stock mono">库存 {{ line.stock }}</text>
+              </template>
             </view>
             <view class="line-foot">
-              <view class="stepper">
+              <view v-if="!isBlockedLine(line)" class="stepper">
                 <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity - 1)">
                   <text class="step-text mono">−</text>
                 </view>
@@ -62,13 +66,26 @@
                   <text class="step-text mono">+</text>
                 </view>
               </view>
+              <text v-else-if="isInquiryLine(line)" class="inquiry-hint">需联系报价后下单</text>
+              <text v-else class="inquiry-hint">缺货，请联系询价确认</text>
               <view class="subtotal">
                 <text class="subtotal-k mono">小计</text>
-                <text class="subtotal-v mono">¥{{ price(line.subtotalFen) }}</text>
+                <text v-if="isInquiryLine(line)" class="subtotal-v subtotal-v--inquiry">询价</text>
+                <text v-else-if="isOutOfStockLine(line)" class="subtotal-v subtotal-v--oos">缺货</text>
+                <text v-else class="subtotal-v mono">¥{{ price(line.subtotalFen) }}</text>
               </view>
             </view>
           </view>
         </view>
+      </view>
+
+      <view v-if="hasBlocked" class="sheet inquiry-banner">
+        <text class="inquiry-banner-title">购物车中有 {{ blockedLines.length }} 件暂不可结算商品</text>
+        <text class="inquiry-banner-sub">
+          <text v-if="hasInquiry">{{ inquiryLines.length }} 件需联系报价；</text>
+          <text v-if="hasOos">{{ oosLines.length }} 件缺货，需确认库存后再下单。</text>
+          这些商品暂不参与结算。
+        </text>
       </view>
 
       <view v-if="checkoutVisible" class="sheet checkout">
@@ -115,11 +132,12 @@
       <view class="bar">
         <view class="bar-total">
           <text class="bar-label mono">共 {{ cart.totalQuantity }} 件</text>
-          <text class="bar-price mono">¥{{ price(cart.totalFen) }}</text>
+          <text v-if="hasBlocked" class="bar-price bar-price--muted">含不可结算 {{ blockedLines.length }} 件</text>
+          <text v-else class="bar-price mono">¥{{ price(payableFen) }}</text>
         </view>
         <view
           class="bar-btn"
-          :class="{ 'bar-btn--busy': submitting }"
+          :class="{ 'bar-btn--busy': submitting, 'bar-btn--disabled': hasBlocked }"
           hover-class="is-press"
           @tap="onBarAction"
         >
@@ -133,18 +151,38 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
-import type { CartDto } from '@mixmapp/contracts';
+import type { CartDto, CartLineDto } from '@mixmapp/contracts';
+import { INQUIRY_NOTICE, isOutOfStock, OUT_OF_STOCK_NOTICE } from '../../api/mall';
 import { mallApi } from '../../api/client';
 import { ROUTES } from '../../routes';
 
-const cart = ref<CartDto>({ items: [], totalQuantity: 0, totalFen: 0 });
+/** 购物车行：后端后续可能回传 priceSource，旧数据按价格是否为 0 兜底判定。 */
+type CartLine = CartLineDto & { priceSource?: 'anonymous' | 'login' | 'inquiry' };
+type CartView = Omit<CartDto, 'items'> & { items: CartLine[] };
+
+const cart = ref<CartView>({ items: [], totalQuantity: 0, totalFen: 0 });
+
+/** 询价行：priceSource 为 inquiry，或价格缺失 / 0 元，一律不参与结算。 */
+function isInquiryLine(line: CartLine): boolean {
+  return line.priceSource === 'inquiry' || line.priceFen == null || line.priceFen === 0;
+}
+
+/** 缺货行：非询价但库存缺失 / 0，历史加购进来的缺货商品同样不能结算。 */
+function isOutOfStockLine(line: CartLine): boolean {
+  return !isInquiryLine(line) && isOutOfStock(line);
+}
+
+/** 被结算拦截的行：询价 + 缺货。 */
+function isBlockedLine(line: CartLine): boolean {
+  return isInquiryLine(line) || isOutOfStockLine(line);
+}
 
 /** 接口返回非 JSON（离线/网关兜底）时可能是 undefined，统一收敛成合法购物车，避免模板读 items 白屏。 */
-function normalizeCart(input: unknown): CartDto {
+function normalizeCart(input: unknown): CartView {
   const raw = (input ?? {}) as Partial<CartDto>;
   if (!Array.isArray(raw.items)) return { items: [], totalQuantity: 0, totalFen: 0 };
   return {
-    items: raw.items,
+    items: raw.items as CartLine[],
     totalQuantity: raw.totalQuantity ?? 0,
     totalFen: raw.totalFen ?? 0,
   };
@@ -154,12 +192,30 @@ const error = ref('');
 const checkoutVisible = ref(false);
 const submitting = ref(false);
 const form = ref({ receiverName: '', receiverPhone: '', address: '', remark: '' });
+
+const inquiryLines = computed(() => cart.value.items.filter(isInquiryLine));
+const oosLines = computed(() => cart.value.items.filter(isOutOfStockLine));
+const blockedLines = computed(() => cart.value.items.filter(isBlockedLine));
+const hasInquiry = computed(() => inquiryLines.value.length > 0);
+const hasOos = computed(() => oosLines.value.length > 0);
+const hasBlocked = computed(() => blockedLines.value.length > 0);
+const payableFen = computed(() =>
+  cart.value.items.reduce((sum, line) => sum + (isBlockedLine(line) ? 0 : line.subtotalFen), 0),
+);
+
 const barLabel = computed(() => {
+  if (hasInquiry.value && hasOos.value) return '含询价 / 缺货商品，暂不能结算';
+  if (hasInquiry.value) return '含询价商品，暂不能结算';
+  if (hasOos.value) return '含缺货商品，暂不能结算';
   if (!checkoutVisible.value) return '去结算';
   return submitting.value ? '提交中…' : '提交订单';
 });
 
 function onBarAction(): void {
+  if (hasBlocked.value) {
+    uni.showToast({ title: hasOos.value ? OUT_OF_STOCK_NOTICE : INQUIRY_NOTICE, icon: 'none' });
+    return;
+  }
   if (checkoutVisible.value) {
     void submitOrder();
     return;
@@ -192,6 +248,14 @@ async function load(): Promise<void> {
 }
 
 async function changeQty(productId: string, quantity: number): Promise<void> {
+  const line = cart.value.items.find((item) => item.productId === productId);
+  if (line && isBlockedLine(line)) {
+    uni.showToast({
+      title: isOutOfStockLine(line) ? OUT_OF_STOCK_NOTICE : '询价商品不能调整数量',
+      icon: 'none',
+    });
+    return;
+  }
   if (quantity < 1) {
     await remove(productId);
     return;
@@ -212,6 +276,11 @@ async function remove(productId: string): Promise<void> {
 }
 
 async function submitOrder(): Promise<void> {
+  if (hasBlocked.value) {
+    uni.showToast({ title: hasOos.value ? OUT_OF_STOCK_NOTICE : INQUIRY_NOTICE, icon: 'none' });
+    checkoutVisible.value = false;
+    return;
+  }
   const { receiverName, receiverPhone, address } = form.value;
   if (!receiverName.trim()) {
     uni.showToast({ title: '请填写收货人', icon: 'none' });
@@ -384,6 +453,50 @@ onShow(() => {
   color: $ink-3;
 }
 
+.unit--inquiry {
+  color: $brand-deep;
+  font-weight: 600;
+}
+
+.unit--oos {
+  color: #a4761c;
+  font-weight: 600;
+}
+
+.inquiry-hint {
+  font-size: 24rpx;
+  color: $ink-4;
+}
+
+.subtotal-v--inquiry {
+  color: $brand-deep;
+}
+
+.subtotal-v--oos {
+  color: #a4761c;
+}
+
+.inquiry-banner {
+  padding: $sp-3;
+  margin-bottom: $sp-3;
+}
+
+.inquiry-banner-title {
+  display: block;
+  font-family: $font-display;
+  font-size: 28rpx;
+  font-weight: 800;
+  color: $ink;
+}
+
+.inquiry-banner-sub {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: $ink-3;
+}
+
 .line-foot {
   display: flex;
   align-items: flex-end;
@@ -525,6 +638,15 @@ onShow(() => {
 
 .bar-btn--busy {
   opacity: 0.72;
+}
+
+.bar-btn--disabled {
+  opacity: 0.5;
+}
+
+.bar-price--muted {
+  font-size: 30rpx;
+  color: $ink-4;
 }
 
 .bar-btn-text {

@@ -40,6 +40,21 @@ const num = (key: string, fallback: number): number => {
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
 };
+/**
+ * 壳与本地调试源恒定并入 CORS 白名单：
+ * - Android/iOS WebView 壳从 https://localhost、capacitor://localhost 加载本地 H5；
+ * - 本地 H5 调试 dev server 走 http://localhost / 127.0.0.1（含 5173 端口）。
+ * 这些源不依赖环境变量配置，避免线上漏配导致壳内全站离线。
+ */
+const BUILTIN_CORS_ORIGINS = [
+  'https://localhost',
+  'capacitor://localhost',
+  'http://localhost',
+  'http://127.0.0.1',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
+
 const bool = (key: string, fallback = false): boolean => {
   const raw = str(key).toLowerCase();
   if (!raw) return fallback;
@@ -195,10 +210,15 @@ export function loadConfig(): Config {
       strategy: parseIdStrategy(str('ID_STRATEGY'), 'snowflake'),
       workerId: num('SNOWFLAKE_WORKER_ID', 0),
     },
-    corsOrigins: str('CORS_ORIGINS', '*')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    corsOrigins: [
+      ...new Set([
+        ...str('CORS_ORIGINS', '*')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ...BUILTIN_CORS_ORIGINS,
+      ]),
+    ],
     sms: {
       provider: str('SMS_PROVIDER', 'console') === 'aliyun' ? 'aliyun' : 'console',
       echoCode: bool('DEV_ECHO_SMS_CODE', env !== 'production'),

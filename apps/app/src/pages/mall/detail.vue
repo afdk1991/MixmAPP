@@ -19,39 +19,78 @@
 
     <block v-else-if="product">
       <view class="hero">
-        <view class="hero-scrim" />
-        <view class="hero-ring" />
-        <view class="hero-ring hero-ring--sm" />
-        <text class="hero-tag mono">{{ product.category }}</text>
-        <text class="hero-char">{{ product.title.slice(0, 1) }}</text>
+        <image v-if="mainImage" class="hero-img" :src="mediaUrl(mainImage)" mode="aspectFill" />
+        <template v-else>
+          <view class="hero-scrim" />
+          <view class="hero-ring" />
+          <view class="hero-ring hero-ring--sm" />
+          <text class="hero-char">{{ product.title.slice(0, 1) }}</text>
+        </template>
+        <text v-if="product.brand" class="hero-tag mono">{{ product.brand }}</text>
         <text class="hero-serial mono">NO. {{ product.id.slice(0, 8).toUpperCase() }}</text>
       </view>
 
+      <view v-if="images.length > 1" class="thumbs">
+        <view
+          v-for="(img, idx) in images"
+          :key="idx"
+          class="thumb"
+          :class="{ 'thumb--active': mainImage === img }"
+          hover-class="is-press"
+          @tap="activeImage = img"
+        >
+          <image class="thumb-img" :src="mediaUrl(img)" mode="aspectFill" />
+        </view>
+      </view>
+
       <view class="body">
-        <text class="eyebrow">SPECIMEN</text>
+        <text class="eyebrow">CATALOG</text>
+        <view v-if="crumbs" class="crumbs mono">{{ crumbs }}</view>
         <text class="title">{{ product.title }}</text>
-        <text class="subtitle">{{ product.subtitle }}</text>
+        <view class="subtitle">{{ product.subtitle }}</view>
 
         <view class="price-row">
-          <view class="price-main">
-            <text class="cur mono">¥</text>
-            <text class="amount mono">{{ price(product.priceFen) }}</text>
-            <text v-if="product.originalPriceFen > 0" class="price-old mono">¥{{ price(product.originalPriceFen) }}</text>
+          <view v-if="inquiry" class="price-main">
+            <text class="amount amount--inquiry">询价</text>
+            <text class="price-note">联系报价</text>
           </view>
-          <text class="stock mono">余 {{ product.stock }}</text>
+          <view v-else class="price-main">
+            <text class="cur mono">¥</text>
+            <text class="amount mono">{{ priceText(product.priceFen) }}</text>
+            <text v-if="priceUnitLabel(product)" class="price-unit mono">{{ priceUnitLabel(product) }}</text>
+            <text v-if="product.originalPriceFen > 0" class="price-old mono">¥{{ priceText(product.originalPriceFen) }}</text>
+          </view>
+          <text v-if="outOfStock" class="stock stock--oos mono">缺货</text>
+          <text v-else-if="product.stock > 0" class="stock mono">余 {{ product.stock }}</text>
+        </view>
+
+        <view v-if="metaLine" class="meta-line">
+          <text v-if="product.unit" class="meta-item mono">单位：{{ product.unit }}</text>
+          <text v-if="packLabel(product)" class="meta-item mono">{{ packLabel(product) }}</text>
         </view>
 
         <view v-if="product.tags.length" class="tags">
           <text v-for="tag in product.tags" :key="tag" class="tag">{{ tag }}</text>
         </view>
 
-        <view class="sheet section">
+        <view v-if="specs.length" class="sheet section">
+          <text class="sec-label mono">SPECS</text>
+          <text class="section-title">规格参数</text>
+          <view class="specs">
+            <view v-for="[key, value] in specs" :key="key" class="spec-row">
+              <text class="spec-key">{{ key }}</text>
+              <text class="spec-value">{{ value }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view v-if="product.description" class="sheet section">
           <text class="sec-label mono">DETAIL</text>
           <text class="section-title">商品说明</text>
           <text class="desc">{{ product.description }}</text>
         </view>
 
-        <view class="sheet section">
+        <view v-if="purchasable" class="sheet section">
           <text class="sec-label mono">QUANTITY</text>
           <view class="qty-head">
             <text class="qty-title">购买数量</text>
@@ -68,15 +107,25 @@
           <text class="hint">单笔最多 99 件，超出库存会提示。</text>
         </view>
 
+        <view v-if="product.sourceUrl" class="sheet section source">
+          <text class="sec-label mono">SOURCE</text>
+          <text class="source-url">{{ product.sourceUrl }}</text>
+          <view class="source-actions">
+            <text class="source-copy mono" hover-class="is-press" @tap="copySource">复制链接</text>
+          </view>
+          <text v-if="capturedAt" class="source-meta mono">价格抓取时间：{{ capturedAt }}</text>
+          <text class="source-disclaimer">内部选品底稿，价格以来源为准，非对外报价。</text>
+        </view>
+
         <view class="note">
-          <text class="micro mono">MIXMAPP · 首发限定周边 · 数量有限</text>
+          <text class="micro mono">MIXMAPP · 目录选品 · 报价以对接确认为准</text>
         </view>
       </view>
 
-      <view class="bar">
+      <view v-if="purchasable" class="bar">
         <view class="bar-total">
           <text class="bar-label mono">合计</text>
-          <text class="bar-price mono">¥{{ price(product.priceFen * quantity) }}</text>
+          <text class="bar-price mono">¥{{ priceText((product.priceFen ?? 0) * quantity) }}</text>
         </view>
         <view class="bar-btn bar-btn--ghost" hover-class="is-press" @tap="addToCart">
           <text class="bar-btn-text bar-btn-text--ghost">加入购物车</text>
@@ -85,26 +134,70 @@
           <text class="bar-btn-text">立即购买</text>
         </view>
       </view>
+
+      <view v-else-if="outOfStock" class="bar bar--inquiry">
+        <view class="bar-total">
+          <text class="bar-label mono">库存状态</text>
+          <text class="bar-state mono">缺货</text>
+        </view>
+        <view class="bar-btn bar-btn--ghost" hover-class="is-press" @tap="showOutOfStock">
+          <text class="bar-btn-text bar-btn-text--ghost">询价确认</text>
+        </view>
+      </view>
+
+      <view v-else class="bar bar--inquiry">
+        <view class="bar-btn bar-btn--primary bar-btn--block" hover-class="is-press" @tap="showInquiry">
+          <text class="bar-btn-text">询价 / 联系报价</text>
+        </view>
+      </view>
     </block>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import type { ProductDto } from '@mixmapp/contracts';
-import { mallApi } from '../../api/client';
+import type { MallProductDto } from '../../api/mall';
+import {
+  breadcrumbLabel,
+  formatCapturedAt,
+  INQUIRY_NOTICE,
+  isInquiryProduct,
+  isOutOfStock,
+  OUT_OF_STOCK_NOTICE,
+  packLabel,
+  priceText,
+  priceUnitLabel,
+  specEntries,
+} from '../../api/mall';
+import { mallApi, mediaUrl } from '../../api/client';
 import { ROUTES } from '../../routes';
 
-const product = ref<ProductDto | null>(null);
+const product = ref<MallProductDto | null>(null);
 const productId = ref('');
 const quantity = ref(1);
 const loading = ref(false);
 const error = ref('');
+const activeImage = ref('');
 
-function price(fen: number): string {
-  return (fen / 100).toFixed(2);
-}
+const inquiry = computed(() => (product.value ? isInquiryProduct(product.value) : false));
+const outOfStock = computed(() =>
+  product.value ? !inquiry.value && isOutOfStock(product.value) : false,
+);
+const purchasable = computed(() =>
+  product.value ? !inquiry.value && !outOfStock.value : false,
+);
+const images = computed(() =>
+  product.value && Array.isArray(product.value.images) ? product.value.images : [],
+);
+const mainImage = computed(() => activeImage.value || images.value[0] || '');
+const specs = computed(() => (product.value ? specEntries(product.value.specs) : []));
+const crumbs = computed(() => (product.value ? breadcrumbLabel(product.value.categoryPath) : ''));
+const capturedAt = computed(() => (product.value ? formatCapturedAt(product.value.priceCapturedAt) : ''));
+const metaLine = computed(() => {
+  if (!product.value) return false;
+  return Boolean(product.value.unit) || Boolean(packLabel(product.value));
+});
 
 async function load(): Promise<void> {
   if (!productId.value) return;
@@ -113,9 +206,11 @@ async function load(): Promise<void> {
   try {
     const res = await mallApi.getProduct(productId.value);
     // 离线/网关兜底会返回空值，缺 tags 时补空数组，避免模板读 tags.length 白屏
-    product.value = res && typeof res === 'object'
-      ? { ...res, tags: Array.isArray(res.tags) ? res.tags : [] }
-      : null;
+    product.value =
+      res && typeof res === 'object'
+        ? { ...res, tags: Array.isArray(res.tags) ? res.tags : [] }
+        : null;
+    activeImage.value = '';
   } catch (e) {
     error.value = e instanceof Error ? e.message : '商品加载失败';
   } finally {
@@ -137,7 +232,43 @@ function dec(): void {
   quantity.value -= 1;
 }
 
+function showInquiry(): void {
+  uni.showModal({
+    title: '询价商品',
+    content: INQUIRY_NOTICE,
+    showCancel: false,
+    confirmText: '知道了',
+  });
+}
+
+function showOutOfStock(): void {
+  uni.showModal({
+    title: '暂时缺货',
+    content: OUT_OF_STOCK_NOTICE,
+    showCancel: false,
+    confirmText: '知道了',
+  });
+}
+
+function copySource(): void {
+  const url = product.value?.sourceUrl;
+  if (!url) return;
+  uni.setClipboardData({
+    data: url,
+    success: () => uni.showToast({ title: '来源链接已复制', icon: 'none' }),
+  });
+}
+
 async function addToCart(): Promise<void> {
+  if (!product.value) return;
+  if (isInquiryProduct(product.value)) {
+    uni.showToast({ title: INQUIRY_NOTICE, icon: 'none' });
+    return;
+  }
+  if (isOutOfStock(product.value)) {
+    uni.showToast({ title: OUT_OF_STOCK_NOTICE, icon: 'none' });
+    return;
+  }
   try {
     await mallApi.addToCart(productId.value, quantity.value);
     uni.showToast({ title: '已加入购物车', icon: 'success' });
@@ -152,6 +283,15 @@ async function addToCart(): Promise<void> {
 }
 
 async function buyNow(): Promise<void> {
+  if (!product.value) return;
+  if (isInquiryProduct(product.value)) {
+    uni.showToast({ title: INQUIRY_NOTICE, icon: 'none' });
+    return;
+  }
+  if (isOutOfStock(product.value)) {
+    uni.showToast({ title: OUT_OF_STOCK_NOTICE, icon: 'none' });
+    return;
+  }
   try {
     await mallApi.addToCart(productId.value, quantity.value);
     uni.navigateTo({ url: ROUTES.cart });
@@ -191,6 +331,16 @@ onLoad((options) => {
   overflow: hidden;
 }
 
+.hero-img {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .hero-scrim {
   position: absolute;
   left: 0;
@@ -226,6 +376,7 @@ onLoad((options) => {
   padding: 6rpx 14rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.32);
   border-radius: 8rpx;
+  background: rgba(11, 15, 14, 0.32);
 }
 
 .hero-char {
@@ -249,6 +400,33 @@ onLoad((options) => {
   color: rgba(244, 244, 241, 0.55);
 }
 
+/* ---------- 缩略图条 ---------- */
+.thumbs {
+  display: flex;
+  gap: 16rpx;
+  padding: $sp-3 $sp-4 0;
+  overflow-x: auto;
+}
+
+.thumb {
+  width: 120rpx;
+  height: 120rpx;
+  flex-shrink: 0;
+  border-radius: $r-control;
+  overflow: hidden;
+  border: 1rpx solid $paper-3;
+  background: $paper-2;
+}
+
+.thumb--active {
+  border-color: $brand;
+}
+
+.thumb-img {
+  width: 100%;
+  height: 100%;
+}
+
 /* ---------- 正文层 ---------- */
 .body {
   position: relative;
@@ -258,6 +436,17 @@ onLoad((options) => {
   background: $paper;
   border-top-left-radius: 44rpx;
   border-top-right-radius: 44rpx;
+}
+
+.crumbs {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+  line-height: 1.6;
+  white-space: pre-line;
+  word-break: break-all;
+  color: $ink-4;
 }
 
 .title {
@@ -273,9 +462,14 @@ onLoad((options) => {
 
 .subtitle {
   display: block;
+  width: 100%;
+  max-width: 100%;
   margin-top: 10rpx;
   font-size: 30rpx;
   line-height: 1.6;
+  white-space: pre-line;
+  word-break: break-all;
+  overflow-wrap: anywhere;
   color: $ink-3;
 }
 
@@ -291,6 +485,7 @@ onLoad((options) => {
 .price-main {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
 }
 
 .cur {
@@ -306,6 +501,22 @@ onLoad((options) => {
   color: $ink;
 }
 
+.amount--inquiry {
+  color: $brand-deep;
+}
+
+.price-note {
+  margin-left: 12rpx;
+  font-size: 26rpx;
+  color: $ink-3;
+}
+
+.price-unit {
+  margin-left: 8rpx;
+  font-size: 24rpx;
+  color: $ink-3;
+}
+
 .price-old {
   margin-left: 14rpx;
   font-size: 26rpx;
@@ -313,9 +524,32 @@ onLoad((options) => {
   text-decoration: line-through;
 }
 
+.price-oos {
+  margin-left: 12rpx;
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+  color: #a4761c;
+}
+
 .stock {
   font-size: 26rpx;
   letter-spacing: 0.5rpx;
+  color: $ink-3;
+}
+
+.stock--oos {
+  color: #a4761c;
+}
+
+.meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 14rpx;
+}
+
+.meta-item {
+  margin-right: 24rpx;
+  font-size: 26rpx;
   color: $ink-3;
 }
 
@@ -351,11 +585,40 @@ onLoad((options) => {
   color: $ink;
 }
 
+.specs {
+  margin-top: 18rpx;
+}
+
+.spec-row {
+  display: flex;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.spec-row:last-child {
+  border-bottom: none;
+}
+
+.spec-key {
+  width: 200rpx;
+  flex-shrink: 0;
+  font-size: 28rpx;
+  color: $ink-3;
+}
+
+.spec-value {
+  flex: 1;
+  font-size: 28rpx;
+  color: $ink;
+  word-break: break-all;
+}
+
 .desc {
   display: block;
   margin-top: 14rpx;
   font-size: 30rpx;
   line-height: 1.8;
+  white-space: pre-line;
   color: $ink-2;
 }
 
@@ -407,6 +670,40 @@ onLoad((options) => {
   color: $ink;
 }
 
+.source-url {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: $ink-3;
+  word-break: break-all;
+}
+
+.source-actions {
+  margin-top: 10rpx;
+}
+
+.source-copy {
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+  color: $brand-deep;
+}
+
+.source-meta {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: $ink-4;
+}
+
+.source-disclaimer {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: $ink-4;
+}
+
 .note {
   margin: $sp-5 0 0;
   padding-top: $sp-4;
@@ -426,9 +723,17 @@ onLoad((options) => {
   color: $ink-4;
 }
 
-.bar-price {
+.bar-state {
   display: block;
-  margin-top: 4rpx;
+  margin-top: 2rpx;
+  font-size: 34rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  color: $ink;
+}
+
+.bar-price {
+  display: block;  margin-top: 4rpx;
   font-size: 40rpx;
   font-weight: 700;
   line-height: 1.1;
@@ -443,6 +748,11 @@ onLoad((options) => {
   align-items: center;
   justify-content: center;
   margin-left: 14rpx;
+}
+
+.bar-btn--block {
+  flex: 1;
+  margin-left: 0;
 }
 
 .bar-btn--ghost {

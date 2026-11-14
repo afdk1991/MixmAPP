@@ -3,9 +3,9 @@ import type {
   CartDto,
   OrderCreateInput,
   OrderDto,
-  ProductDto,
   UserDto,
 } from '@mixmapp/contracts';
+import type { MallCategoryDto, MallProductDto } from './mall';
 
 /**
  * 统一 API 基址。优先级：
@@ -50,6 +50,28 @@ const env = import.meta.env as unknown as Record<string, string | boolean | unde
 export const API_BASE: string = normalizeApiBase(
   readRuntimeApiBase() ?? (buildApiBase || undefined) ?? (env.DEV ? 'http://127.0.0.1:8080/api/v1' : '/api/v1'),
 );
+
+/**
+ * 商品图片地址归一。
+ * - 已是 http(s)/data/blob 完整地址：原样返回（契约要求库里只落 `/media/...` 本地地址，不热链外部图床）；
+ * - 本地相对 `/media/...`：API_BASE 是绝对源时拼到源站 origin 上，**不带入 `/api/v1` 段**；
+ *   API_BASE 同源相对（生产 `/api/v1`）时保留相对路径，由浏览器按当前站点 origin 解析。
+ * - 空值返回空串，调用方据此渲染占位块，避免破图。
+ */
+export function mediaUrl(src?: string | null): string {
+  if (src == null) return '';
+  const trimmed = String(src).trim();
+  if (!trimmed) return '';
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
+  if (!trimmed.startsWith('/')) return trimmed;
+  if (!/^https?:\/\//i.test(API_BASE)) return trimmed;
+  try {
+    const base = new URL(API_BASE);
+    return `${base.origin}${trimmed}`;
+  } catch {
+    return trimmed;
+  }
+}
 
 export class ApiError extends Error {
   constructor(
@@ -286,10 +308,12 @@ export const mallApi = {
       .filter(([, value]) => value !== undefined && value !== '')
       .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
       .join('&');
-    return apiRequest<ProductDto[]>(`/mall/products${qs ? `?${qs}` : ''}`, { auth: false });
+    return apiRequest<MallProductDto[]>(`/mall/products${qs ? `?${qs}` : ''}`, { auth: false });
   },
   getProduct: (productId: string) =>
-    apiRequest<ProductDto>(`/mall/products/${encodeURIComponent(productId)}`, { auth: false }),
+    apiRequest<MallProductDto>(`/mall/products/${encodeURIComponent(productId)}`, { auth: false }),
+  /** 一级分类 + 商品计数；后端未就绪时前端兜底只留「全部」。 */
+  listCategories: () => apiRequest<MallCategoryDto[]>('/mall/categories', { auth: false }),
   getCart: () => apiRequest<CartDto>('/mall/cart'),
   addToCart: (productId: string, quantity = 1) =>
     apiRequest<CartDto>('/mall/cart', { method: 'POST', data: { productId, quantity } }),

@@ -26,3 +26,10 @@ backups/
 .pnpm-store/
 out/
 release/
+
+# 抓取/导入产出的可再生产物（跑 tools/egluosi-importer/crawl.mjs 可重建）
+tools/egluosi-importer/source/catalog.json
+tools/egluosi-importer/source/images/
+
+# 本地化后的商品图（运行时媒体目录，按抓取重建）
+storage/

@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "source": "https://eg.egluosi.com/b2b/",
+    "crawledAt": "2026-11-14T04:00:00.000Z",
+    "pricePolicy": "inquiry",
+    "totalScanned": 3,
+    "totalImported": 3,
+    "note": "手工夹具：给导入端做第一个可跑的样本，字段口径见 ../CONTRACT.md。真实抓取结果替换为 source/catalog.json。"
+  },
+  "categories": [
+    { "code": "egm-screw", "name": "EGM螺丝类", "siteValue": "fixture-1", "path": ["EGM螺丝类"] },
+    { "code": "eg-screw", "name": "EG螺丝类", "siteValue": "fixture-2", "path": ["EG螺丝类"] },
+    { "code": "cutting-tool", "name": "成品刀刃具类", "siteValue": "fixture-3", "path": ["成品刀刃具类"] }
+  ],
+  "products": [
+    {
+      "sourceKey": "sku:FIXTURE-EGM-1420-M6X20",
+      "sourceId": "FIXTURE-EGM-1420-M6X20",
+      "sourceUrl": "https://eg.egluosi.com/b2b/mall/pd_detail?pd=FIXTURE-EGM-1420-M6X20",
+      "name": "EGM 14.9级内六角圆柱头螺丝 M6×20",
+      "subtitle": "M6×20 · 14.9级 · 合金钢",
+      "brand": "EGM",
+      "categoryPath": ["EGM螺丝类", "14.9级内六角圆柱头类", "EGM-14.9级公制内六角圆柱头螺丝"],
+      "categoryCode": "egm-screw",
+      "specs": { "规格": "M6×20", "等级": "14.9", "材质": "合金钢", "标准": "GB/T 70.1" },
+      "unit": "支",
+      "packQty": 100,
+      "priceFen": null,
+      "priceSource": "inquiry",
+      "priceCapturedAt": "2026-11-14T04:00:00.000Z",
+      "stock": 0,
+      "stockSource": "unknown",
+      "images": [],
+      "description": "高强度内六角圆柱头螺丝\n适用机械装配、风电设备、汽车传动",
+      "rawName": "EGM-14.9级公制内六角圆柱头螺丝"
+    },
+    {
+      "sourceKey": "sku:FIXTURE-EG-1290-M8X30",
+      "sourceId": "FIXTURE-EG-1290-M8X30",
+      "sourceUrl": "https://eg.egluosi.com/b2b/mall/pd_detail?pd=FIXTURE-EG-1290-M8X30",
+      "name": "EG 12.9级内六角圆柱头螺丝 M8×30",
+      "subtitle": "M8×30 · 12.9级 · 合金钢",
+      "brand": "EG",
+      "categoryPath": ["EG螺丝类", "EG-12.9级内六角圆柱头类"],
+      "categoryCode": "eg-screw",
+      "specs": { "规格": "M8×30", "等级": "12.9", "材质": "合金钢" },
+      "unit": "支",
+      "packQty": 200,
+      "priceFen": 68,
+      "priceSource": "anonymous",
+      "priceCapturedAt": "2026-11-14T04:00:00.000Z",
+      "stock": 120,
+      "stockSource": "anonymous",
+      "images": [],
+      "description": "12.9级高强度内六角\n表面发黑处理",
+      "rawName": "12.9级内六角"
+    },
+    {
+      "sourceKey": "url:https://eg.egluosi.com/b2b/mall/pd_detail?pd=FIXTURE-OSG-TAP",
+      "sourceId": null,
+      "sourceUrl": "https://eg.egluosi.com/b2b/mall/pd_detail?pd=FIXTURE-OSG-TAP",
+      "name": "OSG 钢用先端丝锥(白) M12×1.5",
+      "subtitle": "M12×1.5 · 先端丝锥 · 高速钢",
+      "brand": "OSG",
+      "categoryPath": ["成品刀刃具类", "OSG丝锥类", "OSG钢用先端丝锥(白)"],
+      "categoryCode": "cutting-tool",
+      "specs": { "规格": "M12×1.5", "类型": "先端丝锥", "材质": "HSSE" },
+      "unit": "支",
+      "packQty": null,
+      "priceFen": null,
+      "priceSource": "inquiry",
+      "priceCapturedAt": "2026-11-14T04:00:00.000Z",
+      "stock": 0,
+      "stockSource": "unknown",
+      "images": [],
+      "description": "",
+      "rawName": "OSG钢用先端丝锥(白)"
+    }
+  ],
+  "skipped": [],
+  "failed": []
+}

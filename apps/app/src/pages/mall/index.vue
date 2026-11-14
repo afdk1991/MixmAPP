@@ -6,7 +6,7 @@
         <view class="head-title">
           <text class="eyebrow">MIXMAPP STORE</text>
           <text class="title">商城</text>
-          <text class="sub">单码多端周边 · 首发限定</text>
+          <text class="sub">五金目录选品 · 询价对接报价</text>
         </view>
         <view class="cart-btn" hover-class="is-press" @tap="goCart">
           <text class="cart-text">购物车</text>
@@ -22,25 +22,27 @@
         <input
           v-model="keyword"
           class="search-input"
-          placeholder="搜商品，如 通行证 / 支架"
+          placeholder="搜商品，如 螺丝 / 丝锥 / M6"
           placeholder-class="field-ph"
           confirm-type="search"
-          @confirm="load"
+          @confirm="onSearch"
         />
-        <view class="search-go" hover-class="is-press" @tap="load">
+        <view class="search-go" hover-class="is-press" @tap="onSearch">
           <text class="search-go-text">搜索</text>
         </view>
       </view>
 
       <scroll-view :scroll-x="true" class="tabs" :show-scrollbar="false">
         <view
-          v-for="item in categories"
-          :key="item.key"
+          v-for="item in tabs"
+          :key="item.code"
           class="tab"
-          :class="{ 'tab--active': active === item.key }"
-          @tap="switchCategory(item.key)"
+          :class="{ 'tab--active': active === item.code }"
+          @tap="switchCategory(item.code)"
         >
-          <text class="tab-label">{{ item.label }}</text>
+          <text class="tab-label">
+            {{ item.name }}<text v-if="item.count > 0" class="tab-count mono">{{ item.count }}</text>
+          </text>
           <view class="tab-line" />
         </view>
       </scroll-view>
@@ -61,13 +63,15 @@
       <view class="empty-mark mono">!</view>
       <text class="empty-title">没能取到商品</text>
       <text class="empty-sub">{{ error }}</text>
-      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
+      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="refresh">重新加载</view>
     </view>
 
     <view v-else-if="products.length === 0" class="empty">
       <view class="empty-mark">空</view>
-      <text class="empty-title">这个分类还没有商品</text>
-      <text class="empty-sub">换个分类或清空关键词再试。</text>
+      <text class="empty-title">{{ keyword.trim() ? '没有找到相关商品' : '这个分类还没有商品' }}</text>
+      <text class="empty-sub">
+        {{ keyword.trim() ? '换个关键词，或浏览其他分类看看。' : '换个分类看看，或稍后再来。' }}
+      </text>
     </view>
 
     <view v-else>
@@ -84,11 +88,32 @@
           @tap="openDetail(product)"
         >
           <view class="cover">
-            <view class="cover-scrim" />
-            <view class="cover-ring" />
-            <text class="cover-tag mono">{{ product.category }}</text>
-            <text class="cover-char">{{ product.title.slice(0, 1) }}</text>
-            <view class="cover-add" hover-class="is-press" @tap.stop="addToCart(product)">
+            <image
+              v-if="coverOf(product)"
+              class="cover-img"
+              :src="coverOf(product)"
+              mode="aspectFill"
+              lazy-load
+            />
+            <view v-else class="cover-placeholder">
+              <view class="cover-ring" />
+              <text class="cover-char">{{ product.title.slice(0, 1) }}</text>
+            </view>
+            <text v-if="product.brand" class="cover-tag mono">{{ product.brand }}</text>
+            <view
+              v-if="isInquiryProduct(product)"
+              class="cover-add cover-add--inquiry"
+              hover-class="is-press"
+              @tap.stop="addToCart(product)"
+            >
+              <text class="cover-add-text mono">询</text>
+            </view>
+            <view
+              v-else-if="!isOutOfStock(product)"
+              class="cover-add"
+              hover-class="is-press"
+              @tap.stop="addToCart(product)"
+            >
               <text class="cover-add-text mono">+</text>
             </view>
           </view>
@@ -96,18 +121,30 @@
             <text class="p-name">{{ product.title }}</text>
             <text class="p-sub">{{ product.subtitle }}</text>
             <view class="p-foot">
-              <view class="p-price">
-                <text class="p-cur mono">¥</text>
-                <text class="p-amount mono">{{ price(product.priceFen) }}</text>
-                <text v-if="product.originalPriceFen > 0" class="p-old mono">¥{{ price(product.originalPriceFen) }}</text>
+              <view v-if="isInquiryProduct(product)" class="p-price p-price--inquiry">
+                <text class="p-inquiry">询价</text>
+                <text class="p-inquiry-sub">联系报价</text>
               </view>
-              <text class="p-stock mono">余 {{ product.stock }}</text>
+              <view v-else class="p-price">
+                <text class="p-cur mono">¥</text>
+                <text class="p-amount mono">{{ priceText(product.priceFen) }}</text>
+                <text v-if="priceUnitLabel(product)" class="p-unit mono">{{ priceUnitLabel(product) }}</text>
+                <text v-if="product.originalPriceFen > 0" class="p-old mono">¥{{ priceText(product.originalPriceFen) }}</text>
+              </view>
+              <view class="p-meta">
+                <text v-if="packLabel(product)" class="p-pack mono">{{ packLabel(product) }}</text>
+                <text v-if="!isOutOfStock(product) && product.stock > 0" class="p-stock mono">余 {{ product.stock }}</text>
+                <text v-else-if="isOutOfStock(product)" class="p-stock p-stock--oos mono">缺货</text>
+              </view>
             </view>
           </view>
         </view>
       </view>
+
       <view class="list-foot">
-        <text class="mono foot-note">库存与价格以服务端实时数据为准</text>
+        <text v-if="loadingMore" class="mono foot-note">加载中…</text>
+        <text v-else-if="noMore" class="mono foot-note">没有更多商品了</text>
+        <text v-else class="mono foot-note">上拉加载更多 · 价格以服务端实时数据为准</text>
       </view>
     </view>
   </view>
@@ -115,63 +152,110 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
-import type { ProductDto } from '@mixmapp/contracts';
-import { mallApi } from '../../api/client';
+import { onLoad, onReachBottom, onShow } from '@dcloudio/uni-app';
+import type { MallCategoryDto, MallProductDto } from '../../api/mall';
+import {
+  INQUIRY_NOTICE,
+  isInquiryProduct,
+  isOutOfStock,
+  OUT_OF_STOCK_NOTICE,
+  packLabel,
+  priceText,
+  priceUnitLabel,
+} from '../../api/mall';
+import { mallApi, mediaUrl } from '../../api/client';
 import { ROUTES } from '../../routes';
 
-/** 分类由服务端商品数据推导，避免前端写死与后端不一致的分类。 */
-const facets = ref<string[]>([]);
-const categories = computed(() => [
-  { key: '', label: '全部' },
-  ...facets.value.map((name) => ({ key: name, label: name })),
-]);
+const PAGE_SIZE = 20;
 
+/** 分类由 `/mall/categories` 接口驱动；接口未就绪时兜底只留「全部」。 */
+const categories = ref<MallCategoryDto[]>([]);
 const active = ref('');
 const keyword = ref('');
-const products = ref<ProductDto[]>([]);
+const products = ref<MallProductDto[]>([]);
+const page = ref(1);
 const loading = ref(false);
+const loadingMore = ref(false);
+const noMore = ref(false);
 const error = ref('');
 
-async function loadFacets(): Promise<void> {
+/** 迁移自带的演示品分类（英文代码），不计入五金目录选品 tab，避免商城出现无名分类 */
+const DEMO_CATEGORY_CODES = new Set(['featured', 'life', 'digital', 'wear']);
+
+const tabs = computed(() => [
+  { code: '', name: '全部', count: 0 },
+  ...categories.value
+    .filter((item) => !DEMO_CATEGORY_CODES.has(item.code))
+    .map((item) => ({ code: item.code, name: item.name, count: item.count ?? 0 })),
+]);
+
+async function loadCategories(): Promise<void> {
   try {
-    const all = await mallApi.listProducts({ pageSize: 50 });
-    if (!Array.isArray(all)) return;
-    const names = Array.from(new Set(all.map((p) => p.category).filter(Boolean)));
-    facets.value = names.slice(0, 6);
+    const list = await mallApi.listCategories();
+    categories.value = Array.isArray(list) ? list : [];
   } catch {
-    facets.value = [];
+    categories.value = [];
   }
 }
 
-function price(fen: number): string {
-  return (fen / 100).toFixed(2);
-}
-
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = '';
+async function fetchPage(reset: boolean): Promise<void> {
+  if (reset) {
+    page.value = 1;
+    noMore.value = false;
+    loading.value = true;
+    error.value = '';
+  } else {
+    if (loadingMore.value || loading.value || noMore.value) return;
+    loadingMore.value = true;
+  }
   try {
     const list = await mallApi.listProducts({
       category: active.value || undefined,
       keyword: keyword.value.trim() || undefined,
-      pageSize: 50,
+      page: page.value,
+      pageSize: PAGE_SIZE,
     });
     // 接口异常或网关返回非 JSON 时保持空数组，避免模板读取 length 时报错白屏
-    products.value = Array.isArray(list) ? list : [];
+    const rows = Array.isArray(list) ? list : [];
+    products.value = reset ? rows : [...products.value, ...rows];
+    if (rows.length < PAGE_SIZE) noMore.value = true;
+    else page.value += 1;
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '商品加载失败';
+    if (reset) {
+      error.value = e instanceof Error ? e.message : '商品加载失败';
+    } else {
+      uni.showToast({ title: '下一页加载失败，请重试', icon: 'none' });
+    }
   } finally {
     loading.value = false;
+    loadingMore.value = false;
   }
 }
 
-function switchCategory(key: string): void {
-  active.value = key;
-  void load();
+function refresh(): void {
+  void fetchPage(true);
 }
 
-function openDetail(product: ProductDto): void {
+function switchCategory(code: string): void {
+  if (active.value === code) return;
+  active.value = code;
+  refresh();
+}
+
+function onSearch(): void {
+  refresh();
+}
+
+function loadMore(): void {
+  void fetchPage(false);
+}
+
+function coverOf(product: MallProductDto): string {
+  const first = Array.isArray(product.images) ? product.images[0] : undefined;
+  return mediaUrl(first);
+}
+
+function openDetail(product: MallProductDto): void {
   uni.navigateTo({ url: `${ROUTES.mallDetail}?id=${encodeURIComponent(product.id)}` });
 }
 
@@ -179,7 +263,15 @@ function goCart(): void {
   uni.navigateTo({ url: ROUTES.cart });
 }
 
-async function addToCart(product: ProductDto): Promise<void> {
+async function addToCart(product: MallProductDto): Promise<void> {
+  if (isInquiryProduct(product)) {
+    uni.showToast({ title: INQUIRY_NOTICE, icon: 'none' });
+    return;
+  }
+  if (isOutOfStock(product)) {
+    uni.showToast({ title: OUT_OF_STOCK_NOTICE, icon: 'none' });
+    return;
+  }
   try {
     await mallApi.addToCart(product.id, 1);
     uni.showToast({ title: '已加入购物车', icon: 'success' });
@@ -193,9 +285,21 @@ async function addToCart(product: ProductDto): Promise<void> {
   }
 }
 
+// 深链进入时可通过 ?keyword=&category= 预填检索条件；onShow 随后按当前 ref 拉首屏。
+onLoad((options) => {
+  const q = (options?.['keyword'] as string | undefined) ?? '';
+  const c = (options?.['category'] as string | undefined) ?? '';
+  keyword.value = q.trim();
+  active.value = c;
+});
+
 onShow(() => {
-  if (!facets.value.length) void loadFacets();
-  void load();
+  void loadCategories();
+  refresh();
+});
+
+onReachBottom(() => {
+  loadMore();
 });
 </script>
 
@@ -347,6 +451,12 @@ onShow(() => {
   padding-bottom: 12rpx;
 }
 
+.tab-count {
+  margin-left: 8rpx;
+  font-size: 24rpx;
+  color: $ink-4;
+}
+
 .tab--active .tab-label {
   color: $ink;
   font-weight: 600;
@@ -398,13 +508,24 @@ onShow(() => {
   border-bottom: 1rpx solid $paper-3;
 }
 
-.cover-scrim {
+.cover-img {
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(150deg, rgba(17, 20, 19, 0.02) 12%, rgba(17, 20, 19, 0.08) 100%);
+  width: 100%;
+  height: 100%;
+}
+
+.cover-placeholder {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 .cover-ring {
@@ -422,14 +543,15 @@ onShow(() => {
   position: absolute;
   left: 20rpx;
   top: 20rpx;
+  z-index: 2;
   font-size: 26rpx;
   letter-spacing: 2rpx;
   text-transform: uppercase;
   color: $ink-3;
+  background: rgba(255, 255, 255, 0.9);
   border: 1rpx solid rgba(17, 20, 19, 0.18);
   border-radius: 6rpx;
   padding: 4rpx 10rpx;
-  z-index: 2;
 }
 
 .cover-char {
@@ -457,8 +579,12 @@ onShow(() => {
   justify-content: center;
 }
 
+.cover-add--inquiry {
+  background: $brand-soft;
+}
+
 .cover-add-text {
-  font-size: 40rpx;
+  font-size: 36rpx;
   line-height: 1;
   color: $ink;
 }
@@ -518,6 +644,12 @@ onShow(() => {
   color: $ink;
 }
 
+.p-unit {
+  margin-left: 6rpx;
+  font-size: 24rpx;
+  color: $ink-3;
+}
+
 .p-old {
   margin-left: 8rpx;
   font-size: 26rpx;
@@ -525,11 +657,50 @@ onShow(() => {
   text-decoration: line-through;
 }
 
-.p-stock {
-  display: block;
+.p-oos {
+  margin-left: 8rpx;
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+  color: #a4761c;
+}
+
+.p-price--inquiry {
+  align-items: baseline;
+}
+
+.p-inquiry {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: $brand-deep;
+}
+
+.p-inquiry-sub {
+  margin-left: 10rpx;
+  font-size: 24rpx;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.p-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   margin-top: 4rpx;
+}
+
+.p-pack {
+  font-size: 24rpx;
+  color: $ink-3;
+  margin-right: 12rpx;
+}
+
+.p-stock {
   font-size: 26rpx;
   color: $ink-4;
+}
+
+.p-stock--oos {
+  color: #a4761c;
 }
 
 .cover-sk {

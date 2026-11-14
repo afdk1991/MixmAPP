@@ -235,8 +235,64 @@ export type HealthReport = {
 export const productQuerySchema = z.object({
   category: z.string().trim().max(32).optional(),
   keyword: z.string().trim().max(64).optional(),
-  page: z.coerce.number().int().min(1).max(100).default(1),
+  // 页上界放大到可覆盖全量目录（万级以上）；pageSize 上限保持 50，前端首屏/触底翻页不放大。
+  page: z.coerce.number().int().min(1).max(100000).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+// ===== 目录导入（抓取端 catalog.json → 商城库） =====
+
+export const importPriceSourceSchema = z.enum(['anonymous', 'login', 'inquiry']);
+export const importStockSourceSchema = z.enum(['anonymous', 'unknown']);
+
+/** §2.4 图片：staged 为 null 表示抓取端下载失败，导入端不得保留不可达 remote 热链。 */
+export const importProductImageSchema = z.object({
+  remote: z.string().trim().url().max(512),
+  staged: z.string().trim().max(256).nullable(),
+  role: z.enum(['cover', 'gallery']).default('gallery'),
+});
+
+/** §2.1 单条商品字段口径，宽度上限与契约一致。 */
+export const importProductSchema = z.object({
+  sourceKey: z.string().trim().min(1).max(128),
+  sourceId: z.string().trim().max(64).nullable(),
+  sourceUrl: z.string().trim().url().max(512),
+  name: z.string().trim().min(1).max(200),
+  subtitle: z.string().trim().max(200).default(''),
+  brand: z.string().trim().max(64).default(''),
+  categoryPath: z.array(z.string().trim().min(1).max(64)).max(5),
+  categoryCode: z.string().trim().min(1).max(32),
+  specs: z
+    .record(z.string().trim().max(64), z.string().trim().max(256))
+    .refine((obj) => Object.keys(obj).length <= 32, 'specs 最多 32 项')
+    .default({}),
+  unit: z.string().trim().max(16).default(''),
+  packQty: z.number().int().positive().nullable().optional(),
+  priceFen: z.number().int().min(0).nullable(),
+  priceSource: importPriceSourceSchema,
+  priceCapturedAt: z.string().datetime(),
+  stock: z.number().int().min(0).default(0),
+  stockSource: importStockSourceSchema,
+  images: z.array(importProductImageSchema).max(10).default([]),
+  description: z.string().max(4000).default(''),
+  rawName: z.string().trim().max(200).default(''),
+});
+
+export const importCatalogCategorySchema = z.object({
+  code: z.string().trim().min(1).max(32),
+  name: z.string().trim().max(64),
+  siteValue: z.string().trim().max(64).optional(),
+  path: z.array(z.string().trim().max(64)).max(5).optional(),
+});
+
+/** §2 catalog 顶层结构；meta/skipped/failed 等附加键在解析时剥离，不参与入库。 */
+export const importCatalogSchema = z.object({
+  source: z.string().trim().max(256).optional(),
+  crawledAt: z.string().datetime().optional(),
+  batch: z.string().trim().max(64).optional(),
+  categories: z.array(importCatalogCategorySchema).optional(),
+  // 单批 catalog 可含数万条；服务端 importCatalog 内部再按 5000/批分片落库，这里只设一个宽裕上界。
+  products: z.array(importProductSchema).max(100000),
 });
 
 export const cartAddSchema = z.object({
@@ -262,6 +318,9 @@ export const orderCreateSchema = z.object({
 });
 
 export type ProductQueryInput = z.infer<typeof productQuerySchema>;
+export type ImportProductImageInput = z.infer<typeof importProductImageSchema>;
+export type ImportProductInput = z.infer<typeof importProductSchema>;
+export type ImportCatalogInput = z.infer<typeof importCatalogSchema>;
 export type CartAddInput = z.infer<typeof cartAddSchema>;
 export type CartUpdateInput = z.infer<typeof cartUpdateSchema>;
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
@@ -270,7 +329,11 @@ export type ProductDto = {
   id: string;
   title: string;
   subtitle: string;
-  /** 现价（分） */
+  /**
+   * 现价（分）。询价商品没有公开价，落库/下发时 null 归一为 0。
+   * 判断能否下单/展示价格必须同时看 priceSource：`priceSource === 'inquiry'` 或 `priceFen <= 0`
+   * 都视为不可直接购买，不能只凭 priceFen === 0 下结论（0 也可能是异常缺价）。
+   */
   priceFen: number;
   /** 划线价（分），0 表示无 */
   originalPriceFen: number;
@@ -282,6 +345,18 @@ export type ProductDto = {
   tags: string[];
   description: string;
   createdAt: string;
+  /** 以下为导入目录商品增补的可选字段，旧数据零影响 */
+  brand?: string;
+  categoryPath?: string[];
+  /** 一级分类中文名 */
+  categoryName?: string;
+  specs?: Record<string, string>;
+  unit?: string;
+  packQty?: number;
+  priceSource?: 'anonymous' | 'login' | 'inquiry';
+  /** ISO 时间，价格抓取时刻 */
+  priceCapturedAt?: string;
+  sourceUrl?: string;
 };
 
 export type CartLineDto = {

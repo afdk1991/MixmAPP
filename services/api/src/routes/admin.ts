@@ -1,6 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { StoreSwitcher } from '../db/switchable.js';
 import { hostOf } from '../db/switchable.js';
+import { projectRoot } from '../config.js';
 import { AppError } from '../lib/errors.js';
 
 /**
@@ -38,6 +41,39 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     await guard(request as unknown as { headers: Record<string, unknown> });
     const cancelled = await app.mall.sweepExpiredOrders(app.cfg.orderTtlMinutes);
     return { data: { ttlMinutes: app.cfg.orderTtlMinutes, cancelled, count: cancelled.length } };
+  });
+
+  // 目录导入：body ① 直接给 catalog 对象；② 给 { file: "tools/.../catalog.json" }，
+  // 服务端按 process.cwd() 解析并限制在仓库根目录内，防路径穿越。
+  app.post('/admin/mall/import', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    const rawBody = (request.body ?? {}) as Record<string, unknown>;
+    let catalogRaw: unknown = rawBody;
+    const file = typeof rawBody.file === 'string' ? rawBody.file : undefined;
+    const batch = typeof rawBody.batch === 'string' ? rawBody.batch : undefined;
+
+    if (file) {
+      const repoRoot = projectRoot();
+      const resolved = resolve(process.cwd(), file);
+      if (resolved !== repoRoot && !resolved.startsWith(repoRoot + sep)) {
+        throw new AppError('BAD_REQUEST', '导入文件路径越出仓库根目录');
+      }
+      if (!existsSync(resolved)) throw AppError.notFound('导入文件不存在');
+      let text: string;
+      try {
+        text = readFileSync(resolved, 'utf8');
+      } catch {
+        throw AppError.notFound('导入文件不存在或不可读');
+      }
+      try {
+        catalogRaw = JSON.parse(text) as unknown;
+      } catch {
+        throw AppError.validation('导入文件不是合法 JSON');
+      }
+    }
+
+    const report = await app.mall.importCatalog(catalogRaw, batch ? { batch } : {});
+    return { data: report };
   });
 
   app.post('/admin/db/switch', async (request, reply) => {

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { ProductRecord } from '../src/db/types.js';
-import { makeApp } from './helpers.js';
+import { MallService } from '../src/modules/mall.js';
+import { makeApp, testConfig } from './helpers.js';
 
 let app: FastifyInstance | undefined;
 
@@ -171,6 +172,130 @@ describe('商城：商品 / 购物车 / 订单', () => {
       headers: auth(await register(app, '13800002103')),
     });
     expect(otherUser.statusCode).toBe(404);
+  });
+
+  it('分类聚合按全量统计，不被分页 list 上限截断', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-cat-1', title: '螺丝甲', category: 'eg-screw' }));
+    await ctx.store.mall.products.insert(product({ id: 'mix-cat-2', title: '螺丝乙', category: 'eg-screw' }));
+    await ctx.store.mall.products.insert(product({ id: 'mix-cat-3', title: '刃具丙', category: 'cutting-tool' }));
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/mall/categories' });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data as Array<{ code: string; count: number }>;
+    const eg = data.find((x) => x.code === 'eg-screw');
+    const ct = data.find((x) => x.code === 'cutting-tool');
+    expect(eg?.count).toBe(2);
+    expect(ct?.count).toBe(1);
+    expect(data.reduce((sum, x) => sum + x.count, 0)).toBe(3);
+  });
+
+  it('同分类同名商品去歧义加后缀，重复导入不叠加第二层后缀', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const mk = (sourceKey: string, sourceId: string) => ({
+      sourceKey,
+      sourceId,
+      sourceUrl: `https://eg.egluosi.com/${sourceId}`,
+      name: '铰刀 X 1.5',
+      subtitle: '',
+      brand: '',
+      categoryPath: ['铰刀类', '手用铰刀'],
+      categoryCode: 'egm-screw',
+      specs: { 包装: '1箱=1支' },
+      unit: '支',
+      packQty: null,
+      priceFen: 1000,
+      priceSource: 'anonymous' as const,
+      priceCapturedAt: '2026-11-14T04:00:00.000Z',
+      stock: 0,
+      stockSource: 'anonymous' as const,
+      images: [],
+      description: '',
+      rawName: '',
+    });
+    const p1 = mk('sku:DUP-1', '190601015000');
+    const p2 = mk('sku:DUP-2', '190601015001');
+
+    const mall = new MallService(testConfig, ctx.store);
+    const first = await mall.importCatalog({ products: [p1, p2] });
+    expect(first.inserted).toBe(2);
+
+    const rows1 = await ctx.store.mall.products.list({ limit: 1000, offset: 0 });
+    const byKey1 = new Map(rows1.map((r) => [r.sourceKey, r.title]));
+    const t1 = byKey1.get('sku:DUP-1')!;
+    const t2 = byKey1.get('sku:DUP-2')!;
+    expect(t1).not.toBe(t2);
+    // 包装在组内相同，退化到货号末 6 位
+    expect(t1).toBe('铰刀 X 1.5 · 货号015000');
+    expect(t2).toBe('铰刀 X 1.5 · 货号015001');
+
+    // 同批复跑：基于原始名重新判重，title 不变，不叠加第二层后缀
+    const second = await mall.importCatalog({ products: [p1, p2] });
+    expect(second.inserted).toBe(0);
+    expect(second.updated).toBe(2);
+    const rows2 = await ctx.store.mall.products.list({ limit: 1000, offset: 0 });
+    const byKey2 = new Map(rows2.map((r) => [r.sourceKey, r.title]));
+    expect(byKey2.get('sku:DUP-1')).toBe(t1);
+    expect(byKey2.get('sku:DUP-2')).toBe(t2);
+  });
+
+  it('询价商品与 0 元商品被服务端拦截，不能加购或下单', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-inq-1', title: '询价螺丝', stock: 10, priceFen: 0, priceSource: 'inquiry' }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-zero-2', title: '缺价商品', stock: 10, priceFen: 0, priceSource: 'anonymous' }),
+    );
+    const token = await register(app, '13800002109');
+
+    const cartInq = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/cart',
+      headers: auth(token),
+      payload: { productId: 'mix-inq-1', quantity: 1 },
+    });
+    expect(cartInq.statusCode).toBe(409);
+
+    const cartZero = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/cart',
+      headers: auth(token),
+      payload: { productId: 'mix-zero-2', quantity: 1 },
+    });
+    expect(cartZero.statusCode).toBe(409);
+
+    const orderInq = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '测试',
+        receiverPhone: '13800002109',
+        address: '浙江省宁波市测试路 9 号',
+        items: [{ productId: 'mix-inq-1', quantity: 1 }],
+      },
+    });
+    expect(orderInq.statusCode).toBe(409);
+
+    const orderZero = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '测试',
+        receiverPhone: '13800002109',
+        address: '浙江省宁波市测试路 9 号',
+        items: [{ productId: 'mix-zero-2', quantity: 1 }],
+      },
+    });
+    expect(orderZero.statusCode).toBe(409);
+
+    const orders = await app.inject({ method: 'GET', url: '/api/v1/mall/orders', headers: auth(token) });
+    expect(orders.json().data).toHaveLength(0);
   });
 
   it('库存不足时下单失败，且不产生订单', async () => {
