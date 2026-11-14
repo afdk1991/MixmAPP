@@ -78,7 +78,68 @@ export class MallService {
     return this.catalog ? this.catalog.isActive() : false;
   }
 
+  /**
+   * 源站明确停售/下架/无货：这条信号可信，tier 模式下也硬拦。
+   * `MALL_SOURCE_STOCK_GATE=false` 时一律不拦（一键回退到旧放行行为）。
+   */
+  private explicitUnavailable(product: ProductRecord): boolean {
+    if (this.config.mall.sourceStockMode === 'off') return false;
+    const status = product.sourceInvStatus?.trim();
+    if (!status) return false;
+    return /无货|下架|停售/.test(status);
+  }
+
+  /**
+   * 是否按源站状态拦截下单。
+   * - off：不拦
+   * - strict：旧口径，缺货/无货/下架/停售一律拦
+   * - tier（默认）：只拦明确停售/下架/无货，「缺货」交给 inferredScarce 分级处理
+   */
+  private sourceUnavailable(product: ProductRecord): boolean {
+    const mode = this.config.mall.sourceStockMode;
+    if (mode === 'off') return false;
+    if (mode === 'strict') {
+      const status = product.sourceInvStatus?.trim();
+      return !!status && /缺货|无货|下架|停售/.test(status);
+    }
+    return this.explicitUnavailable(product);
+  }
+
+  /**
+   * 仅由匿名视图推断的缺货：库存为 0，或状态只写了「缺货」，但没有停售/下架这类
+   * 明确信号。tier 模式下不硬拦，按「货源待确认」放行并打标，交由人工确认。
+   */
+  private inferredScarce(product: ProductRecord): boolean {
+    if (this.config.mall.sourceStockMode !== 'tier') return false;
+    if (this.sourceUnavailable(product)) return false;
+    const status = product.sourceInvStatus?.trim() ?? '';
+    return /缺货/.test(status) || product.stock <= 0;
+  }
+
+  /** 综合可售：明确停售不可售；tier 模式下推断缺货仍可售（打「货源待确认」标）。 */
+  private isInStock(product: ProductRecord): boolean {
+    if (this.sourceUnavailable(product)) return false;
+    if (this.config.mall.sourceStockMode === 'tier') return true;
+    return product.stock > 0;
+  }
+
+  /** 货源可信度标记：仅「推断缺货」时下发，前端据此显示「货源待确认」。 */
+  private stockConfidence(product: ProductRecord): 'inferred' | undefined {
+    return this.inferredScarce(product) ? 'inferred' : undefined;
+  }
+
+  /**
+   * 数量上限校验：tier 模式下「推断缺货」商品的 stock 只是估算（或恒为 0），
+   * 不做真实库存硬上限，只保留 maxOrderQty；其余仍按真实库存拦。
+   */
+  private assertStockEnough(product: ProductRecord, quantity: number): void {
+    if (quantity > product.maxOrderQty!) throw AppError.conflict('单个商品数量超出上限');
+    if (this.inferredScarce(product)) return;
+    if (quantity > product.stock) throw AppError.conflict(`${product.title} 库存不足`);
+  }
+
   private toProductDto(product: ProductRecord): ProductDto {
+    const stockConfidence = this.stockConfidence(product);
     return {
       id: product.id,
       title: product.title,
@@ -117,6 +178,9 @@ export class MallService {
       ...(product.minOrderQty != null ? { minOrderQty: product.minOrderQty } : {}),
       ...(product.qtyStep != null ? { qtyStep: product.qtyStep } : {}),
       ...(product.maxOrderQty != null ? { maxOrderQty: product.maxOrderQty } : {}),
+      ...(product.sourceInvStatus ? { sourceInvStatus: product.sourceInvStatus } : {}),
+      ...(stockConfidence ? { stockConfidence } : {}),
+      inStock: this.isInStock(product),
     };
   }
 
@@ -130,6 +194,7 @@ export class MallService {
       ...(item.packUnit ? { packUnit: item.packUnit } : {}),
       ...(item.packQty != null ? { packQty: item.packQty } : {}),
       ...(item.priceLi != null ? { priceLi: item.priceLi } : {}),
+      ...(item.stockUnconfirmed ? { stockUnconfirmed: true } : {}),
     };
   }
 
@@ -155,6 +220,11 @@ export class MallService {
       ...(query.cat ? { cat: query.cat } : {}),
       ...(query.dims ? { dims: query.dims } : {}),
       ...(query.lens ? { lens: query.lens } : {}),
+      ...(query.brand ? { brand: query.brand } : {}),
+      ...(query.std ? { std: query.std } : {}),
+      ...(query.grd ? { grd: query.grd } : {}),
+      ...(query.mtl ? { mtl: query.mtl } : {}),
+      ...(query.ttt ? { ttt: query.ttt } : {}),
       ...(query.keyword ? { keyword: query.keyword } : {}),
       limit: query.pageSize,
       offset: (query.page - 1) * query.pageSize,
@@ -180,13 +250,16 @@ export class MallService {
     return [...rows].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   }
 
-  /** 分类树下一层：parent 为空取一级，否则取该节点直接子级（只返回有商品的活分类）。 */
-  async listCategoryChildren(parent: string | null): Promise<CategoryNode[]> {
-    return this.store.mall.products.listChildCategories(parent);
+  /** 分类树下一层：parent 为空取一级，否则取该节点直接子级；includeEmpty 连 0 商品节点一起返回。 */
+  async listCategoryChildren(
+    parent: string | null,
+    opts?: { includeEmpty?: boolean },
+  ): Promise<CategoryNode[]> {
+    return this.store.mall.products.listChildCategories(parent, opts);
   }
 
-  /** 三级类目下真实存在的规格候选（dims/lens），用于筛选条展示。 */
-  async listSpecOptions(c3: string): Promise<{ dims: string[]; lens: string[] }> {
+  /** 分类节点（含子孙）下真实存在的筛选候选，用于筛选条展示。 */
+  async listSpecOptions(c3: string) {
     return this.store.mall.products.listSpecOptions(c3);
   }
 
@@ -361,6 +434,7 @@ export class MallService {
     for (const item of items) {
       const product = await this.store.mall.products.findById(item.productId);
       if (!product) continue;
+      const stockConfidence = this.stockConfidence(product);
       lines.push({
         productId: product.id,
         title: product.title,
@@ -376,6 +450,9 @@ export class MallService {
         ...(item.packUnit && item.packQty != null
           ? { packLabel: unitLabel(product, item.packUnit, item.packQty) }
           : {}),
+        ...(product.sourceInvStatus ? { sourceInvStatus: product.sourceInvStatus } : {}),
+        ...(stockConfidence ? { stockConfidence } : {}),
+        inStock: this.isInStock(product),
       });
     }
     return {
@@ -405,6 +482,9 @@ export class MallService {
     if (product.listed === false) {
       throw AppError.conflict(`${product.title} 已下架，暂不可购买`);
     }
+    if (this.sourceUnavailable(product)) {
+      throw AppError.conflict(`${product.title} 源站显示${product.sourceInvStatus}，暂不可购买`);
+    }
     if (product.priceSource === 'inquiry' || product.priceFen <= 0) {
       throw AppError.conflict(`${product.title} 需询价，暂不支持直接下单`);
     }
@@ -423,8 +503,7 @@ export class MallService {
     const addQty = this.resolveQuantity(product, quantity, packUnit, packQty);
     const existing = await this.store.mall.carts.find(userId, productId);
     const nextQuantity = (existing?.quantity ?? 0) + addQty;
-    if (nextQuantity > product.maxOrderQty!) throw AppError.conflict('单个商品数量超出上限');
-    if (nextQuantity > product.stock) throw AppError.conflict(`${product.title} 库存不足`);
+    this.assertStockEnough(product, nextQuantity);
 
     const now = new Date();
     const item: CartItemRecord = {
@@ -454,7 +533,7 @@ export class MallService {
     if (!product) throw AppError.notFound('商品不存在或已下架');
     this.assertOrderable(product);
     const nextQuantity = this.resolveQuantity(product, quantity, packUnit, packQty);
-    if (nextQuantity > product.stock) throw AppError.conflict(`${product.title} 库存不足`);
+    this.assertStockEnough(product, nextQuantity);
     await this.store.mall.carts.upsert({
       ...existing,
       quantity: nextQuantity,
@@ -534,15 +613,22 @@ export class MallService {
       }
     }
     for (const line of lines) {
+      if (line.quantity > line.product.maxOrderQty!) {
+        throw AppError.conflict(`单个商品数量超出上限：${line.product.title}`);
+      }
+      // 推断缺货：stock 只是估算（或恒为 0），不做硬上限，放行并打「货源待确认」标
+      if (this.inferredScarce(line.product)) continue;
       if (line.product.stock < line.quantity) {
         throw AppError.conflict(`库存不足：${line.product.title}`);
       }
     }
 
-    // 先扣库存再落单：任一失败即整单失败；已扣的那几行必须归还，否则库存会凭空消失
+    // 先扣库存再落单：任一失败即整单失败；已扣的那几行必须归还，否则库存会凭空消失。
+    // 推断缺货的商品不扣估算库存，改为落单时打标、由人工确认货源。
     const deducted: typeof lines = [];
     try {
       for (const line of lines) {
+        if (this.inferredScarce(line.product)) continue;
         const ok = await this.store.mall.products.decrementStock(line.product.id, line.quantity);
         if (!ok) throw AppError.conflict(`库存不足：${line.product.title}`);
         deducted.push(line);
@@ -581,6 +667,7 @@ export class MallService {
       packUnit: line.packUnit ?? null,
       packQty: line.packQty ?? null,
       priceLi: line.product.priceLi ?? null,
+      stockUnconfirmed: this.inferredScarce(line.product),
     }));
 
     try {
@@ -593,6 +680,15 @@ export class MallService {
       throw error;
     }
     if (fromCart) await this.store.mall.carts.clear(userId);
+    const unconfirmed = items.filter((item) => item.stockUnconfirmed);
+    if (unconfirmed.length > 0) {
+      // 可读摘要：运营按订单号核对货源，前端/管理端也可据 stockUnconfirmed 取同一批单
+      console.warn(
+        `[order] 货源待确认 ${orderNo}（${unconfirmed.length} 行）：${unconfirmed
+          .map((item) => `${item.title}×${item.quantity}`)
+          .join('、')}`,
+      );
+    }
     return this.toOrderDto(order, items);
   }
 
@@ -607,6 +703,8 @@ export class MallService {
       if (!ok) continue;
       const items = await this.store.mall.orders.itemsByOrder(order.id);
       for (const item of items) {
+        // 下单时未扣估算库存的「货源待确认」行，取消时也不归还，避免库存虚增
+        if (item.stockUnconfirmed) continue;
         await this.store.mall.products.restoreStock(item.productId, item.quantity);
       }
       cancelled.push(order.orderNo);

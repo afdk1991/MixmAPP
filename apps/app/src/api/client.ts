@@ -4,6 +4,7 @@ import type {
   OAuthProviderId,
   OrderCreateInput,
   OrderDto,
+  PrivacyConsentInput,
   UserDto,
 } from '@mixmapp/contracts';
 import type {
@@ -93,6 +94,41 @@ export function mediaUrl(src?: string | null): string {
   const origin = mediaOrigin();
   if (!origin) return trimmed;
   return `${origin}${trimmed}`;
+}
+
+/** 形如 `#0f9d8f` 的 16 进制色值：后端给无图商品（mix-p-* 自有商品）的 cover 存的就是它。 */
+function isTint(src?: string | null): boolean {
+  const value = src == null ? '' : String(src).trim();
+  return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value);
+}
+
+/** 该值能否当作图片地址使用（排除空值、色值、纯文本）。 */
+function isMediaRef(src?: string | null): boolean {
+  const value = src == null ? '' : String(src).trim();
+  if (!value || isTint(value)) return false;
+  return /^(https?:|data:|blob:)/i.test(value) || value.startsWith('/');
+}
+
+/**
+ * 商品封面地址：`images[0]` 优先，退回 `cover`。
+ * 后端把无图商品的 `cover` 存成 16 进制色值，直接塞进 <image> 必然触发 @error 变成破图，
+ * 所以这里过滤掉非图片值并返回空串，由调用方渲染占位块（底色取 coverTint）。
+ */
+export function productCover(product: {
+  images?: string[] | null;
+  cover?: string | null;
+}): string {
+  const images = Array.isArray(product.images) ? product.images : [];
+  const first = images.find((item) => isMediaRef(item));
+  if (first) return mediaUrl(first);
+  return isMediaRef(product.cover) ? mediaUrl(product.cover) : '';
+}
+
+/** 无图商品的占位底色（`#0f9d8f` 这类色值），没有则返回空串沿用默认纸色。 */
+export function coverTint(product: { images?: string[] | null; cover?: string | null }): string {
+  const images = Array.isArray(product.images) ? product.images : [];
+  if (images.some((item) => isMediaRef(item))) return '';
+  return isTint(product.cover) ? String(product.cover).trim() : '';
 }
 
 export class ApiError extends Error {
@@ -266,17 +302,33 @@ export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 
       data: { phone, purpose },
       auth: false,
     }),
-  registerByPhone: (input: { phone: string; code: string; nickname?: string }) =>
-    apiRequest<AuthResult>('/auth/register/phone', { method: 'POST', data: input, auth: false }),
-  registerByEmail: (input: { email: string; password: string; nickname?: string }) =>
-    apiRequest<AuthResult>('/auth/register/email', { method: 'POST', data: input, auth: false }),
-  registerByUsername: (input: { username: string; password: string; nickname?: string }) =>
+  registerByPhone: (input: {
+    phone: string;
+    code: string;
+    nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
+  }) => apiRequest<AuthResult>('/auth/register/phone', { method: 'POST', data: input, auth: false }),
+  registerByEmail: (input: {
+    email: string;
+    password: string;
+    nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
+  }) => apiRequest<AuthResult>('/auth/register/email', { method: 'POST', data: input, auth: false }),
+  registerByUsername: (input: {
+    username: string;
+    password: string;
+    nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
+  }) =>
     apiRequest<AuthResult>('/auth/register/username', { method: 'POST', data: input, auth: false }),
   /** 游客注册：同一设备重复调用返回同一账号 */
-  registerGuest: (input: { deviceId: string; nickname?: string }) =>
-    apiRequest<AuthResult>('/auth/register/guest', { method: 'POST', data: input, auth: false }),
+  registerGuest: (input: {
+    deviceId: string;
+    nickname?: string;
+    privacyConsent?: PrivacyConsentInput;
+  }) => apiRequest<AuthResult>('/auth/register/guest', { method: 'POST', data: input, auth: false }),
   /** 一键登录：已注册手机号即登录，未注册即建号 */
-  oneKey: (input: { token: string; nickname?: string }) =>
+  oneKey: (input: { token: string; nickname?: string; privacyConsent?: PrivacyConsentInput }) =>
     apiRequest<AuthResult>('/auth/onekey', { method: 'POST', data: input, auth: false }),
   loginByPassword: (input: { account: string; password: string }) =>
     apiRequest<AuthResult>('/auth/login/password', { method: 'POST', data: input, auth: false }),
@@ -349,6 +401,11 @@ export const mallApi = {
       cat?: string;
       dims?: string;
       lens?: string;
+      brand?: string;
+      std?: string;
+      grd?: string;
+      mtl?: string;
+      ttt?: string;
       keyword?: string;
       page?: number;
       pageSize?: number;
@@ -364,10 +421,13 @@ export const mallApi = {
     apiRequest<MallProductDto>(`/mall/products/${encodeURIComponent(productId)}`, { auth: false }),
   /** 一级分类 + 商品计数；后端未就绪时前端兜底只留「全部」。 */
   listCategories: () => apiRequest<MallCategoryDto[]>('/mall/categories', { auth: false }),
-  /** 分类树下一层：不传 parent 取树的一级（?parent=root），传节点 id（c1:/c2:）取其直接子级。 */
-  listCategoryChildren: (parent?: string) =>
+  /**
+   * 分类树下一层：不传 parent 取树的一级（?parent=root），传节点 id（c1:/c2:）取其直接子级。
+   * includeEmpty=true 时连同 0 商品节点一起返回，用于「商品分类」抽屉按源站整棵树一比一展示。
+   */
+  listCategoryChildren: (parent?: string, includeEmpty?: boolean) =>
     apiRequest<MallCategoryNodeDto[]>(
-      `/mall/categories?parent=${encodeURIComponent(parent || 'root')}`,
+      `/mall/categories?parent=${encodeURIComponent(parent || 'root')}${includeEmpty ? '&includeEmpty=1' : ''}`,
       { auth: false },
     ),
   /** 三级类目下可用的规格筛选值（dims/lens）。 */

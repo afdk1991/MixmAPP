@@ -27,7 +27,7 @@ export type MallProductDto = ProductDto & {
   sourceUrl?: string;
   /** 面价，厘/支（源站元/千支），有值时用它精确计价与展示 */
   priceLi?: number;
-  /** 折扣百分比，100 = 无折扣 */
+  /** 折扣百分比，100 = 无折扣（合法值，仍显示 100% 且折后价等于面价） */
   discountPct?: number;
   /** 特价，厘/支 */
   salePriceLi?: number;
@@ -64,10 +64,15 @@ export type MallCategoryNodeDto = {
   count: number;
 };
 
-/** 三级类目下的规格筛选项，取值只来自源站真实选项与商品实际取值。 */
+/** 分类节点下的筛选项，取值只来自商品实际落库的真实值。 */
 export type MallSpecOptionsDto = {
   dims: string[];
   lens: string[];
+  brands: string[];
+  stds: string[];
+  grds: string[];
+  mtls: string[];
+  ttts: string[];
 };
 
 /**
@@ -81,19 +86,36 @@ export function isInquiryProduct(
 }
 
 /**
- * 缺货判定：库存缺失或 `stock <= 0`。目录商品的真实库存需登录源站才可见，
- * 前端落库一律存 0，因此 0 视为缺货，不允许加购 / 下单（否则服务端必判 409 库存不足）。
- * 注意与询价区分：询价看 `priceSource / priceFen`，缺货看 `stock`，两者互不覆盖。
+ * 缺货判定：**源站状态优先**，其次才看假设库存。
+ * - `inStock === false`：源站明确缺货/下架，直接判缺货，禁止加购 / 下单。
+ * - `inStock === true`：源站有货，`stock` 只表示可售上限，不再据此判缺货。
+ * - 后端没给 `inStock` 时退回旧口径：库存缺失或 `stock <= 0` 视为缺货。
+ * 注意与询价区分：询价看 `priceSource / priceFen`，缺货看 `inStock / stock`，两者互不覆盖。
  */
 export function isOutOfStock(
-  product: Pick<MallProductDto, 'stock'>,
+  product: Pick<MallProductDto, 'stock' | 'inStock'>,
 ): boolean {
+  if (typeof product.inStock === 'boolean') return !product.inStock;
   return product.stock == null || product.stock <= 0;
 }
 
 /** 缺货商品的统一说明文案：详情按钮 / 列表角标 / 购物车拦截共用。 */
 export const OUT_OF_STOCK_NOTICE =
   '该商品源站显示缺货，或库存需登录后确认，请联系询价后再下单。';
+
+/**
+ * 货源待确认：后端分级判定后放行（仅匿名视图推断缺货，无停售/下架信号）。
+ * 与「缺货」严格区分：可加购 / 可结算，但要提示需人工确认货源。
+ */
+export function isStockUnconfirmed(
+  product: Pick<MallProductDto, 'stockConfidence'>,
+): boolean {
+  return product.stockConfidence === 'inferred';
+}
+
+/** 货源待确认的统一说明文案：列表角标 / 详情 / 购物车共用。 */
+export const STOCK_UNCONFIRMED_NOTICE =
+  '货源待确认：当前库存来自源站匿名视图推断，可正常下单，客服会在发货前与您确认货源。';
 
 /**
  * 库存展示阈值：严格大于该值即视为「大库存」，列表 / 详情 / 购物车只显示
@@ -113,9 +135,23 @@ export function priceText(fen: number | null | undefined): string {
   return (fen / 100).toFixed(2);
 }
 
-/** 价格旁的单位后缀：有单位时返回 `元/支`，否则空串。 */
+/** 价格旁的单位后缀：有单位时返回 `/支`。价格前已经带 ¥，不再重复「元」。 */
 export function priceUnitLabel(product: Pick<MallProductDto, 'unit'>): string {
-  return product.unit ? `元/${product.unit}` : '';
+  return product.unit ? `/${product.unit}` : '';
+}
+
+/**
+ * 列表 / 首页卡片单价：优先用厘/支精确价（85 → 0.085），
+ * 只有旧数据缺 priceLi 时才回落到四舍五入到分的 priceFen（9 → 0.09）。
+ * 详情页与购物车一直走 unitPriceText，这里补齐列表口径，避免同一商品两处价格不一致。
+ */
+export function listPriceText(product: Pick<MallProductDto, 'priceFen' | 'priceLi'>): string {
+  const li = product.priceLi;
+  if (li != null && li > 0) {
+    const exact = unitPriceText(li);
+    if (exact) return exact;
+  }
+  return priceText(product.priceFen);
 }
 
 /**

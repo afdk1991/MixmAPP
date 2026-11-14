@@ -23,6 +23,12 @@ export const smsCodeSchema = z.string().regex(/^\d{6}$/, '验证码为 6 位数�
 export const OAUTH_PROVIDER_KEYS = [
   'wechat',
   'wechat_mp',
+  /** 小程序端 uni.login() 取 code，服务端 jscode2session 换 openid/unionid */
+  'wechat_mini',
+  /** 微信开放平台移动应用 SDK，端侧取 code，服务端换 token */
+  'wechat_app',
+  'huawei',
+  'feishu',
   'qq',
   'weibo',
   'alipay',
@@ -80,11 +86,23 @@ export const usernameSchema = z
 
 export const idStrategySchema = z.enum(['snowflake', 'ulid', 'uuidv7']);
 
+/**
+ * 注册时的隐私同意凭证：政策版本 + 客户端同意时间 + 本机存储通道 + 注册来源。
+ * 只随注册请求提交，服务端写进用户记录，脱离设备也能审计。
+ */
+export const privacyConsentSchema = z.object({
+  version: z.string().trim().min(1).max(32),
+  acceptedAt: z.string().datetime(),
+  channel: z.enum(['web', 'native']),
+  source: z.string().trim().min(1).max(64),
+});
+
 export const registerByPhoneSchema = z.object({
   phone: phoneSchema,
   code: smsCodeSchema,
   nickname: z.string().trim().min(1).max(24).optional(),
   inviteCode: z.string().trim().max(32).optional(),
+  privacyConsent: privacyConsentSchema.optional(),
 });
 
 export const registerByEmailSchema = z.object({
@@ -92,6 +110,7 @@ export const registerByEmailSchema = z.object({
   password: passwordSchema,
   nickname: z.string().trim().min(1).max(24).optional(),
   inviteCode: z.string().trim().max(32).optional(),
+  privacyConsent: privacyConsentSchema.optional(),
 });
 
 /** 用户名注册：不依赖手机号与邮箱，注册后可直接用用户名登录。 */
@@ -100,18 +119,21 @@ export const registerByUsernameSchema = z.object({
   password: passwordSchema,
   nickname: z.string().trim().min(1).max(24).optional(),
   inviteCode: z.string().trim().max(32).optional(),
+  privacyConsent: privacyConsentSchema.optional(),
 });
 
 /** 游客注册：同一设备重复提交返回同一账号，后续可绑定手机号/邮箱升级。 */
 export const registerGuestSchema = z.object({
   deviceId: z.string().trim().min(8, '设备标识过短').max(128, '设备标识过长'),
   nickname: z.string().trim().min(1).max(24).optional(),
+  privacyConsent: privacyConsentSchema.optional(),
 });
 
 /** 一键登录：token 由运营商/本机号码认证 SDK 下发，服务端解析出手机号。 */
 export const oneKeySchema = z.object({
   token: z.string().trim().min(8, '一键登录凭证过短').max(1024, '一键登录凭证过长'),
   nickname: z.string().trim().min(1).max(24).optional(),
+  privacyConsent: privacyConsentSchema.optional(),
 });
 
 /** 给游客账号补设用户名密码，补设后不再算游客。 */
@@ -201,6 +223,7 @@ export const aiChatSchema = z.object({
 });
 
 export type RegisterByPhoneInput = z.infer<typeof registerByPhoneSchema>;
+export type PrivacyConsentInput = z.infer<typeof privacyConsentSchema>;
 export type RegisterByEmailInput = z.infer<typeof registerByEmailSchema>;
 export type RegisterByUsernameInput = z.infer<typeof registerByUsernameSchema>;
 export type RegisterGuestInput = z.infer<typeof registerGuestSchema>;
@@ -276,6 +299,12 @@ export const productQuerySchema = z.object({
   /** 规格筛选：维度数 / 长度，取值只来自源站 ccc_filter 选项（空值表示不过滤） */
   dims: z.string().trim().max(16).optional(),
   lens: z.string().trim().max(16).optional(),
+  /** 属性筛选：品牌 / 标准 / 等级 / 材质 / 表面处理，取值来自商品 specs 里真实出现的值 */
+  brand: z.string().trim().max(64).optional(),
+  std: z.string().trim().max(64).optional(),
+  grd: z.string().trim().max(64).optional(),
+  mtl: z.string().trim().max(64).optional(),
+  ttt: z.string().trim().max(64).optional(),
   keyword: z.string().trim().max(64).optional(),
   // 页上界放大到可覆盖全量目录（万级以上）；pageSize 上限保持 50，前端首屏/触底翻页不放大。
   page: z.coerce.number().int().min(1).max(100000).default(1),
@@ -417,7 +446,7 @@ export type ProductDto = {
   /** ===== 详情页结构化字段（2026-11-14 第二轮抓取） ===== */
   /** 面价，厘/支（源站元/千支）。与 priceFen 并存：priceLi 精确，priceFen 是四舍五入后的兼容值。 */
   priceLi?: number;
-  /** 折扣百分比，100 = 无折扣 */
+  /** 折扣百分比，100 = 无折扣（合法值，仍显示 100% 且折后价等于面价；字段缺失才不下发） */
   discountPct?: number;
   /** 特价，厘/支 */
   salePriceLi?: number;
@@ -437,6 +466,20 @@ export type ProductDto = {
   minOrderQty?: number;
   qtyStep?: number;
   maxOrderQty?: number;
+  /** 源站库存状态原文（如「缺货」「下架」）。有值时优先于假设库存决定能否下单。 */
+  sourceInvStatus?: string;
+  /**
+   * 综合可售判定：`false` 表示源站明确停售/下架/无货，前端必须显示缺货且禁止加购下单。
+   * `stock` 只是「有货时的可售上限」，不能反推是否缺货。
+   */
+  inStock?: boolean;
+  /**
+   * 货源可信度：
+   * - `inferred`：仅由源站匿名视图推断缺货（库存为 0 或状态只写了「缺货」，无停售信号），
+   *   允许下单但需人工确认，前端展示「货源待确认」。
+   * - 缺省：有真实库存信号（或已按总闸关闭拦截）。
+   */
+  stockConfidence?: 'confirmed' | 'inferred';
 };
 
 export type CartLineDto = {
@@ -454,6 +497,12 @@ export type CartLineDto = {
   priceLi?: number;
   unitName?: string;
   packLabel?: string;
+  /** 源站库存状态原文；`缺货` 时购物车行展示缺货并禁止结算 */
+  sourceInvStatus?: string;
+  /** 综合可售判定；`false` 时该行不可结算 */
+  inStock?: boolean;
+  /** 货源可信度；`inferred` 表示「货源待确认」，可结算但需人工确认 */
+  stockConfidence?: 'confirmed' | 'inferred';
 };
 
 export type CartDto = {
@@ -472,6 +521,8 @@ export type OrderItemDto = {
   packUnit?: string;
   packQty?: number;
   priceLi?: number;
+  /** 下单时货源未确认（仅匿名视图推断缺货），需人工确认货源后再发货 */
+  stockUnconfirmed?: boolean;
 };
 
 export type OrderDto = {

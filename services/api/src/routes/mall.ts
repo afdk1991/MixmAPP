@@ -11,19 +11,24 @@ import { parse } from '../lib/validate.js';
 export async function mallRoutes(app: FastifyInstance): Promise<void> {
   // 无参：一级类目聚合（兼容旧页面）；?parent=root：分类树一级节点（带 id，供下钻）；
   // ?parent=c1:002：返回该节点下一层（分类树下钻）。
+  // ?includeEmpty=1：连同 0 商品节点一起返回，「商品分类」抽屉按源站整棵树一比一展示。
   app.get('/mall/categories', async (request) => {
-    const query = request.query as { parent?: string } | undefined;
+    const query = request.query as { parent?: string; includeEmpty?: string } | undefined;
     const parent = typeof query?.parent === 'string' && query.parent.trim() ? query.parent.trim() : null;
+    const includeEmpty = query?.includeEmpty === '1' || query?.includeEmpty === 'true';
     if (!parent) return { data: await app.mall.listCategories() };
-    if (parent === 'root') return { data: await app.mall.listCategoryChildren(null) };
-    return { data: await app.mall.listCategoryChildren(parent) };
+    if (parent === 'root') return { data: await app.mall.listCategoryChildren(null, { includeEmpty }) };
+    return { data: await app.mall.listCategoryChildren(parent, { includeEmpty }) };
   });
 
   // 某个三级类目下可用的规格筛选项（dims/lens），只返回商品里真实出现的取值。
   app.get('/mall/specs', async (request) => {
     const query = request.query as { c3?: string } | undefined;
     const c3 = typeof query?.c3 === 'string' ? query.c3.trim() : '';
-    if (!c3) return { data: { dims: [], lens: [] } };
+    if (!c3)
+      return {
+        data: { dims: [], lens: [], brands: [], stds: [], grds: [], mtls: [], ttts: [] },
+      };
     return { data: await app.mall.listSpecOptions(c3) };
   });
 

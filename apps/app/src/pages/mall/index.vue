@@ -23,7 +23,7 @@
         <input
           :value="keyword"
           class="search-input"
-          placeholder="搜商品，如 螺丝 / 丝锥 / M6"
+          placeholder="搜商品 / 规格"
           placeholder-class="field-ph"
           confirm-type="search"
           @input="onKeywordInput"
@@ -34,87 +34,37 @@
         </view>
       </view>
 
-      <!-- 分类三层下钻：一级 → 二级 → 三级，逐层由 `/mall/categories?parent=` 驱动 -->
-      <scroll-view :scroll-x="true" class="chips" :show-scrollbar="false">
-        <view
-          v-for="item in levelOneTabs"
-          :key="item.id || 'all'"
-          class="chip"
-          :class="{ 'chip--active': l1 === item.id }"
-          @tap="selectLevel1(item.id)"
-        >
-          <text class="chip-label">{{ item.name }}</text>
-          <text v-if="item.count > 0" class="chip-count mono">{{ item.count }}</text>
+      <!-- 分类入口：与源站 /b2b/ 的「商品分类」抽屉同构，左侧滑出，一层层下钻 -->
+      <view class="cat-entry" hover-class="is-press" @tap="openDrawer">
+        <view class="cat-entry-mark">
+          <view class="cat-entry-bar" />
+          <view class="cat-entry-bar" />
+          <view class="cat-entry-bar" />
         </view>
-      </scroll-view>
-
-      <scroll-view
-        v-if="levelTwoTabs.length > 1"
-        :scroll-x="true"
-        class="chips chips--sub"
-        :show-scrollbar="false"
-      >
-        <view
-          v-for="item in levelTwoTabs"
-          :key="item.id || 'all2'"
-          class="chip chip--sub"
-          :class="{ 'chip--active': l2 === item.id }"
-          @tap="selectLevel2(item.id)"
-        >
-          <text class="chip-label">{{ item.name }}</text>
-          <text v-if="item.count > 0" class="chip-count mono">{{ item.count }}</text>
+        <view class="cat-entry-body">
+          <text class="cat-entry-title">商品分类</text>
+          <text class="cat-entry-path mono">{{ currentPathText }}</text>
         </view>
-      </scroll-view>
-
-      <scroll-view
-        v-if="levelThreeTabs.length > 1"
-        :scroll-x="true"
-        class="chips chips--sub"
-        :show-scrollbar="false"
-      >
-        <view
-          v-for="item in levelThreeTabs"
-          :key="item.id || 'all3'"
-          class="chip chip--sub"
-          :class="{ 'chip--active': l3 === item.id }"
-          @tap="selectLevel3(item.id)"
-        >
-          <text class="chip-label">{{ item.name }}</text>
-          <text v-if="item.count > 0" class="chip-count mono">{{ item.count }}</text>
-        </view>
-      </scroll-view>
-
-      <!-- 三级类目下才有规格筛选；选项来自源站 ccc_filter 真实取值，无选项不渲染 -->
-      <view v-if="dimsOptions.length" class="spec-group">
-        <text class="spec-label mono">直径</text>
-        <scroll-view :scroll-x="true" class="chips chips--spec" :show-scrollbar="false">
-          <view class="chip chip--spec" :class="{ 'chip--active': !dims }" @tap="selectDims('')">
-            <text class="chip-label">不限</text>
-          </view>
-          <view
-            v-for="opt in dimsOptions"
-            :key="`d-${opt}`"
-            class="chip chip--spec"
-            :class="{ 'chip--active': dims === opt }"
-            @tap="selectDims(opt)"
-          >
-            <text class="chip-label mono">{{ opt }}</text>
-          </view>
-        </scroll-view>
+        <text class="cat-entry-arrow mono">›</text>
       </view>
 
-      <view v-if="lensOptions.length" class="spec-group">
-        <text class="spec-label mono">长度</text>
+      <!-- 筛选：直径/长度/品牌/标准/等级/材质/表面处理；选项来自商品真实取值，空维度不渲染 -->
+      <view v-for="group in filterGroups" :key="group.key" class="spec-group">
+        <text class="spec-label mono">{{ group.label }}</text>
         <scroll-view :scroll-x="true" class="chips chips--spec" :show-scrollbar="false">
-          <view class="chip chip--spec" :class="{ 'chip--active': !lens }" @tap="selectLens('')">
+          <view
+            class="chip chip--spec"
+            :class="{ 'chip--active': !group.value }"
+            @tap="selectFilter(group.key, '')"
+          >
             <text class="chip-label">不限</text>
           </view>
           <view
-            v-for="opt in lensOptions"
-            :key="`l-${opt}`"
+            v-for="opt in group.options"
+            :key="`${group.key}-${opt}`"
             class="chip chip--spec"
-            :class="{ 'chip--active': lens === opt }"
-            @tap="selectLens(opt)"
+            :class="{ 'chip--active': group.value === opt }"
+            @tap="selectFilter(group.key, opt)"
           >
             <text class="chip-label mono">{{ opt }}</text>
           </view>
@@ -170,9 +120,9 @@
               lazy-load
               @error="markBroken(product.id)"
             />
-            <view v-else class="cover-placeholder">
+            <view v-else class="cover-placeholder" :style="tintOf(product)">
               <view class="cover-ring" />
-              <text class="cover-char">{{ product.title.slice(0, 1) }}</text>
+              <text class="cover-char" :class="{ 'cover-char--on-tint': !!coverTint(product) }">{{ product.title.slice(0, 1) }}</text>
             </view>
             <text v-if="product.brand" class="cover-tag mono">{{ product.brand }}</text>
             <view
@@ -203,7 +153,7 @@
               </view>
               <view v-else class="p-price">
                 <text class="p-cur mono">¥</text>
-                <text class="p-amount mono">{{ priceText(product.priceFen) }}</text>
+                <text class="p-amount mono">{{ listPriceText(product) }}</text>
                 <text v-if="priceUnitLabel(product)" class="p-unit mono">{{ priceUnitLabel(product) }}</text>
                 <text v-if="product.originalPriceFen > 0" class="p-old mono">¥{{ priceText(product.originalPriceFen) }}</text>
               </view>
@@ -214,6 +164,9 @@
                 </view>
                 <view v-else-if="isOutOfStock(product)" class="status-chip status-chip--oos">
                   <text class="status-chip-text mono">缺货</text>
+                </view>
+                <view v-else-if="isStockUnconfirmed(product)" class="status-chip status-chip--pending">
+                  <text class="status-chip-text mono">货源待确认</text>
                 </view>
                 <view v-else class="status-chip status-chip--stock">
                   <text class="status-chip-text mono">{{ isBulkStock(product.stock) ? '在售' : `在售 · 余 ${product.stock}` }}</text>
@@ -230,26 +183,85 @@
         <text v-else class="mono foot-note">上拉加载更多 · 价格以服务端实时数据为准</text>
       </view>
     </view>
+
+    <!-- 商品分类抽屉：左侧滑出，标题「商品分类」+ 列表图标，逐级下钻、可返回上一级 -->
+    <view v-if="drawerOpen" class="drawer-mask" @tap="closeDrawer" />
+    <view class="drawer" :class="{ 'drawer--open': drawerOpen }">
+      <view class="drawer-head">
+        <view class="drawer-head-mark">
+          <view class="cat-entry-bar" />
+          <view class="cat-entry-bar" />
+          <view class="cat-entry-bar" />
+        </view>
+        <text class="drawer-head-title">商品分类</text>
+      </view>
+
+      <view v-if="drawerStack.length" class="drawer-up" hover-class="is-press" @tap="drawerUp">
+        <text class="drawer-up-arrow mono">‹</text>
+        <text class="drawer-up-text">返回 {{ drawerParentName }}</text>
+      </view>
+
+      <scroll-view :scroll-y="true" class="drawer-body" :show-scrollbar="false">
+        <view
+          v-if="!drawerStack.length && l1"
+          class="drawer-item drawer-item--reset"
+          hover-class="is-press"
+          @tap="selectFromDrawer({ id: '', name: '全部商品' }, 0)"
+        >
+          <text class="drawer-mark">›</text>
+          <text class="drawer-name">全部商品</text>
+        </view>
+        <view
+          v-if="drawerStack.length"
+          class="drawer-item"
+          :class="{ 'drawer-item--active': isSubtreeSelected }"
+          hover-class="is-press"
+          @tap="pickParentAll"
+        >
+          <text class="drawer-mark">›</text>
+          <text class="drawer-name">全部 {{ drawerParentName }}</text>
+          <text class="drawer-chev mono">›</text>
+        </view>
+        <view
+          v-for="node in drawerNodes"
+          :key="node.id"
+          class="drawer-item"
+          :class="{ 'drawer-item--active': isActiveNode(node), 'drawer-item--empty': !node.count }"
+          hover-class="is-press"
+          @tap="onDrawerTap(node)"
+        >
+          <text class="drawer-mark">›</text>
+          <text class="drawer-name">{{ node.name }}</text>
+          <text v-if="node.count > 0" class="drawer-count mono">{{ node.count }}</text>
+          <text v-else class="drawer-count drawer-count--empty mono">暂无</text>
+          <text class="drawer-chev mono">›</text>
+        </view>
+        <view v-if="drawerLoading" class="drawer-note mono">加载中…</view>
+        <view v-else-if="!drawerNodes.length" class="drawer-note mono">这个分类下没有子分类</view>
+      </scroll-view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
-import type { MallCategoryNodeDto, MallProductDto } from '../../api/mall';
+import type { MallCategoryNodeDto, MallProductDto, MallSpecOptionsDto } from '../../api/mall';
 import {
   breadcrumbLabel,
   INQUIRY_NOTICE,
   isBulkStock,
   isInquiryProduct,
   isOutOfStock,
+  isStockUnconfirmed,
+  listPriceText,
   OUT_OF_STOCK_NOTICE,
   packLabel,
   priceText,
   priceUnitLabel,
   specEntries,
 } from '../../api/mall';
-import { mallApi, mediaUrl } from '../../api/client';
+import { mallApi, productCover, coverTint } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 
@@ -265,11 +277,43 @@ const l3 = ref('');
 const l1Nodes = ref<MallCategoryNodeDto[]>([]);
 const l2Nodes = ref<MallCategoryNodeDto[]>([]);
 const l3Nodes = ref<MallCategoryNodeDto[]>([]);
-/** 规格筛选：只在三级类目下出现，取值来自 `/mall/specs?c3=` 的真实选项。 */
-const dims = ref('');
-const lens = ref('');
-const dimsOptions = ref<string[]>([]);
-const lensOptions = ref<string[]>([]);
+/** 筛选：选项全部来自 `/mall/specs` 里真实落库的取值，空维度不渲染。 */
+type FilterKey = 'dims' | 'lens' | 'brand' | 'std' | 'grd' | 'mtl' | 'ttt';
+const FILTER_FIELDS: Array<{ key: FilterKey; label: string; field: keyof MallSpecOptionsDto }> = [
+  { key: 'dims', label: '直径', field: 'dims' },
+  { key: 'lens', label: '长度', field: 'lens' },
+  { key: 'brand', label: '品牌', field: 'brands' },
+  { key: 'std', label: '标准', field: 'stds' },
+  { key: 'grd', label: '等级', field: 'grds' },
+  { key: 'mtl', label: '材质', field: 'mtls' },
+  { key: 'ttt', label: '表面处理', field: 'ttts' },
+];
+const filters = reactive<Record<FilterKey, string>>({
+  dims: '',
+  lens: '',
+  brand: '',
+  std: '',
+  grd: '',
+  mtl: '',
+  ttt: '',
+});
+const filterOptions = reactive<Record<FilterKey, string[]>>({
+  dims: [],
+  lens: [],
+  brand: [],
+  std: [],
+  grd: [],
+  mtl: [],
+  ttt: [],
+});
+const filterGroups = computed(() =>
+  FILTER_FIELDS.map((f) => ({
+    key: f.key,
+    label: f.label,
+    options: filterOptions[f.key],
+    value: filters[f.key],
+  })).filter((group) => group.options.length > 0),
+);
 
 const keyword = ref('');
 const products = ref<MallProductDto[]>([]);
@@ -288,22 +332,141 @@ let pendingCategory = '';
 
 type TreeNode = { id: string; code: string; name: string; count: number };
 
-/** 每层都带「全部」占位；接口已过滤空分类，不用再额外筛。 */
-function withAll(nodes: MallCategoryNodeDto[]): TreeNode[] {
-  return [
-    { id: '', code: '', name: '全部', count: 0 },
-    ...nodes
-      .filter((n) => n && n.id && n.name)
-      .map((n) => ({ id: n.id, code: n.code, name: n.name, count: n.count ?? 0 })),
-  ];
+function toNode(node: MallCategoryNodeDto): TreeNode {
+  return { id: node.id, code: node.code, name: node.name, count: node.count ?? 0 };
 }
 
-const levelOneTabs = computed(() => withAll(l1Nodes.value));
-const levelTwoTabs = computed(() => (l1.value ? withAll(l2Nodes.value) : []));
-const levelThreeTabs = computed(() => (l2.value ? withAll(l3Nodes.value) : []));
+/* ---------- 商品分类抽屉：与源站 /b2b/ 一致，左侧滑出，逐级下钻 ---------- */
+const drawerOpen = ref(false);
+const drawerLoading = ref(false);
+/** 已下钻的路径；长度即当前展示层级的深度（0 = 一级） */
+const drawerStack = ref<Array<{ id: string; name: string }>>([]);
+const drawerNodes = ref<TreeNode[]>([]);
+/** 子分类缓存：同一节点只取一次，返回上一级不重复请求 */
+const childrenCache = new Map<string, TreeNode[]>();
+
+const drawerParentName = computed(() => drawerStack.value[drawerStack.value.length - 1]?.name ?? '');
 
 /** 收敛到当前选中的最深节点；三级 > 二级 > 一级。 */
 const activeCat = computed(() => l3.value || l2.value || l1.value || '');
+
+const currentPathText = computed(() => {
+  const names: string[] = [];
+  const n1 = l1Nodes.value.find((n) => n.id === l1.value);
+  if (n1) names.push(n1.name);
+  const n2 = l2Nodes.value.find((n) => n.id === l2.value);
+  if (n2) names.push(n2.name);
+  const n3 = l3Nodes.value.find((n) => n.id === l3.value);
+  if (n3) names.push(n3.name);
+  return names.length ? names.join(' / ') : '全部商品';
+});
+
+/** 当前路径是否已选到「全部 <父节点>」这一层（用于高亮父级整树） */
+const isSubtreeSelected = computed(() => {
+  const top = drawerStack.value[drawerStack.value.length - 1];
+  if (!top) return false;
+  const depth = drawerStack.value.length - 1;
+  return depth === 0 ? l1.value === top.id && !l2.value : l2.value === top.id && !l3.value;
+});
+
+async function childrenOf(id: string): Promise<TreeNode[]> {
+  const cached = childrenCache.get(id);
+  if (cached) return cached;
+  try {
+    // includeEmpty：抽屉按源站完整树展示（含 0 商品节点），避免和源站层级对不上
+    const list = await mallApi.listCategoryChildren(id || undefined, true);
+    const rows = (Array.isArray(list) ? list : [])
+      .filter((n) => n && n.id && n.name)
+      .map(toNode);
+    childrenCache.set(id, rows);
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+async function openDrawer(): Promise<void> {
+  drawerOpen.value = true;
+  if (drawerNodes.value.length) return;
+  drawerLoading.value = true;
+  try {
+    // 打开即定位到「包含当前选中项」的那一层，避免每次从根重新点
+    if (l1.value) {
+      if (l2.value && l2Nodes.value.some((n) => n.id === l2.value)) {
+        drawerStack.value = [{ id: l1.value, name: l1Nodes.value.find((n) => n.id === l1.value)?.name ?? '' }];
+        drawerNodes.value = await childrenOf(l1.value);
+      } else {
+        drawerStack.value = [];
+        drawerNodes.value = await childrenOf('');
+      }
+    } else {
+      drawerStack.value = [];
+      drawerNodes.value = await childrenOf('');
+    }
+  } finally {
+    drawerLoading.value = false;
+  }
+}
+
+function closeDrawer(): void {
+  drawerOpen.value = false;
+}
+
+function isActiveNode(node: TreeNode): boolean {
+  const depth = drawerStack.value.length;
+  if (depth === 0) return l1.value === node.id;
+  if (depth === 1) return l2.value === node.id;
+  return l3.value === node.id;
+}
+
+/** 选中一个节点：有子节点就继续下钻，末级就落到商品列表并收起抽屉。 */
+async function onDrawerTap(node: TreeNode): Promise<void> {
+  if (drawerLoading.value) return;
+  drawerLoading.value = true;
+  try {
+    const kids = await childrenOf(node.id);
+    if (kids.length) {
+      drawerStack.value = [...drawerStack.value, { id: node.id, name: node.name }];
+      drawerNodes.value = kids;
+      return;
+    }
+    // 源站存在 0 商品的三级节点：保留在树上（与源站一致），但点进去没有东西，明确提示而不是跳空页
+    if (!node.count) {
+      uni.showToast({ title: '该分类暂无商品', icon: 'none' });
+      return;
+    }
+    await selectFromDrawer(node, drawerStack.value.length);
+  } finally {
+    drawerLoading.value = false;
+  }
+}
+
+/** depth 0=一级 1=二级 2=三级；id 为空表示「全部商品」 */
+async function selectFromDrawer(node: { id: string; name: string }, depth: number): Promise<void> {
+  closeDrawer();
+  if (depth <= 0) await selectLevel1(node.id);
+  else if (depth === 1) await selectLevel2(node.id);
+  else await selectLevel3(node.id);
+}
+
+async function drawerUp(): Promise<void> {
+  const stack = drawerStack.value.slice(0, -1);
+  drawerStack.value = stack;
+  const parentId = stack.length ? stack[stack.length - 1]?.id ?? '' : '';
+  drawerLoading.value = true;
+  try {
+    drawerNodes.value = await childrenOf(parentId);
+  } finally {
+    drawerLoading.value = false;
+  }
+}
+
+/** 点击「全部 <父节点>」= 选中当前层级本身（父级整棵树） */
+async function pickParentAll(): Promise<void> {
+  const top = drawerStack.value[drawerStack.value.length - 1];
+  if (!top) return;
+  await selectFromDrawer(top, drawerStack.value.length - 1);
+}
 
 async function loadLevelOne(): Promise<void> {
   try {
@@ -332,19 +495,20 @@ async function loadChildren(parent: string, level: 2 | 3): Promise<void> {
   }
 }
 
-async function loadSpecs(c3: string): Promise<void> {
-  dims.value = '';
-  lens.value = '';
-  dimsOptions.value = [];
-  lensOptions.value = [];
-  if (!c3) return;
+async function loadSpecs(nodeId: string): Promise<void> {
+  for (const field of FILTER_FIELDS) {
+    filters[field.key] = '';
+    filterOptions[field.key] = [];
+  }
+  if (!nodeId) return;
   try {
-    const opts = await mallApi.listSpecOptions(c3);
-    dimsOptions.value = Array.isArray(opts?.dims) ? opts.dims : [];
-    lensOptions.value = Array.isArray(opts?.lens) ? opts.lens : [];
+    const opts = await mallApi.listSpecOptions(nodeId);
+    for (const field of FILTER_FIELDS) {
+      const list = opts?.[field.field];
+      filterOptions[field.key] = Array.isArray(list) ? list : [];
+    }
   } catch {
-    dimsOptions.value = [];
-    lensOptions.value = [];
+    for (const field of FILTER_FIELDS) filterOptions[field.key] = [];
   }
 }
 
@@ -355,7 +519,7 @@ async function selectLevel1(id: string): Promise<void> {
   l3.value = '';
   l2Nodes.value = [];
   l3Nodes.value = [];
-  await loadSpecs('');
+  await loadSpecs(id);
   if (id) void loadChildren(id, 2);
   refresh();
 }
@@ -365,7 +529,7 @@ async function selectLevel2(id: string): Promise<void> {
   l2.value = id;
   l3.value = '';
   l3Nodes.value = [];
-  await loadSpecs('');
+  await loadSpecs(id);
   if (id) void loadChildren(id, 3);
   refresh();
 }
@@ -377,15 +541,9 @@ async function selectLevel3(id: string): Promise<void> {
   refresh();
 }
 
-function selectDims(value: string): void {
-  if (dims.value === value) return;
-  dims.value = value;
-  refresh();
-}
-
-function selectLens(value: string): void {
-  if (lens.value === value) return;
-  lens.value = value;
+function selectFilter(key: FilterKey, value: string): void {
+  if (filters[key] === value) return;
+  filters[key] = value;
   refresh();
 }
 
@@ -402,8 +560,13 @@ async function fetchPage(reset: boolean): Promise<void> {
   try {
     const list = await mallApi.listProducts({
       cat: activeCat.value || undefined,
-      dims: dims.value || undefined,
-      lens: lens.value || undefined,
+      dims: filters.dims || undefined,
+      lens: filters.lens || undefined,
+      brand: filters.brand || undefined,
+      std: filters.std || undefined,
+      grd: filters.grd || undefined,
+      mtl: filters.mtl || undefined,
+      ttt: filters.ttt || undefined,
       keyword: keyword.value.trim() || undefined,
       page: page.value,
       pageSize: PAGE_SIZE,
@@ -461,8 +624,13 @@ function loadMore(): void {
 }
 
 function coverOf(product: MallProductDto): string {
-  const first = Array.isArray(product.images) ? product.images[0] : undefined;
-  return mediaUrl(first);
+  return productCover(product);
+}
+
+/** 无图自有商品（cover 存的是色值）的占位底色。 */
+function tintOf(product: MallProductDto): Record<string, string> {
+  const tint = coverTint(product);
+  return tint ? { background: tint } : {};
 }
 
 function isBroken(id: string): boolean {
@@ -750,6 +918,197 @@ onPullDownRefresh(() => {
   color: $ink-4;
 }
 
+/* ---------- 商品分类入口 + 左侧抽屉（结构照源站 /b2b/ 的商品分类） ---------- */
+.cat-entry {
+  display: flex;
+  align-items: center;
+  margin-top: $sp-4;
+  height: 104rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  background: $shell;
+}
+
+.cat-entry-mark,
+.drawer-head-mark {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 40rpx;
+  height: 26rpx;
+  margin-right: 18rpx;
+  flex-shrink: 0;
+}
+
+.cat-entry-bar {
+  height: 3rpx;
+  border-radius: 2rpx;
+  background: $ink-2;
+}
+
+.cat-entry-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cat-entry-title {
+  font-size: $fs-meta;
+  letter-spacing: 1rpx;
+  color: $ink;
+}
+
+.cat-entry-path {
+  margin-top: 6rpx;
+  font-size: $fs-micro;
+  color: $ink-4;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cat-entry-arrow {
+  margin-left: 12rpx;
+  font-size: 34rpx;
+  color: $ink-4;
+}
+
+.is-press {
+  opacity: 0.7;
+}
+
+.drawer-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 900;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 901;
+  display: flex;
+  flex-direction: column;
+  width: 78vw;
+  max-width: 640rpx;
+  padding-top: calc(env(safe-area-inset-top) + 20rpx);
+  background: $shell;
+  box-shadow: 8rpx 0 40rpx rgba(0, 0, 0, 0.35);
+  transform: translateX(-100%);
+  transition: transform 0.24s ease;
+}
+
+.drawer--open {
+  transform: translateX(0);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 32rpx 18rpx;
+}
+
+.drawer-head-title {
+  font-family: $font-display;
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  color: $ink;
+}
+
+.drawer-up {
+  display: flex;
+  align-items: center;
+  padding: 14rpx 32rpx;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.drawer-up-arrow {
+  margin-right: 8rpx;
+  font-size: 32rpx;
+  color: $ink-3;
+}
+
+.drawer-up-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.drawer-body {
+  flex: 1;
+  padding: 4rpx 0 48rpx;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  padding: 30rpx 32rpx;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.drawer-item--active {
+  background: $brand-soft;
+}
+
+.drawer-mark {
+  width: 30rpx;
+  font-size: 30rpx;
+  line-height: 1;
+  color: $brand-deep;
+}
+
+.drawer-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 32rpx;
+  color: $ink;
+}
+
+.drawer-item--active .drawer-name {
+  color: $brand-deep;
+  font-weight: 700;
+}
+
+.drawer-item--reset .drawer-name {
+  color: $ink-3;
+}
+
+.drawer-count {
+  margin: 0 12rpx;
+  font-size: $fs-micro;
+  color: $ink-4;
+}
+
+/* 源站本身 0 商品的节点：仍出现在树上（与源站一致），用「暂无」区分 */
+.drawer-count--empty {
+  color: $ink-4;
+  opacity: 0.7;
+}
+
+.drawer-item--empty .drawer-name {
+  color: $ink-4;
+}
+
+.drawer-chev {
+  font-size: 34rpx;
+  color: $ink-4;
+}
+
+.drawer-note {
+  padding: 32rpx;
+  font-size: $fs-micro;
+  color: $ink-4;
+}
+
 /* ---------- 目录索引卡 ---------- */
 .list-head {
   display: flex;
@@ -847,6 +1206,12 @@ onPullDownRefresh(() => {
   letter-spacing: $ls-tight;
   line-height: 1;
   color: $ink;
+}
+
+/* 自有商品无实物图时后端 cover 是品牌色：占位块铺该底色，首字改白。 */
+.cover-char--on-tint {
+  color: $on-deep;
+  opacity: 0.92;
 }
 
 .cover-add {
@@ -1001,6 +1366,14 @@ onPullDownRefresh(() => {
 }
 
 .status-chip--oos .status-chip-text {
+  color: $amber;
+}
+
+.status-chip--pending {
+  background: $brand-soft;
+}
+
+.status-chip--pending .status-chip-text {
   color: $amber;
 }
 

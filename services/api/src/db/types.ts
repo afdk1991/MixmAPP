@@ -1,5 +1,3 @@
-import type { OAuthProviderKey } from '@mixmapp/contracts';
-
 export type UserRecord = {
   id: string;
   accountNo: string;
@@ -17,12 +15,25 @@ export type UserRecord = {
   email: string | null;
   passwordHash: string | null;
   status: 'active' | 'frozen';
+  /**
+   * 隐私政策同意记录（注册时取得）。落库而非只存本机，便于合规审计：
+   * 版本号变了即视为未同意新政策，可在下一版重新征得同意。
+   */
+  privacyConsent: PrivacyConsentRecord | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
-/** 第三方渠道与 contracts 同源；'guest' 是设备绑定，不属于 OAuth。 */
-export type BindingProvider = OAuthProviderKey | 'guest';
+/** 一次隐私政策同意：政策版本、同意时间、本机存储通道、注册来源（如 register:phone/android）。 */
+export type PrivacyConsentRecord = {
+  version: string;
+  acceptedAt: Date;
+  channel: 'web' | 'native';
+  source: string;
+};
+
+/** 绑定渠道：内置渠道与注册表里的通用渠道共用一个字符串标识；'guest' 是设备绑定。 */
+export type BindingProvider = string;
 
 export type BindingRecord = {
   id: string;
@@ -153,6 +164,10 @@ export type ProductRecord = {
   maxOrderQty?: number;
   /** 源站在售标记：false 表示源站已下架，商品保留但不可售 */
   listed?: boolean;
+  /** 源站原始在售标记（onSale），用于区分「下架」与「缺货」 */
+  sourceOnSale?: boolean | null;
+  /** 源站库存状态原文（invStatusDesc）。有值时优先于假设库存决定能否下单。 */
+  sourceInvStatus?: string | null;
 };
 
 export type CartItemRecord = {
@@ -167,6 +182,17 @@ export type CartItemRecord = {
   updatedAt: Date;
 };
 
+export type CatalogSyncRunRecord = {
+  runId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: 'running' | 'success' | 'partial' | 'failed' | string;
+  stats: Record<string, unknown> | null;
+  reportPath: string | null;
+  /** 失败摘要（单行、最长 500 字），健康检查直接展示 */
+  error: string | null;
+};
+
 export type OrderItemRecord = {
   id: string;
   orderId: string;
@@ -179,6 +205,8 @@ export type OrderItemRecord = {
   packQty?: number | null;
   /** 精确单价，厘/支 */
   priceLi?: number | null;
+  /** 下单时货源未确认（仅匿名视图推断缺货），需人工确认后再发货 */
+  stockUnconfirmed?: boolean;
 };
 
 export type OrderRecord = {
@@ -256,6 +284,12 @@ export type Store = {
   ping(): Promise<boolean>;
   close(): Promise<void>;
 
+  /** 运维观测：不参与业务，缺表/无记录都返回 null，不让健康检查失败 */
+  ops: {
+    /** 最近一次目录同步运行（catalog_sync_runs 最新一行） */
+    lastCatalogSyncRun(): Promise<CatalogSyncRunRecord | null>;
+  };
+
   users: {
     insert(user: UserRecord): Promise<UserRecord>;
     findById(id: string): Promise<UserRecord | null>;
@@ -318,19 +352,34 @@ export type Store = {
         cat?: string;
         dims?: string;
         lens?: string;
+        brand?: string;
+        std?: string;
+        grd?: string;
+        mtl?: string;
+        ttt?: string;
         keyword?: string;
         limit: number;
         offset: number;
       }): Promise<ProductRecord[]>;
       /**
        * 分类树逐层读取：parentId 为空取一级类目，否则取该节点的直接子级。
-       * 只返回 is_active 且 product_count > 0 的节点（空分类不显示空壳）。
+       * 默认只返回 is_active 且 product_count > 0 的节点（列表页不显示空壳）；
+       * includeEmpty=true 时连同 0 商品节点一起返回，供「商品分类」抽屉与源站树一比一。
        */
       listChildCategories(
         parentId: string | null,
+        opts?: { includeEmpty?: boolean },
       ): Promise<Array<{ id: string; code: string; name: string; level: number; count: number }>>;
-      /** 某三级类目下商品实际出现的规格候选（dims / lens），无数据时为空数组。 */
-      listSpecOptions(c3Id: string): Promise<{ dims: string[]; lens: string[] }>;
+      /** 某分类节点（含子孙）下商品实际出现的筛选候选，无数据时为空数组。 */
+      listSpecOptions(c3Id: string): Promise<{
+        dims: string[];
+        lens: string[];
+        brands: string[];
+        stds: string[];
+        grds: string[];
+        mtls: string[];
+        ttts: string[];
+      }>;
       /**
        * 是否存在「真实目录商品」：以 source_key 非空为判据（0002 演示品、测试夹具都不带）。
        * MALL_CATALOG_SOURCE=auto 时用它决定要不要让内嵌只读目录源接管公开读。

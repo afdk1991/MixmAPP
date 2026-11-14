@@ -180,7 +180,7 @@
           </view>
 
           <view class="pick-more" hover-class="is-press" @tap="go(ROUTES.mall)">
-            <text class="pick-more-text">进入商城浏览完整目录</text>
+            <text class="pick-more-text">{{ catalogAllLabel }}</text>
             <text class="pick-more-arrow mono">→</text>
           </view>
         </view>
@@ -217,22 +217,30 @@
           <view class="sec-head">
             <view class="sec-head-l">
               <text class="eyebrow">COVERAGE</text>
-              <text class="sec-title">已接通的端</text>
+              <text class="sec-title">多端覆盖</text>
             </view>
             <text class="sec-count mono">终端 · {{ platforms.length }} 端</text>
           </view>
           <view class="rule" />
           <view class="index-list">
-            <view v-for="p in platforms" :key="p.code" class="index-row">
+            <view
+              v-for="p in platforms"
+              :key="p.code"
+              class="index-row"
+              :class="{ 'index-row--idle': p.status !== 'ready' }"
+            >
               <text class="index-code mono">{{ p.short }}</text>
               <view class="index-main">
                 <text class="index-title">{{ p.name }}</text>
                 <text class="index-desc mono">{{ p.code }}</text>
               </view>
-              <view class="index-dot" />
+              <view class="index-state" :class="{ 'index-state--idle': p.status !== 'ready' }">
+                <view class="index-dot" />
+                <text class="index-state-text mono">{{ p.status === 'ready' ? '已接通' : '规划中' }}</text>
+              </view>
             </view>
           </view>
-          <text class="section-note">同一套 Vue3 代码，按平台产出不同产物；账号、发号器与权限完全共用。</text>
+          <text class="section-note">H5 与 Android 已上线；iOS、鸿蒙、微信小程序、App-Plus 规划中，账号、发号器与权限按共用设计。</text>
         </view>
 
         <view class="footer">
@@ -276,21 +284,33 @@ const env = ref('unknown');
 const online = ref(false);
 const error = ref('');
 
+/**
+ * 端状态是首页静态事实，不是接口数据：只有 H5 与 Android 有可运行产物，
+ * 其余四端仍在规划中，必须与已接通端在视觉上区分，不能一律给绿点。
+ */
 const platforms = [
-  { code: 'WEB', short: 'WEB', name: 'H5 / PWA' },
-  { code: 'ANDROID', short: 'AN', name: 'Android' },
-  { code: 'IOS', short: 'iOS', name: 'iOS' },
-  { code: 'HARMONY', short: 'HM', name: '鸿蒙' },
-  { code: 'WECHAT', short: 'WX', name: '微信小程序' },
-  { code: 'APP-PLUS', short: 'AP', name: 'App-Plus' },
+  { code: 'WEB', short: 'WEB', name: 'H5 / PWA', status: 'ready' },
+  { code: 'ANDROID', short: 'AND', name: 'Android', status: 'ready' },
+  { code: 'IOS', short: 'IOS', name: 'iOS', status: 'planned' },
+  { code: 'HARMONY', short: 'HAR', name: '鸿蒙', status: 'planned' },
+  { code: 'WECHAT', short: 'WX', name: '微信小程序', status: 'planned' },
+  { code: 'APP-PLUS', short: 'APP', name: 'App-Plus', status: 'planned' },
 ];
 
-const entries = [
-  { key: '01', tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: ROUTES.mall },
-  { key: '02', tag: 'PASS', title: '星际联邦通行证', desc: '登录 · 注册 · 公民编号', url: ROUTES.me },
-  { key: '04', tag: 'RESEARCH', title: '深度研究', desc: 'AI 多轮检索 · 结构化报告', url: ROUTES.research },
-  { key: '03', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: ROUTES.about },
+/**
+ * 通行入口：序号由数组顺序派生（01/02/03/04），不在数据里另写 key。
+ * 之前数据里手写 04 排在 03 前面，序号与展示顺序不一致。
+ */
+const entryItems = [
+  { tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: ROUTES.mall },
+  { tag: 'PASS', title: '星际联邦通行证', desc: '登录 · 注册 · 公民编号', url: ROUTES.me },
+  { tag: 'RESEARCH', title: '深度研究', desc: 'AI 多轮检索 · 结构化报告', url: ROUTES.research },
+  { tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: ROUTES.about },
 ];
+
+const entries = computed(() =>
+  entryItems.map((item, index) => ({ ...item, key: String(index + 1).padStart(2, '0') })),
+);
 
 const signedIn = computed(() => Boolean(session.user));
 const primaryUrl = computed(() => ROUTES.me);
@@ -315,6 +335,15 @@ const tabCategories = computed(() =>
     .filter((item) => item && item.code && item.name)
     .map((item) => ({ code: item.code, name: item.name, count: item.count ?? 0 })),
 );
+
+/**
+ * 目录出口文案：带上一级分类合计件数，说明首页只展示了精选，完整目录规模多大。
+ * 合计为 0（分类还没加载 / 接口失败）时回落到不带数字的文案，避免出现「查看全部 0 件」。
+ */
+const catalogAllLabel = computed(() => {
+  const total = tabCategories.value.reduce((sum, item) => sum + (item.count || 0), 0);
+  return total > 0 ? `查看全部 ${total.toLocaleString('en-US')} 件商品` : '进入商城浏览完整目录';
+});
 
 async function loadCategories(): Promise<void> {
   try {
@@ -771,13 +800,40 @@ onPullDownRefresh(() => {
   color: $ink-4;
 }
 
+/* 端状态：已接通=实心绿点；规划中=空心灰点，两者都带文字，不靠颜色单独传达 */
+.index-state {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-left: $sp-3;
+}
+
 .index-dot {
   flex-shrink: 0;
-  margin-left: $sp-3;
   width: 8rpx;
   height: 8rpx;
   border-radius: 50%;
   background: $brand;
+}
+
+.index-state--idle .index-dot {
+  background: transparent;
+  border: 1rpx solid $ink-4;
+}
+
+.index-state-text {
+  margin-left: 8rpx;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $brand-deep;
+}
+
+.index-state--idle .index-state-text {
+  color: $ink-4;
+}
+
+.index-row--idle .index-title {
+  color: $ink-3;
 }
 
 .section-note {

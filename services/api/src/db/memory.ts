@@ -39,6 +39,11 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  /** 内存库没有目录同步记账，统一返回 null（健康检查显示 unknown） */
+  ops = {
+    lastCatalogSyncRun: async () => null,
+  };
+
   async close(): Promise<void> {
     this.userList = [];
     this.bindingList = [];
@@ -299,7 +304,8 @@ export class MemoryStore implements Store {
         }
         return [...byCode.values()];
       },
-      listChildCategories: async (parentId: string | null) => {
+      // 内存库只有演示商品，没有空分类壳，includeEmpty 对它无影响。
+      listChildCategories: async (parentId: string | null, _opts?: { includeEmpty?: boolean }) => {
         if (parentId) return [];
         const byCode = new Map<string, { id: string; code: string; name: string; level: number; count: number }>();
         for (const p of this.productList) {
@@ -317,7 +323,15 @@ export class MemoryStore implements Store {
         }
         return [...byCode.values()];
       },
-      listSpecOptions: async () => ({ dims: [], lens: [] }),
+      listSpecOptions: async () => ({
+        dims: [],
+        lens: [],
+        brands: [],
+        stds: [],
+        grds: [],
+        mtls: [],
+        ttts: [],
+      }),
       findById: async (id: string): Promise<ProductRecord | null> => {
         const found = this.productList.find((p) => p.id === id);
         return found ? clone(found) : null;

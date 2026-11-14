@@ -4,6 +4,7 @@ import type {
   AccountMergeRecord,
   BindingRecord,
   CartItemRecord,
+  CatalogSyncRunRecord,
   MergeCandidate,
   OrderItemRecord,
   OrderRecord,
@@ -51,6 +52,14 @@ function mapUser(row: Row): UserRecord {
     email: (row['email'] as string | null) ?? null,
     passwordHash: (row['password_hash'] as string | null) ?? null,
     status: row['status'] as UserRecord['status'],
+    privacyConsent: row['privacy_consent_version']
+      ? {
+          version: row['privacy_consent_version'] as string,
+          acceptedAt: toDate(row['privacy_consent_at']),
+          channel: row['privacy_consent_channel'] === 'native' ? 'native' : 'web',
+          source: (row['privacy_consent_source'] as string | null) ?? 'unknown',
+        }
+      : null,
     createdAt: toDate(row['created_at']),
     updatedAt: toDate(row['updated_at']),
   };
@@ -108,12 +117,42 @@ export class PgStore implements Store {
     await this.pool.end?.();
   }
 
+  ops = {
+    lastCatalogSyncRun: async (): Promise<CatalogSyncRunRecord | null> => {
+      try {
+        const res = await this.pool.query(
+          `select run_id, started_at, finished_at, status, stats, report_path, error
+             from catalog_sync_runs
+            order by started_at desc
+            limit 1`,
+        );
+        const row = res.rows[0];
+        if (!row) return null;
+        const iso = (value: unknown): string =>
+          value instanceof Date ? value.toISOString() : String(value ?? '');
+        return {
+          runId: String(row['run_id']),
+          startedAt: iso(row['started_at']),
+          finishedAt: row['finished_at'] == null ? null : iso(row['finished_at']),
+          status: String(row['status'] ?? 'unknown'),
+          stats: (row['stats'] as Record<string, unknown> | null) ?? null,
+          reportPath: (row['report_path'] as string | null) ?? null,
+          error: (row['error'] as string | null) ?? null,
+        };
+      } catch {
+        // 表未建 / 老库 / 权限不足：不参与业务，健康检查保持可用
+        return null;
+      }
+    },
+  };
+
   users = {
     insert: async (user: UserRecord): Promise<UserRecord> => {
       const res = await this.pool.query(
         `insert into users (id, account_no, snowflake, ulid, uuid_v7, nickname, avatar_url, bio,
-           username, guest, phone, email, password_hash, status, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning *`,
+           username, guest, phone, email, password_hash, status, privacy_consent_version,
+           privacy_consent_at, privacy_consent_channel, privacy_consent_source, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) returning *`,
         [
           user.id,
           user.accountNo,
@@ -129,6 +168,10 @@ export class PgStore implements Store {
           user.email,
           user.passwordHash,
           user.status,
+          user.privacyConsent?.version ?? null,
+          user.privacyConsent?.acceptedAt ?? null,
+          user.privacyConsent?.channel ?? null,
+          user.privacyConsent?.source ?? null,
           user.createdAt,
           user.updatedAt,
         ],
@@ -179,6 +222,7 @@ export class PgStore implements Store {
         email: 'email',
         passwordHash: 'password_hash',
         status: 'status',
+        privacyConsent: 'privacy_consent_version',
         createdAt: 'created_at',
         updatedAt: 'updated_at',
       };
@@ -188,6 +232,18 @@ export class PgStore implements Store {
       for (const [key, column] of Object.entries(columns)) {
         if (key === 'id' || key === 'createdAt' || key === 'updatedAt') continue;
         if (!(key in patch)) continue;
+        // 同意记录是一个对象，落成 4 个列，不能按单列直传。
+        if (key === 'privacyConsent') {
+          const consent = patch.privacyConsent;
+          if (!consent) continue;
+          sets.push(
+            `privacy_consent_version = $${i}, privacy_consent_at = $${i + 1}, ` +
+              `privacy_consent_channel = $${i + 2}, privacy_consent_source = $${i + 3}`,
+          );
+          values.push(consent.version, consent.acceptedAt, consent.channel, consent.source);
+          i += 4;
+          continue;
+        }
         sets.push(`${column} = $${i}`);
         values.push(patch[key as keyof UserRecord]);
         i += 1;
@@ -560,6 +616,11 @@ export class PgStore implements Store {
         cat?: string;
         dims?: string;
         lens?: string;
+        brand?: string;
+        std?: string;
+        grd?: string;
+        mtl?: string;
+        ttt?: string;
         keyword?: string;
         limit: number;
         offset: number;
@@ -586,6 +647,22 @@ export class PgStore implements Store {
         if (filter.lens) {
           params.push(filter.lens);
           conditions.push(`spec_lens = $${params.length}`);
+        }
+        // 属性筛选：品牌落列，标准/等级/材质/表面处理落在 specs（源站中文键）里。
+        if (filter.brand) {
+          params.push(filter.brand);
+          conditions.push(`brand = $${params.length}`);
+        }
+        for (const [key, column] of [
+          ['std', '标准'],
+          ['grd', '等级'],
+          ['mtl', '材质'],
+          ['ttt', '表面处理'],
+        ] as const) {
+          const value = filter[key];
+          if (!value) continue;
+          params.push(value);
+          conditions.push(`specs->>'${column}' = $${params.length}`);
         }
         if (filter.keyword) {
           params.push(`%${filter.keyword}%`);
@@ -614,11 +691,12 @@ export class PgStore implements Store {
           count: Number(row['count']),
         }));
       },
-      listChildCategories: async (parentId: string | null) => {
+      listChildCategories: async (parentId: string | null, opts?: { includeEmpty?: boolean }) => {
         const res = await this.pool.query(
           `select id, code, name, level, product_count
              from catalog_categories
-            where source = 'egluosi' and is_active and product_count > 0
+            where source = 'egluosi' and is_active
+              ${opts?.includeEmpty ? '' : 'and product_count > 0'}
               and ${parentId ? 'parent_id = $1' : 'level = 1'}
             order by sort_no asc, code asc`,
           parentId ? [parentId] : [],
@@ -631,24 +709,43 @@ export class PgStore implements Store {
           count: Number(row['product_count']),
         }));
       },
-      listSpecOptions: async (c3Id: string) => {
-        const [dims, lens] = await Promise.all([
+      // 任意节点（一级/二级/三级）都按其子孙三级类目收敛，筛选条在每一层都有值。
+      listSpecOptions: async (nodeId: string) => {
+        const scope = `c3_id in (select id from catalog_categories
+                        where id = $1 or parent_id = $1
+                           or parent_id in (select id from catalog_categories where parent_id = $1))
+                       and listed is not false`;
+        const [dims, lens, brands, stds, grds, mtls, ttts] = await Promise.all([
           this.pool.query(
-            `select distinct spec_dims from products
-              where c3_id = $1 and listed is not false and spec_dims is not null
-              order by spec_dims`,
-            [c3Id],
+            `select distinct spec_dims as v from products where ${scope} and spec_dims is not null order by v`,
+            [nodeId],
           ),
           this.pool.query(
-            `select distinct spec_lens from products
-              where c3_id = $1 and listed is not false and spec_lens is not null
-              order by spec_lens`,
-            [c3Id],
+            `select distinct spec_lens as v from products where ${scope} and spec_lens is not null order by v`,
+            [nodeId],
+          ),
+          this.pool.query(
+            `select distinct brand as v from products where ${scope} and coalesce(brand, '') <> '' order by v`,
+            [nodeId],
+          ),
+          ...(['标准', '等级', '材质', '表面处理'] as const).map((column) =>
+            this.pool.query(
+              `select distinct specs->>'${column}' as v from products
+                where ${scope} and coalesce(specs->>'${column}', '') <> '' order by v`,
+              [nodeId],
+            ),
           ),
         ]);
+        const values = (res: { rows: unknown[] }): string[] =>
+          res.rows.map((row) => String((row as Record<string, unknown>)['v']));
         return {
-          dims: dims.rows.map((row) => String(row['spec_dims'])),
-          lens: lens.rows.map((row) => String(row['spec_lens'])),
+          dims: values(dims!),
+          lens: values(lens!),
+          brands: values(brands!),
+          stds: values(stds!),
+          grds: values(grds!),
+          mtls: values(mtls!),
+          ttts: values(ttts!),
         };
       },
       findById: async (id: string): Promise<ProductRecord | null> => {
@@ -885,8 +982,8 @@ export class PgStore implements Store {
           for (const item of items) {
             await client.query(
               `insert into order_items (id, order_id, product_id, title, price_fen, quantity, subtotal_fen,
-                 pack_unit, pack_qty, price_li)
-               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+                 pack_unit, pack_qty, price_li, stock_unconfirmed)
+               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
               [
                 item.id,
                 item.orderId,
@@ -898,6 +995,7 @@ export class PgStore implements Store {
                 item.packUnit ?? null,
                 item.packQty ?? null,
                 item.priceLi ?? null,
+                item.stockUnconfirmed ?? false,
               ],
             );
           }
@@ -1151,6 +1249,8 @@ function mapProduct(row: Row): ProductRecord {
     qtyStep: Number(row['qty_step'] ?? 1),
     maxOrderQty: Number(row['max_order_qty'] ?? 1000000),
     listed: row['listed'] !== false,
+    sourceOnSale: row['source_on_sale'] == null ? null : row['source_on_sale'] === true,
+    sourceInvStatus: (row['source_inv_status'] as string | null) ?? null,
   };
 }
 
@@ -1195,6 +1295,7 @@ function mapOrderItem(row: Row): OrderItemRecord {
     packUnit: (row['pack_unit'] as string | null) ?? null,
     packQty: row['pack_qty'] == null ? null : Number(row['pack_qty']),
     priceLi: row['price_li'] == null ? null : Number(row['price_li']),
+    stockUnconfirmed: row['stock_unconfirmed'] === true,
   };
 }
 
