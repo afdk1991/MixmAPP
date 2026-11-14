@@ -5,7 +5,8 @@
 alter table products add column if not exists attributes        jsonb not null default '{}'::jsonb;
 -- 面价：源站 basePrcD3N2 单位「元/千支」，数值上等于「厘/支」，用整数存可精确计价（1 分 = 10 厘）。
 alter table products add column if not exists price_li          integer;
--- 折扣百分比（disD2N2），100 = 无折扣；小额零售折扣（lowDqDisc）不在此列，保留在 attributes。
+-- 折扣百分比（disD2N2）。100 是合法值（源站无折扣），仍要落库并展示 100%、折后价=面价；
+-- 只有源站确实没有该字段时才为 null。小额零售折扣（lowDqDisc）不在此列，保留在 attributes。
 alter table products add column if not exists discount_pct       numeric(6, 2);
 -- 特价（tejiaD2N2，厘/支），源站无特价时为 null。
 alter table products add column if not exists sale_price_li      integer;

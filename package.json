@@ -21,6 +21,8 @@
     "lint": "node scripts/repo-lint.mjs",
     "verify": "node scripts/verify.mjs",
     "db:migrate": "pnpm --filter @mixmapp/api db:migrate",
+    "catalog:sync": "node scripts/catalog/cli.mjs sync",
+    "catalog:inspect": "node scripts/catalog/cli.mjs inspect",
     "ops:health": "node scripts/healthcheck.mjs",
     "ops:backup": "node scripts/backup.mjs",
     "build:h5:single": "node scripts/build-h5-single.mjs",
