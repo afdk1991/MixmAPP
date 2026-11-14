@@ -155,9 +155,7 @@ async function main() {
 
   // 2. 正式版本号
   const version = String(hj.version ?? '');
-  const versionOk = EXPECT_VERSION
-    ? version === EXPECT_VERSION
-    : Boolean(version) && !/preview/i.test(version) && version !== '0.0.0-preview';
+  const versionOk = EXPECT_VERSION ? version === EXPECT_VERSION : Boolean(version) && !/preview/i.test(version);
   rec(
     '版本号为正式号',
     versionOk,

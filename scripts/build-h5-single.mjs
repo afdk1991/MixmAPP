@@ -55,7 +55,7 @@ const BASE = process.env.MIXMAPP_H5_BASE ?? '/';
  */
 const API_BASE = (process.env.MIXMAPP_API_BASE ?? '').trim();
 if (!API_BASE) {
-  console.error('✗ 构建中止：单文件 H5 只能托管在静态平台，必须设置 MIXMAPP_API_BASE 为绝对地址（如 https://cloud.mixm.top/mixmapp/api/v1）');
+  console.error('✗ 构建中止：单文件 H5 只能托管在静态平台，必须设置 MIXMAPP_API_BASE 为绝对地址（如 https://api.mixm.top/mixmapp/api/v1）');
   process.exit(1);
 }
 if (!/^https?:\/\//.test(API_BASE)) {

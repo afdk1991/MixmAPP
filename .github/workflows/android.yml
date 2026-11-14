@@ -50,15 +50,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 版本号唯一事实源：version.json。app/build.gradle 会从它动态读 build / released / next / channel
+      # 版本号唯一事实源：version.json。app/build.gradle 会从它动态读 version / channel / counters
       # 生成 versionCode / versionName；这里再解析一次用于日志与产物命名，规则保持一致：
-      # 正式发布态（channel=release 且 released 非空）取 released 最新已发布号（裸号，当前 0.0.0.0），
-      # 其余情况取 next，预览/开发通道追加 -<channel>。注意 next 是「下一个待发布工作号」，
-      # 正式发布后不能拿它当 APK 版本名，否则产物会显示 0.0.0.1 与 README/manifest 不一致。
+      # 三段式基线 0.0.0；release 取 version，preview/dev 追加 -<channel>，计数 > 0 再加 .N。
+      # versionCode = 1 + major*10000 + minor*100 + patch（0.0.0 → 1）。
       - name: 读取版本（version.json 单一事实源）
         id: version
         run: |
-          node -e 'const v=require("./version.json");const fs=require("fs");const formal=["stable","release"].includes(v.channel);const published=v.channel==="release"&&Array.isArray(v.released)&&v.released.length?v.released[v.released.length-1]:null;const vn=published||(v.next+(formal?"":"-"+v.channel));fs.appendFileSync(process.env.GITHUB_OUTPUT,"version_name="+vn+"\nversion_code="+v.build+"\n");console.log("versionName="+vn+"  versionCode="+v.build);'
+          node -e 'const v=require("./version.json");const fs=require("fs");const ch=v.channel||"release";const n=Number((v.counters||{})[ch]||0);const vn=ch==="release"?String(v.version):`${v.version}-${ch}${n>0?"."+n:""}`;const p=String(v.version).split(".").map(Number);const vc=1+p[0]*10000+p[1]*100+p[2];fs.appendFileSync(process.env.GITHUB_OUTPUT,"version_name="+vn+"\nversion_code="+vc+"\n");console.log("versionName="+vn+"  versionCode="+vc);'
 
       - name: Build H5（注入壳内 API 源）
         # 壳的 WebView 从 https://localhost 加载本地资源，必须把 API 绝对地址写进 HTML，

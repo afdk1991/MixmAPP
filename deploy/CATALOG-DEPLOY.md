@@ -38,8 +38,8 @@
 | 数据层本身健康 | 本机 8094 API 全量翻页实测：page 1..301、pageSize 50 → `rows=15043`、`uniqueIds=15043`、`duplicates=0`、`errors=0`。分页/排序/去重没问题，问题纯粹在「生产库没这批数据 + 线上旧构建」。 |
 | 图片文件本身健康 | `storage/products/` 魔数抽查正常（`.jpg = ffd8ffe0`、`.png = 89504e47`），线上 404 是 nginx `/media` 直出/同步问题，**不是文件损坏**。 |
 | 前缀可用 | `GET /mixmapp/api/v1/mall/categories` → 200（前端注入路径可用）；`GET /api/v1/healthz` → 200。两条前缀都反代到后端 `/api/v1/*`（见 §6）。 |
-| `version=0.0.0-preview` | 线上仍是旧构建，需重新发布正式版（version-lead 产物 V1.0.0）。 |
-| **已发布静态产物本身就是「预览版/离线」** | `release/` 下多份 HTML 残留 `0.0.0-preview` 与「单码多端预览版」字样；其中 3 份的 API 基址注入了**失效域名** `https://cloud.mix.top/mixmapp/api/v1`（实测 schannel SSL 握手失败 `SEC_E_ILLEGAL_MESSAGE`），而正确的是 `https://cloud.mixm.top/mixmapp/api/v1`。用户看到的很可能就是这些旧产物——**只改源码不重发产物无效**。 |
+| `version` 带 `-preview` 后缀 | 线上仍是旧构建，需重新发布正式版（三段式基线 `0.0.0`）。 |
+| **已发布静态产物本身就是「预览版/离线」** | `release/` 下多份 HTML 残留旧渠道后缀版本号与「单码多端预览版」字样；其中 3 份的 API 基址注入了**失效域名** `https://cloud.mix.top/mixmapp/api/v1`（实测 schannel SSL 握手失败 `SEC_E_ILLEGAL_MESSAGE`），而正确的是 `https://cloud.mixm.top/mixmapp/api/v1`。用户看到的很可能就是这些旧产物——**只改源码不重发产物无效**。 |
 
 **前缀关系核对结论**（别改坏 API 反代）：
 - 前端 `window.__MIXMAPP_API_BASE__="/mixmapp/api/v1"`；nginx `location /mixmapp/ { proxy_pass http://127.0.0.1:8080/; }`（**带结尾 `/`** 剥掉 `/mixmapp` 前缀）→ 后端 `/api/v1/*`。
@@ -56,7 +56,7 @@
 SITE=https://cloud.mixm.top
 
 # 2.1 现状快照（全部只读 GET）
-curl -fsS "$SITE/api/v1/healthz"; echo          # 改动前：version=0.0.0-preview, storage=local, db=ok
+curl -fsS "$SITE/api/v1/healthz"; echo          # 改动前：version 带 -preview 后缀, storage=local, db=ok
 curl -fsS "$SITE/api/v1/meta"; echo            # 改动前：env=production, catalogSource.source=unavailable/db
 curl -fsS "$SITE/api/v1/mall/categories"; echo # 改动前：6 条演示类目 featured/life/digital/wear
 curl -fsS "$SITE/api/v1/mall/products?page=1&pageSize=3"; echo  # 改动前：首发限定礼盒/冲锋衣/理线坞
@@ -113,8 +113,8 @@ sudo find /var/lib/mixmapp/storage/products -type f 2>/dev/null | wc -l
 
 | 文件 | 残留问题 |
 |---|---|
-| `release/mixmapp-h5-single.html`、`release/cs-index.html`、`release/pages-index.html` | 含 `0.0.0-preview` + 「单码多端预览版」；API 基址注入**失效域名** `https://cloud.mix.top/mixmapp/api/v1` |
-| `release/site/index.html`、`release/cloudbase-site/index.html`、`release/cloudbase-site/404.html`、`release/MixmAPP/index.html`、`release/api-stage/dist/chunk-*.js` | 含 `0.0.0-preview` |
+| `release/mixmapp-h5-single.html`、`release/cs-index.html`、`release/pages-index.html` | 含旧渠道后缀版本号 + 「单码多端预览版」；API 基址注入**失效域名** `https://cloud.mix.top/mixmapp/api/v1` |
+| `release/site/index.html`、`release/cloudbase-site/index.html`、`release/cloudbase-site/404.html`、`release/MixmAPP/index.html`、`release/api-stage/dist/chunk-*.js` | 含旧渠道后缀版本号 |
 
 **必做动作**：用正式版源码 + `MIXMAPP_API_BASE=https://cloud.mixm.top/mixmapp/api/v1`（或同域相对 `/mixmapp/api/v1`）**重新构建**并替换上述全部产物；统一 API 基址，禁用 `cloud.mix.top`。CI 的 `pnpm build:h5` 每次重建 H5，并已有「抽检 H5 产物（版本号/预览字样/API 基址）」step 拦截回归。
 
@@ -127,13 +127,13 @@ for f in release/mixmapp-h5-single.html release/cs-index.html release/pages-inde
          release/cloudbase-site/404.html release/MixmAPP/index.html; do
   [ -f "$f" ] || continue
   echo "--- $f"
-  grep -c '0.0.0-preview' "$f" || true                 # 期望 0
+  grep -cE '0\.[0-9]+\.[0-9]+\.[0-9]+|-[0-9]+\.[0-9]+\.[0-9]+-(preview|dev)' "$f" || true  # 期望 0（四段号/渠道后缀号）
   grep -c '单码多端预览版' "$f" || true                 # 期望 0
   grep -c 'cloud\.mix\.top/mixmapp' "$f" || true       # 期望 0（失效域名）
   grep -o '__MIXMAPP_API_BASE__="[^"]*"' "$f" | head -1 || true
   # 期望：/mixmapp/api/v1 或 https://cloud.mixm.top/mixmapp/api/v1
 done
-grep -rlq '0.0.0-preview' release/api-stage/dist/ && echo "✗ api-stage chunk 仍含预览版号" || echo "✓ api-stage OK"
+grep -rlEq '0\.[0-9]+\.[0-9]+\.[0-9]+' release/api-stage/dist/ && echo "✗ api-stage chunk 仍含四段号" || echo "✓ api-stage OK"
 ```
 
 ---
@@ -312,12 +312,12 @@ API=$SITE/api/v1          # 也可改用 $SITE/mixmapp/api/v1，生产两条都�
 # ① healthz：正式号 + 真库 + catalog 目录源接管  [必需]
 curl -fsS "$API/healthz" | tee /tmp/health.json; echo
 # 期望：HTTP 200，status="ok"，checks.db="ok"，checks.catalogSource="catalog"，
-#       version=<正式号> —— 不等于 0.0.0-preview 且不含 "preview"
+#       version=<三段正式号> —— 不含 "preview" / "dev" 后缀
 node -e 'const j=require("/tmp/health.json");
   const ok = j.status==="ok" && j.checks?.db==="ok" && j.version &&
-             !/preview/i.test(j.version) && j.version!=="0.0.0-preview" &&
+             !/preview|dev/i.test(j.version) &&
              j.checks?.catalogSource==="catalog";
-  console.info(ok?"✓ 版本正式化 + 目录源接管":"✗ 仍是预览版/目录源未接管",
+  console.info(ok?"✓ 版本正式化 + 目录源接管":"✗ 仍是渠道版/目录源未接管",
     "version="+j.version,"catalogSource="+j.checks?.catalogSource);
   process.exit(ok?0:1)'
 
@@ -360,7 +360,7 @@ curl -sS -o /dev/null -w 'HTTP %{http_code}  content-type=%{content_type}  bytes
 # 期望：HTTP 200  content-type=image/jpeg（或 image/*）  bytes>0
 
 # ⑥ 静态产物三项抽检（版本号 / 预览字样 / API 基址）—— 见 §4 命令
-# 期望：无 0.0.0-preview、无「单码多端预览版」、无 cloud.mix.top，基址为 cloud.mixm.top/mixmapp/api/v1
+# 期望：无四段号 / 无渠道后缀号、无「单码多端预览版」、无 cloud.mix.top，基址为 cloud.mixm.top/mixmapp/api/v1
 
 # ⑦ 一键验收（HTTP 全项，CI 也调用）
 node deploy/catalog-verify.mjs "$SITE"
@@ -374,12 +374,12 @@ LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
 
 | 验收项 | 命令 | 期望值 |
 |--------|------|--------|
-| 版本正式号 | `curl $SITE/api/v1/healthz` | `version` 非 `0.0.0-preview` / 不含 preview，`db=ok` |
+| 版本正式号 | `curl $SITE/api/v1/healthz` | `version` 不含 `preview` / `dev` 后缀，`db=ok` |
 | **catalog 目录源接管** | `curl $SITE/api/v1/healthz` | `checks.catalogSource === "catalog"`（或 `/meta` 的 `data.catalogSource.source==="catalog"`） |
 | 6 个真实中文类目 | `curl $SITE/api/v1/mall/categories` | `data.length>=6`、中文名、非演示码、`Σcount>10000` |
 | 真实五金商品 | `curl "$SITE/api/v1/mall/products?page=1&pageSize=3"` | 3 条真实商品名，无演示三品 |
 | 图片直出 200 | `curl -o /dev/null -w '%{http_code}' $SITE/media/products/<sha1>.jpg` | `200` + `content-type: image/*` |
-| **静态产物三项** | §4 抽检命令 | 无 `0.0.0-preview` / 无预览字样 / 无 `cloud.mix.top` |
+| **静态产物三项** | §4 抽检命令 | 无渠道后缀号 / 无预览字样 / 无 `cloud.mix.top` |
 | **本地资产** | `LOCAL_ONLY=1 CATALOG_FILE=... STORAGE_DIR=... node deploy/catalog-verify.mjs` | `catalog.json` 可解析、图片数 `≥871` |
 | 自动化汇总 | `node deploy/catalog-verify.mjs $SITE` | 全项 PASS，exit 0 |
 

@@ -1,8 +1,9 @@
 {
-  "next": "0.0.0.1",
-  "build": 1,
+  "version": "0.0.0",
   "channel": "release",
-  "released": [
-    "0.0.0.0"
-  ]
+  "released": [],
+  "counters": {
+    "preview": 0,
+    "dev": 0
+  }
 }

@@ -23,10 +23,23 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skipBuild = process.argv.includes('--skip-build');
 const version = (() => {
   const v = JSON.parse(fs.readFileSync(path.join(repo, 'version.json'), 'utf8'));
-  return v.version ?? v.next ?? `0.0.${v.build ?? 0}`;
+  // 与 scripts/version.mjs 的 displayVersion() 同口径：三段式，release 取当前号，
+  // preview / dev 追加 -<channel>，计数 > 0 时再加 .N。
+  const base = String(v.version ?? '0.0.0');
+  if (v.channel && v.channel !== 'release') {
+    const n = Number((v.counters ?? {})[v.channel] ?? 0);
+    return `${base}-${v.channel}${n > 0 ? `.${n}` : ''}`;
+  }
+  return base;
 })();
 const outDir = path.join(repo, 'release');
-const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'mixmapp-pkg-'));
+// Windows + pnpm 9 已知坑：deploy 目标若是绝对路径（如 C:\Users\...\Temp\...），
+// hoisted 符号链接阶段会把绝对路径字符串当相对路径拼到 workspace 根，
+// 产出 `F:\repo\C:\Users\...` 这类非法路径并 ENOENT（2026-11-14 实测）。
+// 规避：stage 放仓库内（release/ 已被 .gitignore 排除），deploy 目标用相对路径。
+const stageRoot = path.join(outDir, '.pkg-stage');
+fs.mkdirSync(stageRoot, { recursive: true });
+const stage = fs.mkdtempSync(path.join(stageRoot, 'pkg-'));
 const outFile = path.join(outDir, `mixmapp-install-${version}.tar.gz`);
 
 const isWin = process.platform === 'win32';

@@ -9,9 +9,9 @@
 >  内自洽，不依赖任何外部旧仓。
 
 <!-- version:begin -->
-当前构建版本：**V0.0.0.0**（正式发布版本）
-已发布版本：`V0.0.0.0`
-版本规约：四段式，首发 `V0.0.0.0`，之后按第 4 位递增；npm 包版本取前三段；正式发布态以已发布版本为准；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
+当前构建版本：**V0.0.0**（正式发布版本）
+已发布版本：无
+版本规约：三段式，基线 `0.0.0`；release 递增第三段（`0.0.0 → 0.0.1`）；preview / dev 为 `0.0.0-preview.N` / `0.0.0-dev.N`，后缀计数各自独立；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
 <!-- version:end -->
 
 ## 访问入口

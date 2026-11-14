@@ -112,13 +112,15 @@ fi
 ln -sfn "$RELEASE" "$APP_DIR/current"
 
 # 版本号写回 api.env（幂等）：线上 /healthz 与 /meta 报出的 version 取自 APP_VERSION，
-# 不写回就会一直沿用旧值（曾长期显示 0.0.0-preview，与产物版本脱节）。
+# 不写回就会一直沿用旧值（与产物版本脱节）。
 # 取值顺序：显式传入 APP_VERSION > 产物内 version.json > 当前 release 的 version.json。
+# 口径与 scripts/version.mjs 一致：三段式基线；release 取 version，
+# preview/dev 取 version-channel，计数 > 0 时追加 .N。
 # 只覆盖 APP_VERSION 这一行，其余运维配置不动；解析不出就保留原值并告警。
 if [ -z "${APP_VERSION:-}" ]; then
   for f in "$RELEASE/version.json" "$APP_DIR/current/version.json"; do
     if [ -f "$f" ]; then
-      APP_VERSION=$(node -e 'const v=require(process.argv[1]);const formal=["stable","release"].includes(v.channel);const pub=v.channel==="release"&&Array.isArray(v.released)&&v.released.length?v.released[v.released.length-1]:null;process.stdout.write(pub||(v.next+(formal?"":"-"+v.channel)));' "$f" 2>/dev/null || true)
+      APP_VERSION=$(node -e 'const v=require(process.argv[1]);const base=String(v.version??"0.0.0");const ch=String(v.channel??"release");if(ch==="release"){process.stdout.write(base)}else{const n=Number((v.counters??{})[ch]??0);process.stdout.write(base+"-"+ch+(n>0?"."+n:""))}' "$f" 2>/dev/null || true)
       [ -n "${APP_VERSION:-}" ] && break
     fi
   done

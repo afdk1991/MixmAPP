@@ -22,9 +22,9 @@ concurrency:
 #   生产 /api/v1/admin/* 整体 404（未配 ADMIN_TOKEN），不能远程灌库；
 #   数据以「catalog.json 随包发布 + API 内嵌只读目录源（MALL_CATALOG_*）」生效。
 #
-# 静态产物：build:h5 每次重新构建；抽检 step 保证产物无四段 preview/dev 号、
+# 静态产物：build:h5 每次重新构建；抽检 step 保证产物无四段号、无渠道后缀、
 #   无「单码多端预览版」字样、API 基址不指向已失效域名 cloud.mix.top。
-#   发布产物一律从 V0.0.0.0 起算，不再有独立的旧预览序列。
+#   发布产物为三段式，基线 V0.0.0，之后递增第三段。
 #
 # 现有门禁不变：DEPLOY_SSH_KEY_B64/DEPLOY_HOST/DEPLOY_USER 缺失 → SSH_READY=false 全跳过；
 # atomic-release.sh 健康检查失败自动回滚的逻辑不动。
@@ -69,13 +69,13 @@ jobs:
         run: |
           H5=apps/app/dist/build/h5
           [ -d "$H5" ] || { echo "✗ 缺少 H5 产物目录 $H5"; exit 1; }
-          if grep -rEq '([0-9]+\.){3}[0-9]+-(preview|dev)|单码多端预览版' "$H5"; then
-            echo "✗ H5 产物残留预览/开发版字样或四段预览号，重新构建未生效"; exit 1
+          if grep -rEq '([0-9]+\.){3}[0-9]+|0\.0\.0-(preview|dev)|单码多端预览版' "$H5"; then
+            echo "✗ H5 产物残留四段号 / 渠道后缀 / 预览字样，重新构建未生效"; exit 1
           fi
           if grep -rq 'cloud\.mix\.top/mixmapp' "$H5"; then
             echo "✗ H5 产物 API 基址指向已失效域名 cloud.mix.top"; exit 1
           fi
-          echo "✓ H5 产物抽检通过（无四段预览/开发号 / 无预览字样 / 无 cloud.mix.top）"
+          echo "✓ H5 产物抽检通过（无四段号 / 无渠道后缀 / 无预览字样 / 无 cloud.mix.top）"
 
       - name: 生成独立可运行 API 发布包
         run: pnpm --filter @mixmapp/api deploy --prod "$GITHUB_WORKSPACE/out/api"
@@ -131,12 +131,12 @@ jobs:
           name: release-bundles
 
       # 版本号唯一事实源：version.json。线上 /healthz 与 /meta 的 version 由 api.env 的
-      # APP_VERSION 决定；不显式下发就会沿用旧的 0.0.0-preview，页面显示与产物版本脱节。
-      # 规则与 android.yml 一致：正式发布态取 released 最新号，否则取 next + -<channel>。
+      # APP_VERSION 决定；不显式下发就会沿用旧号，页面显示与产物版本脱节。
+      # 规则与 android.yml 一致：三段式，release 取 version，preview/dev 追加 -<channel>[.N]。
       - name: 读取版本（version.json 单一事实源）
         id: version
         run: |
-          node -e 'const v=require("./version.json");const fs=require("fs");const formal=["stable","release"].includes(v.channel);const published=v.channel==="release"&&Array.isArray(v.released)&&v.released.length?v.released[v.released.length-1]:null;const vn=published||(v.next+(formal?"":"-"+v.channel));fs.appendFileSync(process.env.GITHUB_OUTPUT,"version_name="+vn+"\n");console.log("APP_VERSION="+vn);'
+          node -e 'const v=require("./version.json");const fs=require("fs");const ch=v.channel||"release";const n=Number((v.counters||{})[ch]||0);const vn=ch==="release"?String(v.version):`${v.version}-${ch}${n>0?"."+n:""}`;fs.appendFileSync(process.env.GITHUB_OUTPUT,"version_name="+vn+"\n");console.log("APP_VERSION="+vn);'
 
       - name: 写入部署私钥（base64 单行传输，避免换行符破坏 OpenSSH 私钥）
         if: env.SSH_READY == 'true'

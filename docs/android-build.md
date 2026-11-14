@@ -1,7 +1,7 @@
 # Android 构建手册（Capacitor 壳）
 
 > 适用范围：`apps/mobile`（Capacitor 7.6.10 壳）+ `apps/app`（uni-app H5 产物）
-> 本机验证时间：2026-11-12 02:14（UTC+8），debug APK 与 release AAB 均产出
+> 本机验证时间：2026-11-14（UTC+8），debug APK 产出并通过模拟器冒烟
 
 ---
 
@@ -56,13 +56,13 @@ node scripts/android-build.mjs assembleDebug
 | 文件 | 体积 | 说明 |
 |---|---|---|
 | `app/build/outputs/apk/debug/app-debug.apk` | 4.13 MB | 含 24 个 `assets/public/*` H5 资源，可直接安装 |
-| `app/build/outputs/bundle/release/app-release.aab` | 3.03 MB | **未签名**（未提供签名环境变量），不可上架 |
+| `app/build/outputs/bundle/release/app-release.aab` | 3.03 MB | 签名随构建环境而定：本机有 `.secrets` 凭证时自动签（见第 3 节）；CI 需配置签名 Secrets，否则为未签名包、不可上架 |
 
 ---
 
 ## 3. release 签名
 
-签名信息全部来自环境变量，代码里不写死、不入库：
+优先读环境变量（CI Secrets），四项不全时回退到仓库根 `.secrets/`：`keystore.properties`（口令/别名）+ `release.keystore`（证书本体）。该目录已 gitignore，凭证明文不入库；本机这两个文件已就位。
 
 | 变量 | 含义 |
 |---|---|
@@ -120,11 +120,25 @@ CI 里的 API 源：默认 `https://cloud.mixm.top/mixmapp/api/v1`，可用仓�
 
 | gradle 字段 | 来源 |
 |---|---|
-| `versionCode` | `version.json.build`（单调递增，Play 要求只增不减） |
-| `versionName` | `version.json.next` + `--channel`（非 `stable` 追加 `-<channel>`，如 `0.0.0-preview`） |
+| `versionCode` | `1 + major*10000 + minor*100 + patch`（由 `version.json.version` 推导，单调递增，Play 要求只增不减） |
+| `versionName` | `release` 取 `version.json.version`（三段裸号）；`preview` / `dev` 追加 `-<channel>`，计数 > 0 时再加 `.N`（如 `0.0.0-preview.1`） |
 
-实测（2026-11-13）：`version.json` = `{next:0.0.0, build:100, channel:preview}` → APK badging `versionCode='100' versionName='0.0.0-preview'`；
-临时改成 `build:101 / channel:stable` → `versionCode='101' versionName='0.0.0'`，改回即复原。文件缺失时构建直接抛 `GradleException`，不会再静默退化成 1。
+**重置态口径（2026-11-14）**：`version.json` 为
+`{version:"0.0.0", channel:"release", released:[], counters:{preview:0,dev:0}}`，`node scripts/version.mjs show`
+的 display 是 `V0.0.0`。此时 APK 的 `versionName` 必须是 **`0.0.0`**、`versionCode=1`，
+与展示层、README、manifest、7 个包（含 CloudBase 云函数）对齐到同一个号。
+
+三段号与整数的映射：`versionCode = 1 + major*10000 + minor*100 + patch`
+（`0.0.0 → 1`、`0.0.1 → 2`、`0.1.0 → 101`、`1.0.0 → 10001`）；每次出包必须用 APK/AAB badging 复核。
+文件缺失时构建直接抛 `GradleException`，不会静默退化成 1。
+
+> 门禁接线约束：`scripts/version.mjs check()` 会用正则校验本文件必须保留
+> `rootProject.file('../../../version.json')`、`new groovy.json.JsonSlurper().parseText`、
+> `mixmVersion.version` 读取、`versionCode mixmVersionCode` + `mixmVersionCode = 1 +`、
+> `versionName mixmVersionName` + **`mixmVersionName = mixmBaseVersion`** 这些接线。
+>
+> 注意：`check()` **只校验接线、不校验 `versionName` 的最终取值**，门禁全绿不代表出包版本名正确；
+> **出包时必须用 APK/AAB badging 复核** `versionName` / `versionCode`。
 
 ---
 
@@ -156,10 +170,12 @@ python apps/mobile/branding/generate-icons.py
 
 **返回键**：Android 15+ 对 targetSdk 35 默认开启预测性返回，`Activity.onBackPressed()` **不再被调用**（本项目实测 API 36 上改造前返回键完全失效）。现在走 `OnBackPressedDispatcher`：
 1. `webView.canGoBack()` 为真 → `goBack()`（pushState 的页面跳转也算在历史栈里）；
-2. 否则交给 H5 页面栈（`uni.getCurrentPages().length > 1` → `uni.navigateBack()`）；
+2. 否则按 `location.pathname` 判断当前 H5 路由（uni-app H5 未暴露全局 `getCurrentPages`）：
+   不在首页就 `history.replaceState('/pages/index/index')` + 派发 `popstate` 回到首页 tab；
 3. 到根部 → 弹「再按一次退出」，2 秒内再按才 `finish()`。
+4. 首启隐私同意页（`/pages/legal/privacy?mode=gate`）上按返回键只提示「请先阅读并同意隐私政策」，不能用返回绕过门禁。
 
-实测：`我的` → 返回落到首页；首页按一次不退出、连按两次回到桌面。
+实测：`我的`/`商城` → 返回落到首页；首页按一次不退出、连按两次回到桌面；首启同意页返回不跳首页。
 
 **外链**：壳的 WebView 只服务本地 H5（`https://localhost` / `127.0.0.1` / `file:` / `about:` / `capacitor:`），命中站外地址时用 `ACTION_VIEW` 交系统浏览器，壳本身不被导航走。实测 `https://example.com/x?from=mixmapp` 跳进 vivo 浏览器，回到 App 仍在原页。
 
@@ -197,7 +213,7 @@ node scripts/android-smoke.mjs --require-api         # API 不可达也判失败
 
 ## 10. 尚未做的部分
 
-- **真实 keystore 未配**（需生成或提供，`keytool -genkeypair`，不入库；缺它只能出 debug APK + 未签名 AAB）。
+- **release 签名核验尚未做**：本机 keystore 已就位（`.secrets/keystore.properties` + `.secrets/release.keystore`，目录已 gitignore、不入库），`bundleRelease` 会自动使用它；但「用正式 keystore 出包并核验签名/指纹」这一步还没执行，需等确认后再做。CI 侧仍依赖签名 Secrets。
 - **OAuth 回跳还没有深链**：站外链接现在交给浏览器，但授权完成后不会自动回到 App（需要 `intent-filter` + `appUrlOpen` 处理，且要和服务端 redirect_uri 对齐）。
 - **两套打包路径并存**：`apps/app` 的 uni-app 自带 `build:app` 与本手册的 Capacitor 路径，不要同时用来出 Android 包，否则会出现两套签名与两套产物口径。
 - `allowBackup` 已从 `true` 改为 `false`（本地存着令牌，不该被云备份带走到另一台设备上）。

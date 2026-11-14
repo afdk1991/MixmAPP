@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 线上健康巡检：读取 /api/v1/healthz，校验关键依赖，输出可读报表。
- * 用法：node scripts/healthcheck.mjs https://api.mixm.app
+ * 用法：node scripts/healthcheck.mjs https://cloud.mixm.top/mixmapp/api/v1
  * 退出码：0 健康 / 1 降级或不可达（可直接接到监控告警）
  */
 const base = (process.argv[2] ?? process.env.HEALTH_BASE_URL ?? 'http://127.0.0.1:8080').replace(

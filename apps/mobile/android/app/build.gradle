@@ -21,27 +21,24 @@ if (!releaseKeyPassword) releaseKeyPassword = localKeystoreProps.getProperty('ke
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 
 // ── 版本号：唯一事实源是仓库根 version.json（由 scripts/version.mjs 维护）─────
-// versionCode 取 build 计数（单调递增，Play 要求）。
-// versionName：正式发布态取 released 最新正式号（裸号）；其余取 next，预览通道追加 -<channel>。
+// 三段式版本 X.Y.Z，基线 0.0.0；release 递增第三段，preview/dev 用 <base>-<channel>[.N]。
+// versionCode = 1 + major*10000 + minor*100 + patch（0.0.0 → 1，单调递增，Play 要求）。
 def mixmVersionFile = rootProject.file('../../../version.json')
 if (!mixmVersionFile.exists()) {
     throw new GradleException("找不到版本单一事实源：${mixmVersionFile}（仓库根的 version.json 必须在）")
 }
 def mixmVersion = new groovy.json.JsonSlurper().parseText(mixmVersionFile.text)
-def mixmVersionCode = (mixmVersion.build ?: 1) as Integer
-def mixmChannel = (mixmVersion.channel ?: 'stable') as String
-def mixmVersionName = (mixmVersion.next ?: '0.0.0.0') as String
-// 正式发布后 version.json 的 next 是「下一个待发布工作号」（当前 0.0.0.1），
-// 而已发布正式号在 released 里（当前 0.0.0.0）。APK 必须展示已发布号，
-// 与 version:show 的 display / README / manifest / 各 package.json 对齐。
-// 注意：上面这行 mixmVersionName = ... mixmVersion.next 必须保留，
+def mixmBaseVersion = (mixmVersion.version ?: '0.0.0') as String
+def mixmBaseParts = mixmBaseVersion.tokenize('.')
+def mixmVersionCode = 1 + (mixmBaseParts[0] as Integer) * 10000 + (mixmBaseParts[1] as Integer) * 100 + (mixmBaseParts[2] as Integer)
+def mixmChannel = (mixmVersion.channel ?: 'release') as String
+def mixmVersionName = mixmBaseVersion
+// 注意：上面这行 mixmVersionName = mixmBaseVersion 必须保留，
 // scripts/version.mjs check() 用正则校验 gradle 接线，删掉会让门禁失败。
-def mixmReleased = (mixmVersion.released ?: []) as List
-def formalChannels = ['stable', 'release']
-if (mixmChannel.toLowerCase() == 'release' && !mixmReleased.isEmpty()) {
-    mixmVersionName = mixmReleased.last().toString()
-} else if (!formalChannels.contains(mixmChannel.toLowerCase())) {
-    mixmVersionName = mixmVersionName + '-' + mixmChannel
+if (mixmChannel != 'release') {
+    def mixmCounters = (mixmVersion.counters ?: [:]) as Map
+    def mixmCounter = (mixmCounters[mixmChannel] ?: 0) as Integer
+    mixmVersionName = mixmBaseVersion + '-' + mixmChannel + (mixmCounter > 0 ? '.' + mixmCounter : '')
 }
 
 // ── API 基址：与壳内注入同源，供原生版本检查 GET /api/v1/meta 使用 ──────────
@@ -54,7 +51,7 @@ if (!mixmApiBase) {
         mixmApiBase = (mixmApiCfg.apiBase ?: '').toString().trim()
     }
 }
-if (!mixmApiBase) mixmApiBase = 'https://cloud.mixm.top/mixmapp/api/v1'
+if (!mixmApiBase) mixmApiBase = 'https://api.mixm.top/mixmapp/api/v1'
 
 android {
     namespace "top.mixm.app"
