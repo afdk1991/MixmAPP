@@ -5,7 +5,12 @@ import type {
   OrderDto,
   UserDto,
 } from '@mixmapp/contracts';
-import type { MallCategoryDto, MallProductDto } from './mall';
+import type {
+  MallCategoryDto,
+  MallCategoryNodeDto,
+  MallProductDto,
+  MallSpecOptionsDto,
+} from './mall';
 
 /**
  * 统一 API 基址。优先级：
@@ -52,9 +57,29 @@ export const API_BASE: string = normalizeApiBase(
 );
 
 /**
+ * 媒体（图片 / 静态资源）基址：构建时注入 `window.__MIXMAPP_MEDIA_BASE__`（如 https://img.mixm.top）。
+ * 未注入时回落到 API 源 origin，保持旧行为；同域相对部署则不拼接，交给浏览器按当前站点解析。
+ */
+const MEDIA_BASE: string = (() => {
+  const injected = (globalThis as { __MIXMAPP_MEDIA_BASE__?: unknown }).__MIXMAPP_MEDIA_BASE__;
+  return typeof injected === 'string' ? injected.trim().replace(/\/+$/, '') : '';
+})();
+
+function mediaOrigin(): string {
+  const source = /^https?:\/\//i.test(MEDIA_BASE) ? MEDIA_BASE : API_BASE;
+  if (!/^https?:\/\//i.test(source)) return '';
+  try {
+    return new URL(source).origin;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * 商品图片地址归一。
  * - 已是 http(s)/data/blob 完整地址：原样返回（契约要求库里只落 `/media/...` 本地地址，不热链外部图床）；
- * - 本地相对 `/media/...`：API_BASE 是绝对源时拼到源站 origin 上，**不带入 `/api/v1` 段**；
+ * - 本地相对 `/media/...`：优先拼到媒体基址（`__MIXMAPP_MEDIA_BASE__`，生产为 img.mixm.top），
+ *   未配置时拼到 API 源 origin，**不带入 `/api/v1` 段**；
  *   API_BASE 同源相对（生产 `/api/v1`）时保留相对路径，由浏览器按当前站点 origin 解析。
  * - 空值返回空串，调用方据此渲染占位块，避免破图。
  */
@@ -64,13 +89,9 @@ export function mediaUrl(src?: string | null): string {
   if (!trimmed) return '';
   if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
   if (!trimmed.startsWith('/')) return trimmed;
-  if (!/^https?:\/\//i.test(API_BASE)) return trimmed;
-  try {
-    const base = new URL(API_BASE);
-    return `${base.origin}${trimmed}`;
-  } catch {
-    return trimmed;
-  }
+  const origin = mediaOrigin();
+  if (!origin) return trimmed;
+  return `${origin}${trimmed}`;
 }
 
 export class ApiError extends Error {
@@ -303,7 +324,17 @@ export const adminApi = {
 };
 
 export const mallApi = {
-  listProducts: (query: { category?: string; keyword?: string; page?: number; pageSize?: number } = {}) => {
+  listProducts: (
+    query: {
+      category?: string;
+      cat?: string;
+      dims?: string;
+      lens?: string;
+      keyword?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+  ) => {
     const qs = Object.entries(query)
       .filter(([, value]) => value !== undefined && value !== '')
       .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
@@ -314,13 +345,34 @@ export const mallApi = {
     apiRequest<MallProductDto>(`/mall/products/${encodeURIComponent(productId)}`, { auth: false }),
   /** 一级分类 + 商品计数；后端未就绪时前端兜底只留「全部」。 */
   listCategories: () => apiRequest<MallCategoryDto[]>('/mall/categories', { auth: false }),
+  /** 分类树下一层：不传 parent 取一级，传节点 id（c1:/c2:）取其直接子级。 */
+  listCategoryChildren: (parent?: string) =>
+    apiRequest<MallCategoryNodeDto[]>(
+      `/mall/categories${parent ? `?parent=${encodeURIComponent(parent)}` : ''}`,
+      { auth: false },
+    ),
+  /** 三级类目下可用的规格筛选值（dims/lens）。 */
+  listSpecOptions: (c3: string) =>
+    apiRequest<MallSpecOptionsDto>(`/mall/specs?c3=${encodeURIComponent(c3)}`, { auth: false }),
   getCart: () => apiRequest<CartDto>('/mall/cart'),
-  addToCart: (productId: string, quantity = 1) =>
-    apiRequest<CartDto>('/mall/cart', { method: 'POST', data: { productId, quantity } }),
-  updateCart: (productId: string, quantity: number) =>
+  addToCart: (productId: string, quantity = 1, packUnit?: string, packQty?: number) =>
+    apiRequest<CartDto>('/mall/cart', {
+      method: 'POST',
+      data: {
+        productId,
+        quantity,
+        ...(packUnit ? { packUnit } : {}),
+        ...(packQty != null ? { packQty } : {}),
+      },
+    }),
+  updateCart: (productId: string, quantity: number, packUnit?: string, packQty?: number) =>
     apiRequest<CartDto>(`/mall/cart/${encodeURIComponent(productId)}`, {
       method: 'PATCH',
-      data: { quantity },
+      data: {
+        quantity,
+        ...(packUnit ? { packUnit } : {}),
+        ...(packQty != null ? { packQty } : {}),
+      },
     }),
   removeCart: (productId: string) =>
     apiRequest<CartDto>(`/mall/cart/${encodeURIComponent(productId)}`, { method: 'DELETE' }),

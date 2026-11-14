@@ -69,13 +69,18 @@ if (!existsSync(indexPath)) {
 }
 
 const html = readFileSync(indexPath, 'utf8');
+const mediaBase = (process.env.MIXMAPP_MEDIA_BASE ?? '').trim();
 if (!html.includes('__MIXMAPP_API_BASE__')) {
-  const tag = `<script>window.__MIXMAPP_API_BASE__=${JSON.stringify(apiBase)};</script>`;
-  writeFileSync(indexPath, html.replace('<head>', `<head>\n    ${tag}`), 'utf8');
+  const tags = [`<script>window.__MIXMAPP_API_BASE__=${JSON.stringify(apiBase)};</script>`];
+  if (mediaBase) {
+    tags.push(`<script>window.__MIXMAPP_MEDIA_BASE__=${JSON.stringify(mediaBase)};</script>`);
+  }
+  writeFileSync(indexPath, html.replace('<head>', `<head>\n    ${tags.join('\n    ')}`), 'utf8');
 }
 
 const mode = /^https?:\/\//.test(apiBase) ? '跨域绝对源' : '同域相对路径';
 console.info(`[h5] 已注入 API 源（${mode}，来源 ${baseSource}）：${apiBase}`);
+if (mediaBase) console.info(`[h5] 已注入媒体源：${mediaBase}`);
 if (/^https?:\/\//.test(apiBase)) {
   console.info('[h5] 提示：跨域端要求服务端 CORS 白名单包含当前页面 origin（壳 https://localhost、各托管域名等），否则浏览器层直接拒收。');
 }

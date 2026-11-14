@@ -60,6 +60,7 @@ jobs:
       - name: 构建 H5（绝对基址 api.mixm.top）
         env:
           MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || 'https://api.mixm.top/mixmapp/api/v1' }}
+          MIXMAPP_MEDIA_BASE: ${{ vars.MIXMAPP_MEDIA_BASE || 'https://img.mixm.top' }}
         run: pnpm build:h5
 
       # 抽检新构建产物：版本号 / 预览字样 / API 基址三项都要过，防止「只改源码不重发产物」。
@@ -76,7 +77,10 @@ jobs:
           if ! grep -rq 'https://api\.mixm\.top/mixmapp/api/v1' "$H5"; then
             echo "✗ H5 产物未内置绝对基址 https://api.mixm.top/mixmapp/api/v1"; exit 1
           fi
-          echo "✓ H5 产物抽检通过（无四段号 / 无渠道后缀 / 无预览字样 / 基址 api.mixm.top）"
+          if ! grep -rq 'https://img\.mixm\.top' "$H5"; then
+            echo "✗ H5 产物未内置媒体源 https://img.mixm.top"; exit 1
+          fi
+          echo "✓ H5 产物抽检通过（无四段号 / 无渠道后缀 / 无预览字样 / 基址 api.mixm.top / 媒体 img.mixm.top）"
 
       - name: 生成独立可运行 API 发布包
         run: pnpm --filter @mixmapp/api deploy --prod "$GITHUB_WORKSPACE/out/api"

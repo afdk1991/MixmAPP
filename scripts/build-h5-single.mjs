@@ -174,6 +174,14 @@ if (API_BASE) {
   console.info(`[single] API 源 = ${API_BASE}`);
 }
 
+// 7. 图片 / 媒体走独立域名（img.mixm.top），与 API 源解耦，便于 CDN 与缓存策略分开
+const MEDIA_BASE = (process.env.MIXMAPP_MEDIA_BASE ?? '').trim();
+if (MEDIA_BASE) {
+  const tag = `<script>window.__MIXMAPP_MEDIA_BASE__=${JSON.stringify(MEDIA_BASE)};</script>`;
+  html = html.includes('<head>') ? html.replace('<head>', `<head>\n    ${tag}`) : `${tag}\n${html}`;
+  console.info(`[single] 媒体源 = ${MEDIA_BASE}`);
+}
+
 mkdirSync(outDir, { recursive: true });
 writeFileSync(outFile, html, 'utf8');
 const kb = (statSync(outFile).size / 1024).toFixed(1);

@@ -44,6 +44,7 @@ jobs:
           # 这里用独立变量 PAGES_API_BASE，不复用主站同源变量 MIXMAPP_API_BASE
           # （其值同为绝对基址，但两处入口的回滚节奏不同）。
           MIXMAPP_API_BASE: ${{ vars.PAGES_API_BASE || 'https://api.mixm.top/mixmapp/api/v1' }}
+          MIXMAPP_MEDIA_BASE: ${{ vars.MIXMAPP_MEDIA_BASE || 'https://img.mixm.top' }}
         run: node scripts/build-h5-single.mjs
 
       - name: 组装站点目录
