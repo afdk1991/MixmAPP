@@ -51,7 +51,7 @@ async function main() {
   // 1. 健康检查 + 真库
   const health = await req('GET', `${api}/healthz`);
   const checks = health.json?.checks ?? {};
-  const dbOk = health.status === 200 && checks.db === 'postgres';
+  const dbOk = health.status === 200 && (checks.db === 'ok' || checks.db === 'postgres') && Boolean(checks.dbTarget);
   record('健康检查与真库连通', dbOk, `status=${health.status} db=${checks.db} dbTarget=${checks.dbTarget ?? '-'} dbHost=${checks.dbHost ?? '-'}`);
 
   // 2. 能力矩阵
@@ -141,7 +141,7 @@ async function main() {
     record(
       '管理面可读数据库落点',
       admin.status === 200 && Boolean(admin.json?.data?.target),
-      `target=${admin.json?.data?.target} host=${admin.json?.data?.host} source=${admin.json?.data?.source}`,
+      `status=${admin.status} target=${admin.json?.data?.target} host=${admin.json?.data?.host} source=${admin.json?.data?.source}`,
     );
     const bad = await req('GET', `${api}/admin/db`, { headers: { 'x-admin-token': 'wrong-token' } });
     record('管理面错误令牌被拒', bad.status === 404, `status=${bad.status}`);

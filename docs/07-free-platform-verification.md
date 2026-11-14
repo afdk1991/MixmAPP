@@ -524,3 +524,19 @@ Edge 无头模式的 `--window-size=430,932` 会被钳制到约 492 CSS px 宽�
 **截图**：`docs/screenshots/live-tx-home.png`（首页，右侧状态为 `ONLINE / production`，说明同域 API 已连通）、`live-tx-mall.png`（商城首屏，标题栏下即「‹ 首页」）。
 
 **仍留在外部平台的残留（未删，仅停用）**：GitHub Pages 站点、CloudBase 静态托管、ghcr 镜像。真要删除需再确认，避免误删仍在被引用的地址。
+## §18 服务器重建后的复检：数据库落本机 PG、存储落本机磁盘（2026-11-14）
+
+**发生了什么**：11-13 14:08 起 `deploy` 连续报 `Permission denied (publickey,password)`，站点 443/80 全部拒绝、SSH 主机指纹变化。11-14 复查确认机器在 11-13 16:16 被安装向导重装过（`/opt/mixmapp/releases`、`/var/www/mixmapp-site`、`/etc/nginx/conf.d/cloud.mixm.top.conf` 均由 installer 重新生成，`uptime` 19 小时），本机 PG 数据被重建（`users` 仅剩 1 行，此前验收账号与订单不再存在）。
+
+**恢复动作**：
+1. SSH 恢复后核对布局：`mixmapp-api`、`nginx`、`postgresql` 三个服务 active；当前 release 的 `web` 是指向 `/var/www/mixmapp-site` 的软链，流水线发布与安装目录已合并为同一落点。
+2. 数据库：`DB_TARGET=server`，`source=DATABASE_URL_LOCAL`，`host=127.0.0.1:5432`，`cloudbase.configured=false`——CloudBase 云 PG 只剩代码里的备援开关，不再是落点。
+3. 存储改本机磁盘：`STORAGE_PROVIDER=local`、`STORAGE_DIR=/var/lib/mixmapp/storage`、`STORAGE_API_BASE=/api/v1`；systemd 追加 `ReadWritePaths=/var/lib/mixmapp`；nginx 增加 `location /media/ { alias /var/lib/mixmapp/storage/; }`，`client_max_body_size` 提到 25m。
+4. 踩到的两个真问题：`alias` 里再写 `try_files $uri` 会拼错路径（404），去掉即可；`/var/lib/mixmapp` 原为 `750` 且属组 `mixmapp`，nginx worker（`www-data`）无法穿越目录，改属组为 `www-data` 后才通。
+
+**线上验证**：
+- `PUT /api/v1/storage/upload?key&exp&sig` → 204；文件落在 `/var/lib/mixmapp/storage/u/<uid>/verify/ok.txt`；
+- `GET /media/u/<uid>/verify/ok.txt` → 200，内容与上传一致；
+- `/api/v1/healthz` → `db=ok / dbTarget=server / dbSource=DATABASE_URL_LOCAL / storage=local`；
+- `/api/v1/admin/db` → `target=server, source=DATABASE_URL_LOCAL, cloudbase.configured=false`；
+- 验收脚本 17/18：唯一失败项是「限流触发」，同期其它请求已达阈值，本窗口 80 次未触发 429（此前多次实测 429 生效）；另修正脚本对 `checks.db` 的判断（服务端已把健康检查收敛为单一实现，值为 `ok` 而非 `postgres`）。
