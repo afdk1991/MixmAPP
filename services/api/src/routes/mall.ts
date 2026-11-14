@@ -9,11 +9,13 @@ import { parse } from '../lib/validate.js';
 
 /** 商城路由：商品公开读，购物车与订单需登录。 */
 export async function mallRoutes(app: FastifyInstance): Promise<void> {
-  // 无参：一级类目聚合（兼容旧页面）；?parent=c1:002：返回该节点下一层（分类树下钻）。
+  // 无参：一级类目聚合（兼容旧页面）；?parent=root：分类树一级节点（带 id，供下钻）；
+  // ?parent=c1:002：返回该节点下一层（分类树下钻）。
   app.get('/mall/categories', async (request) => {
     const query = request.query as { parent?: string } | undefined;
     const parent = typeof query?.parent === 'string' && query.parent.trim() ? query.parent.trim() : null;
     if (!parent) return { data: await app.mall.listCategories() };
+    if (parent === 'root') return { data: await app.mall.listCategoryChildren(null) };
     return { data: await app.mall.listCategoryChildren(parent) };
   });
 

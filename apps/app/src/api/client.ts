@@ -1,7 +1,7 @@
 import type {
   AuthResult,
   CartDto,
-  OAuthProviderKey,
+  OAuthProviderId,
   OrderCreateInput,
   OrderDto,
   UserDto,
@@ -236,14 +236,14 @@ export async function apiRequest<T>(
  * 服务端 302 到渠道授权页，回跳后再带 `code` 回到当前页面。
  * 未配置的渠道不要调用，服务端会返回 `PROVIDER_DISABLED`。
  */
-export function oauthStartUrl(provider: OAuthProviderKey, redirect?: string): string {
+export function oauthStartUrl(provider: OAuthProviderId, redirect?: string): string {
   const base = API_BASE.replace(/\/+$/, '');
   const back = redirect ?? (typeof window !== 'undefined' ? window.location.href : '');
   return `${base}/auth/oauth/${provider}/start${back ? `?redirect=${encodeURIComponent(back)}` : ''}`;
 }
 
 export type OAuthProviderOption = {
-  key: OAuthProviderKey;
+  key: OAuthProviderId;
   label: string;
   region: 'cn' | 'intl';
   /** 是否支持 H5 服务端跳转授权；false 表示需要端侧 SDK */
@@ -282,7 +282,7 @@ export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 
     apiRequest<AuthResult>('/auth/login/password', { method: 'POST', data: input, auth: false }),
   loginBySms: (input: { phone: string; code: string }) =>
     apiRequest<AuthResult>('/auth/login/sms', { method: 'POST', data: input, auth: false }),
-  loginByOAuth: (provider: OAuthProviderKey, code: string) =>
+  loginByOAuth: (provider: OAuthProviderId, code: string) =>
     apiRequest<AuthResult>('/auth/login/oauth', {
       method: 'POST',
       data: { provider, code },
@@ -302,7 +302,7 @@ export const meApi = {
   bindUsername: (username: string, password: string) =>
     apiRequest<UserDto>('/me/bind/username', { method: 'POST', data: { username, password } }),
   /** 解绑第三方渠道；仅剩一种登录方式时服务端会返回 409 */
-  unbindOAuth: (provider: OAuthProviderKey) =>
+  unbindOAuth: (provider: OAuthProviderId) =>
     apiRequest<UserDto>(`/me/bind/oauth/${provider}`, { method: 'DELETE' }),
 };
 
@@ -364,10 +364,10 @@ export const mallApi = {
     apiRequest<MallProductDto>(`/mall/products/${encodeURIComponent(productId)}`, { auth: false }),
   /** 一级分类 + 商品计数；后端未就绪时前端兜底只留「全部」。 */
   listCategories: () => apiRequest<MallCategoryDto[]>('/mall/categories', { auth: false }),
-  /** 分类树下一层：不传 parent 取一级，传节点 id（c1:/c2:）取其直接子级。 */
+  /** 分类树下一层：不传 parent 取树的一级（?parent=root），传节点 id（c1:/c2:）取其直接子级。 */
   listCategoryChildren: (parent?: string) =>
     apiRequest<MallCategoryNodeDto[]>(
-      `/mall/categories${parent ? `?parent=${encodeURIComponent(parent)}` : ''}`,
+      `/mall/categories?parent=${encodeURIComponent(parent || 'root')}`,
       { auth: false },
     ),
   /** 三级类目下可用的规格筛选值（dims/lens）。 */
