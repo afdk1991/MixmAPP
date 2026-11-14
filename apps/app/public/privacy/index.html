@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="MixmAPP 隐私政策与权限说明（公开版）" />
+  <title>隐私政策与权限说明 · MixmAPP</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f4f4f1;
+      --paper-2: #ebece7;
+      --shell: #ffffff;
+      --ink: #111413;
+      --ink-2: #333a37;
+      --ink-3: #6b736e;
+      --ink-4: #9aa39d;
+      --brand: #0a7a70;
+      --rule: #dedfd8;
+      --mark: #e2f1ee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --paper: #121716;
+        --paper-2: #1b211f;
+        --shell: #171d1b;
+        --ink: #eceee9;
+        --ink-2: #c9cfca;
+        --ink-3: #a2aaa5;
+        --ink-4: #868e89;
+        --brand: #3fc0b0;
+        --rule: #2b3330;
+        --mark: #1d2b28;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--paper); }
+    body {
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.85;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 20px calc(56px + env(safe-area-inset-bottom));
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--brand);
+    }
+    h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.3;
+      letter-spacing: -0.4px;
+    }
+    .meta {
+      margin: 14px 0 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: var(--ink-3);
+    }
+    .rule {
+      height: 1px;
+      margin: 26px 0 8px;
+      background: var(--rule);
+      border: 0;
+    }
+    section { margin-top: 34px; }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 19px;
+      line-height: 1.4;
+    }
+    p { margin: 0 0 12px; color: var(--ink-2); }
+    ul { margin: 0 0 12px; padding-left: 1.25em; color: var(--ink-2); }
+    li { margin: 0 0 8px; }
+    strong { color: var(--ink); font-weight: 600; }
+    .card {
+      padding: 16px 18px;
+      background: var(--shell);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+    }
+    .card + .card { margin-top: 12px; }
+    .card h3 {
+      margin: 0 0 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      letter-spacing: 1px;
+      color: var(--brand);
+      font-weight: 600;
+    }
+    .card p:last-child { margin-bottom: 0; }
+    .row {
+      display: flex;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .row:last-child { border-bottom: 0; }
+    .row .k {
+      flex: 0 0 88px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      color: var(--ink-3);
+      letter-spacing: 1px;
+    }
+    .row .v { flex: 1; margin: 0; }
+    a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+    .foot {
+      margin-top: 44px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: var(--ink-4);
+      text-align: center;
+    }
+    @media (max-width: 420px) {
+      .wrap { padding-top: 34px; }
+      h1 { font-size: 25px; }
+      h2 { font-size: 18px; }
+      .row { display: block; }
+      .row .k { display: block; margin-bottom: 2px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">PRIVACY &amp; PERMISSIONS</p>
+    <h1>隐私政策与权限说明</h1>
+    <p class="meta">政策版本 2026-11 · 生效日期 2026-11-14</p>
+    <hr class="rule" />
+
+    <p>本页是 MixmAPP（Android 应用包名 <strong>top.mixm.app</strong>）隐私政策与权限说明的公开版本。你可以在不安装应用的情况下阅读全文。</p>
+
+    <section>
+      <h2>一、我们收集什么</h2>
+      <p>1. 账号资料：注册时填写的用户名、昵称、手机号或邮箱，用于签发通行证与登录。</p>
+      <p>2. 交易数据：购物车、订单、收货信息，仅在为你完成下单与履约时使用。</p>
+      <p>3. 运行信息：应用版本、网络连通状态与崩溃记录，用于定位故障与恢复页面。</p>
+      <p>4. 本机数据：登录凭证、隐私同意状态、最近一次启动记录，均保存在设备本地。</p>
+    </section>
+
+    <section>
+      <h2>二、应用申请的权限</h2>
+      <div class="card">
+        <h3>网络 · 必需</h3>
+        <p>访问网络与读取网络状态。用于加载页面与在断网时给出提示。</p>
+      </div>
+      <div class="card">
+        <h3>通知 · 可选</h3>
+        <p>接收订单与账号相关通知。不授权不影响使用，后续在合适时机单独询问。</p>
+      </div>
+      <div class="card">
+        <h3>剪贴板 · 按操作触发</h3>
+        <p>仅在你点击「复制编号」等按钮时写入，不会在后台读取剪贴板内容。</p>
+      </div>
+      <p style="margin-top:12px">本应用不申请相机、麦克风、通讯录、位置与存储读取权限。</p>
+    </section>
+
+    <section>
+      <h2>三、信息如何使用</h2>
+      <p>仅用于提供账号、商城与订单服务，以及安全防护与故障排查。我们不使用上述信息进行广告画像，也不向第三方出售个人信息。</p>
+    </section>
+
+    <section>
+      <h2>四、第三方登录会获取哪些字段</h2>
+      <p>只有在你主动点击对应的第三方登录方式时，应用才会拉起该渠道的授权页。服务端只接收授权结果（授权码；Apple 为身份令牌），并按下列范围读取身份信息，用于建号、登录或绑定已有账号：</p>
+      <div class="row"><span class="k">微信</span><p class="v">openid、unionid、昵称、头像地址。</p></div>
+      <div class="row"><span class="k">QQ</span><p class="v">openid、昵称、头像地址。</p></div>
+      <div class="row"><span class="k">GitHub</span><p class="v">用户 id、登录名（login）、昵称（name）、头像地址（avatar_url）。</p></div>
+      <div class="row"><span class="k">Apple</span><p class="v">身份令牌中的用户标识（sub）。不获取昵称与头像。</p></div>
+      <p style="margin-top:12px">上述渠道的账号密码不会经过 MixmAPP 服务端。</p>
+    </section>
+
+    <section>
+      <h2>五、第三方与数据出境</h2>
+      <p>应用仅连接自有服务端接口，未接入广告或统计 SDK。除法律法规要求或你主动触发的站外链接外，不向第三方提供你的个人信息。</p>
+    </section>
+
+    <section>
+      <h2>六、保存期限与安全</h2>
+      <p>登录凭证保存在本机 WebView 存储中，退出登录即清除；应用已关闭系统自动备份，避免凭据随设备迁移被带出。传输全程使用 HTTPS。</p>
+    </section>
+
+    <section>
+      <h2>七、你的权利</h2>
+      <p>你可以在「我的」页查看与修改账号资料、退出登录；在系统设置中清除应用数据，等同于撤回同意并删除本地数据。</p>
+    </section>
+
+    <section>
+      <h2>八、政策更新机制</h2>
+      <p>当前政策版本为 <strong>2026-11</strong>，生效日期为 2026-11-14。政策发生实质变更时会升级版本号，应用下次启动会展示新版本并再次征得同意；本公开页会同步更新版本号与生效日期。</p>
+    </section>
+
+    <section>
+      <h2>九、联系我们</h2>
+      <p>如对本政策或个人信息处理有疑问，可通过公开仓库的 Issues 提交：</p>
+      <p><a href="https://github.com/afdk1991/MixmAPP/issues">https://github.com/afdk1991/MixmAPP/issues</a></p>
+      <p>你也可以在应用内「我的 → 关于与能力」查看当前版本、运行环境与服务端能力状态。</p>
+    </section>
+
+    <p class="foot">© 2026 MIXMAPP · 政策版本 2026-11</p>
+  </main>
+</body>
+</html>

@@ -20,13 +20,26 @@
  *   MIXMAPP_API_BASE=/mixmapp/api/v1 pnpm build:h5   # 同域自托管
  */
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const indexPath = resolve(root, 'apps', 'app', 'dist', 'build', 'h5', 'index.html');
+const outDir = resolve(root, 'apps', 'app', 'dist', 'build', 'h5');
+const indexPath = resolve(outDir, 'index.html');
+const publicDir = resolve(root, 'apps', 'app', 'public');
 const configPath = resolve(root, 'apps', 'mobile', 'api-base.json');
+
+/** 递归复制目录。不用 fs.cpSync：Windows + 非 ASCII 路径下它会以 0xC0000409 直接崩进程。 */
+function copyDir(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    const src = join(from, entry.name);
+    const dest = join(to, entry.name);
+    if (entry.isDirectory()) copyDir(src, dest);
+    else copyFileSync(src, dest);
+  }
+}
 
 function resolveApiBase() {
   const fromEnv = (process.env.MIXMAPP_API_BASE ?? '').trim();
@@ -66,6 +79,15 @@ execSync('pnpm --filter @mixmapp/app build:h5', { cwd: root, stdio: 'inherit' })
 if (!existsSync(indexPath)) {
   console.error(`[h5] 找不到产物入口：${indexPath}`);
   process.exit(1);
+}
+
+// 公开静态页：uni 的 H5 构建只复制 src/static，项目根的 public/ 不会进产物。
+// 隐私政策这类需要「浏览器直接打开、稳定 URL、无 hash」的页面放 apps/app/public 下，
+// 构建后原样落到 dist/build/h5 根目录（如 /privacy/index.html），
+// 由 nginx 的 try_files $uri $uri/ 直接命中，不经过 SPA 路由。
+if (existsSync(publicDir)) {
+  copyDir(publicDir, outDir);
+  console.info(`[h5] 已复制公开静态页：${publicDir} → ${outDir}`);
 }
 
 const html = readFileSync(indexPath, 'utf8');
