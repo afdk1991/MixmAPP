@@ -135,9 +135,38 @@ function checkApiRoutes() {
 }
 
 // ---------- 文档编号唯一性 ----------
+// 允许「带理由的显式豁免」：只有 scripts/repo-lint-exemptions.json 里逐条登记、
+// 且理由与复核期限齐全的撞号才放行；放行时仍然打印告警，不做无声放水。
 const DOCS = join(ROOT, 'docs');
+const EXEMPTIONS_FILE = join(ROOT, 'scripts', 'repo-lint-exemptions.json');
+const exemptions = (() => {
+  try {
+    const parsed = JSON.parse(readFileSync(EXEMPTIONS_FILE, 'utf8'));
+    return Array.isArray(parsed.docNumberCollisions) ? parsed.docNumberCollisions : [];
+  } catch {
+    return [];
+  }
+})();
+function matchExemption(entry, first, no) {
+  return exemptions.find(
+    (x) =>
+      x &&
+      x.rule === 'doc-number-unique' &&
+      Array.isArray(x.files) &&
+      x.files.includes(`docs/${entry}`) &&
+      x.files.includes(`docs/${first}`) &&
+      (!x.number || String(x.number) === no) &&
+      typeof x.reason === 'string' &&
+      x.reason.trim().length >= 20 &&
+      typeof x.owner === 'string' &&
+      x.owner.trim() &&
+      typeof x.reviewBy === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(x.reviewBy),
+  );
+}
 function checkDocNumbers() {
   const byNo = new Map();
+  const exempted = [];
   for (const entry of readdirSync(DOCS)) {
     if (!entry.endsWith('.md')) continue;
     const m = entry.match(/^(\d{2})-.*\.md$/);
@@ -145,11 +174,14 @@ function checkDocNumbers() {
     const no = m[1];
     if (byNo.has(no)) {
       const first = byNo.get(no);
-      violations.push(`docs/${entry} 与 docs/${first} 撞号 ${no}，同一编号只许一篇（新增文档请取当前最大号之后的空号）`);
+      const hit = matchExemption(entry, first, no);
+      if (hit) exempted.push(`docs/${entry} 与 docs/${first} 撞号 ${no} 已豁免（${hit.owner}，复核至 ${hit.reviewBy}）：${hit.reason}`);
+      else violations.push(`docs/${entry} 与 docs/${first} 撞号 ${no}，同一编号只许一篇（新增文档请取当前最大号之后的空号）`);
     } else {
       byNo.set(no, entry);
     }
   }
+  exempted.forEach((msg) => console.warn(`⚠ ${msg}`));
 }
 
 walk(ROOT);

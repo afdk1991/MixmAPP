@@ -1,0 +1,16 @@
+{
+  "_readme": "仓库规则检查的显式豁免清单。每条必须写清 rule / files / number / owner / reason / reviewBy，缺任一项则视同未豁免（检查照旧失败）。到期后请删除本条并改号。",
+  "docNumberCollisions": [
+    {
+      "rule": "doc-number-unique",
+      "number": 22,
+      "files": [
+        "docs/22-audit-mim-community-mall-paid-2026-11-14.md",
+        "docs/22-audit-mim-tools-appearance-content-security-2026-11-14.md"
+      ],
+      "owner": "Mim 项目审计线（并行会话）",
+      "reason": "两篇均为 Mim 项目（F:\\合并项目\\Mim）只读审计报告，由另一个并行会话在 2026-11-14 生成且尚未提交；商城线无法确认其会话归属，擅自改名会与在途写入冲突，因此先登记豁免，由 Mim 线自行改号为 28/29。",
+      "reviewBy": "2026-11-21"
+    }
+  ]
+}
