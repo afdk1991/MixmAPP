@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <view class="halo">
     <view class="page home">
       <!-- ---------- 星际联邦通行证 Hero ---------- -->
@@ -132,7 +132,7 @@
         <view class="footer">
           <view class="foot-rule" />
           <text class="foot-line mono">BUILD · TEST · SHIP · OPS</text>
-          <text class="foot-line foot-line--dim mono">MIXMAPP · 单码多端预览版</text>
+          <text class="foot-line foot-line--dim mono">MIXMAPP · 正式发布</text>
         </view>
       </view>
     </view>
