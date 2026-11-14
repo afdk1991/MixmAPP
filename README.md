@@ -9,12 +9,23 @@
 >  内自洽，不依赖任何外部旧仓。
 
 <!-- version:begin -->
-当前构建版本：**V0.0.0-preview**（内部预览构建，未对外发布）
-已发布版本：无
-版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
+当前构建版本：**V0.0.0.0**（正式发布版本）
+已发布版本：`V0.0.0.0`
+版本规约：四段式，首发 `V0.0.0.0`，之后按第 4 位递增；npm 包版本取前三段；正式发布态以已发布版本为准；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
 <!-- version:end -->
 
+## 访问入口
 
+| 用途 | 地址 |
+|---|---|
+| 主入口（官网 / H5 正式站） | <https://www.mixm.top/> |
+| 裸域（301 → `www`） | <https://mixm.top> |
+| 生产 API / 支付回调 | <https://api.mixm.top/mixmapp/api/v1> |
+| 静态资源与图片 | <https://img.mixm.top/> |
+| 切换期 legacy（已发布 APK 仍在用，待下线） | <https://cloud.mixm.top/> |
+| 域名注册表（单一真源） | [deploy/domains.json](deploy/domains.json) |
+
+主域是 `mixm.top`，主入口是 `www.mixm.top`，裸域 `mixm.top` 301 到 www；API 与支付回调在 `api.mixm.top`，静态资源在 `img.mixm.top`。`cloud.mixm.top` 自 2026-11-14 起不再是主入口与 API 宿主，只在切换期作 legacy 双跑（已发布 APK 与存量支付回调仍指向它），确认零流量后下线——步骤见 [切换与回退序列](2026-11-14/deploy-domains/outputs/切换与回退序列.md)。DNSPod 导出表（`dnspod_records_2026-11-05_21-42-26.xls`）里这些主机只有主机名与备注，记录类型/记录值为空，属「表内主机、待建解析」；同根域的 `mim` / `data` / `gy` 属其他项目，不在本仓配置。`mix.top`（少一个 m）不是本项目域名，功能路径禁止出现，改完跑 `pnpm domains:check` 校验。
 
 ***
 
@@ -200,7 +211,7 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 
 第三方按需开启：填了对应凭据，`/api/v1/meta` 的能力矩阵会变成 `on`，未填则自动退化为 dev 适配器（不报错、不联网）。
 
-第三方登录是**真实闭环**（2026-11-13）：`GET /api/v1/auth/oauth/:provider/start` 校验渠道后 302 到官方授权页（`redirect_uri` 固定回本站 `/auth/oauth/:provider/callback`，带一次性 `state`），回跳把 `code` 带回原页面，再由 `POST /auth/login/oauth` 换令牌建号。未配置渠道直接返回 `PROVIDER_DISABLED`，前端渲染「未启用」且不显示跳转箭头、不发假跳转。部署在带前缀的域名时，`PUBLIC_BASE_URL` 要写到 API 前缀（例：`https://cloud.mix.top/mixmapp/api/v1`），未配置则按请求 `Host` 反推。
+第三方登录是**真实闭环**（2026-11-13）：`GET /api/v1/auth/oauth/:provider/start` 校验渠道后 302 到官方授权页（`redirect_uri` 固定回本站 `/auth/oauth/:provider/callback`，带一次性 `state`），回跳把 `code` 带回原页面，再由 `POST /auth/login/oauth` 换令牌建号。未配置渠道直接返回 `PROVIDER_DISABLED`，前端渲染「未启用」且不显示跳转箭头、不发假跳转。部署在带前缀的域名时，`PUBLIC_BASE_URL` 要写到 API 前缀（例：`https://cloud.mixm.top/mixmapp/api/v1`），未配置则按请求 `Host` 反推。
 
 
 
@@ -222,8 +233,8 @@ SNOWFLAKE_WORKER_ID=1        # 0..1023，多实例必须互不相同
 | `ci`                        | ✅ 1m18s | 规则 / 类型 / 单元测试 /**真实 PostgreSQL 集成测试**/API 构建 / H5 构建 / 小程序构建 /`dist` 启动后 `readyz` 就绪                                                                                                                                                            |
 | `deploy`                    | ✅ 1m10s | 独立发布包（`pnpm deploy --prod`）+ H5 打包 + SSH 原子发布（`/opt/mixmapp/current`）                                                                                                                                                                            |
 | `Android`                   | ✅ 3m18s | H5 → `cap sync` → `assembleDebug`，产出 `mixmapp-debug-apk`（3.91 MB）                                                                                                                                                                                |
-| GitHub Pages                | ✅ 已上线   | [https://afdk1991.github.io/MixmAPP/](https://afdk1991.github.io/MixmAPP/)，单文件 H5 注入生产 API 源，新版「通行证 PASS」界面 run `43249567035` success                                                                                                            |
-| CloudBase 静态托管              | ✅ 已上线   | [https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/](https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/)，当前版本 `mixmapp-007`（buildId `2612465058`）SUCCESS；2026-11-13 首发修正产物内嵌的 API 基址（原为错误的 `cloud.mix.top`），随后两次重发带上新版首页 |
+| GitHub Pages                | ✅ 活的（2026-11-14 复核） | 地址 [https://afdk1991.github.io/MixmAPP/](https://afdk1991.github.io/MixmAPP/)（HTTP 200）；`pages.yml` 工作流 `state=active`，run `43581523947` success。**它是表外域名**（`afdk1991.github.io` 不在 DNSPod 导出表内），只作预览入口，不得进入生产配置或 CORS 白名单 |
+| CloudBase 静态托管              | ⏸ 已暂停（2026-11-13） | 历史地址 [https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/](https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com/)，当前版本 `mixmapp-007`（buildId `2612465058`）SUCCESS；该域名不在 DNSPod 导出表内，标记 **pending 待确认**，H5 改由云服务器 `cloud.mixm.top` 提供 |
 | 生产机自托管入口                    | ✅ 已上线   | [https://cloud.mixm.top/](https://cloud.mixm.top/)，nginx `location = /` 直接返回 `/var/www/mixmapp-site/index.html`（与 Pages / CloudBase 同一份单文件 H5，同源调用 `/mixmapp/api/v1`），根路径不再落回 Mim 的 8787 返回 404                                                  |
 
 **线上内容一致性（2026-11-12 复核）**：三端静态站此前展示的是旧版白卡片界面，仓库里的全站改版未入库。已提交 `6ce6bb0`（14 个文件、全站通行证视觉）与 `1393512`（`rise` 动效去掉 `opacity` 起始，避免动画被浏览器冻结时「通行入口」整块永久空白），Pages 与 CloudBase 均已按修复版重发并逐页取证（首页 / 登录 / 商城）。详见 [docs/12-delivery-report-2026-11-12-ui-consistency.md](docs/12-delivery-report-2026-11-12-ui-consistency.md)。

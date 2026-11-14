@@ -28,7 +28,9 @@
     "version:check": "node scripts/version.mjs check",
     "version:sync": "node scripts/version.mjs sync",
     "version:bump": "node scripts/version.mjs bump",
-    "version:release": "node scripts/version.mjs release"
+    "version:release": "node scripts/version.mjs release",
+    "domains:show": "node scripts/domains.mjs show",
+    "domains:check": "node scripts/domains.mjs check"
   },
   "devDependencies": {
     "typescript": "5.6.3"

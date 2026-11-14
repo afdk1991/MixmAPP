@@ -74,7 +74,7 @@ schedule（每日 02:20）
 | `ANDROID_KEY_PASSWORD` | secret | 签名口令 | 同上 |
 | `CF_PAGES_PROJECT` | var | Pages 项目名（默认 `mixmapp`） | 用默认 |
 | `HEALTH_BASE_URL` | var | 线上健康校验基址 | 跳过校验 |
-| `MIXMAPP_API_BASE` | var | 静态端使用的 API 绝对地址（如 `https://api.mixm.app`） | 构建保持同源 `/api/v1`；静态平台会全量 404 |
+| `MIXMAPP_API_BASE` | var | 静态端使用的 API 绝对地址（目标值 `https://api.mixm.top/mixmapp/api/v1`；切换期可保持相对路径 `/mixmapp/api/v1` 由 www 反代） | 构建保持同源 `/api/v1`；静态平台会全量 404 |
 
 > 静态托管平台只发前端文件，没有 `/api/v1` 路由。`MIXMAPP_API_BASE` 会在构建时写入
 > `window.__MIXMAPP_API_BASE__`，前端优先读取它；也可以部署后直接改 HTML 里的这一行，
@@ -96,7 +96,7 @@ schedule（每日 02:20）
 ```
 
 服务：`mixmapp-api.service`（systemd，`Restart=always`，读取 `/etc/mixmapp/api.env`，暴露 8080）。
-反代：`infra/nginx/mixmapp-api.conf`（`/api/` → 127.0.0.1:8080，静态端可由 Nginx 或 Pages 承担）。
+反代（2026-11-14 改版）：`infra/nginx/api.mixm.top.conf`（`/mixmapp/` 剥前缀、`/api/` 原样 → 127.0.0.1:8080）；站点入口 `infra/nginx/www.mixm.top.conf`，裸域 301 `infra/nginx/mixm.top.conf`，切换期 legacy `infra/nginx/cloud.mixm.top.conf`。
 
 ### 原子发布流程（`deploy/atomic-release.sh`）
 
@@ -126,7 +126,7 @@ bash /opt/mixmapp/deploy/rollback.sh 2    # 回退 2 个版本
 sudo useradd -r -s /usr/sbin/nologin mixmapp
 sudo mkdir -p /opt/mixmapp/{releases,deploy} /var/log/mixmapp /etc/mixmapp
 sudo cp infra/systemd/mixmapp-api.service /etc/systemd/system/
-sudo cp infra/nginx/mixmapp-api.conf /etc/nginx/conf.d/
+sudo cp infra/nginx/{www,api,img,mixm}.mixm.top.conf /etc/nginx/conf.d/   # 切换期另保留 cloud.mixm.top.conf
 sudo systemctl daemon-reload && sudo systemctl enable mixmapp-api
 
 # 环境变量（权限 600）

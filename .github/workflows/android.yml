@@ -9,12 +9,14 @@ on:
       - 'packages/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
+      - 'version.json'
       - '.github/workflows/android.yml'
   pull_request:
     paths:
       - 'apps/app/**'
       - 'apps/mobile/**'
       - 'packages/**'
+      - 'version.json'
   workflow_dispatch:
     inputs:
       release:
@@ -48,18 +50,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 版本号唯一事实源：version.json。app/build.gradle 会从它动态读 build / released / next / channel
+      # 生成 versionCode / versionName；这里再解析一次用于日志与产物命名，规则保持一致：
+      # 正式发布态（channel=release 且 released 非空）取 released 最新已发布号（裸号，当前 0.0.0.0），
+      # 其余情况取 next，预览/开发通道追加 -<channel>。注意 next 是「下一个待发布工作号」，
+      # 正式发布后不能拿它当 APK 版本名，否则产物会显示 0.0.0.1 与 README/manifest 不一致。
+      - name: 读取版本（version.json 单一事实源）
+        id: version
+        run: |
+          node -e 'const v=require("./version.json");const fs=require("fs");const formal=["stable","release"].includes(v.channel);const published=v.channel==="release"&&Array.isArray(v.released)&&v.released.length?v.released[v.released.length-1]:null;const vn=published||(v.next+(formal?"":"-"+v.channel));fs.appendFileSync(process.env.GITHUB_OUTPUT,"version_name="+vn+"\nversion_code="+v.build+"\n");console.log("versionName="+vn+"  versionCode="+v.build);'
+
       - name: Build H5（注入壳内 API 源）
         # 壳的 WebView 从 https://localhost 加载本地资源，必须把 API 绝对地址写进 HTML，
         # 否则所有请求落到 https://localhost/api/v1（全站离线）。可用仓库变量覆盖。
+        # 2026-11-14 起客户端基址定为 api.mixm.top；正式包必须在 api.mixm.top 双跑
+        # 验证（healthz/meta 正常）之后再出，否则新壳指向未生效域名。
         env:
-          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || 'https://cloud.mixm.top/mixmapp/api/v1' }}
+          MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || 'https://api.mixm.top/mixmapp/api/v1' }}
         run: node scripts/build-h5.mjs
 
       - name: Sync Capacitor（含 API 源注入）
         # 注入放在 sync 之后由脚本兜住：任何人裸跑 build:h5 + cap sync 都不会把注入覆盖掉
         run: pnpm --filter @mixmapp/mobile sync:android
 
-      - name: Check shell assets
+      - name: Check shell assets（完整体检）
+        # --check 输出 API 源 / HTTPS / /api/v1 后缀 / viewport-fit=cover / JS 产物等清单
         run: node scripts/android-inject-base.mjs --check
 
       - uses: actions/setup-java@v4
@@ -67,10 +82,14 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Assemble debug APK
-        working-directory: apps/mobile/android
+      - name: Make gradlew executable
         # Windows 提交的 gradlew 会丢可执行位，这里显式补回，避免 Permission denied(126)
-        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+        run: chmod +x apps/mobile/android/gradlew
+
+      - name: Assemble debug APK
+        # 统一走 scripts/android-build.mjs（自动挑 JDK 21），与本地 build:debug 同一入口；
+        # android-build.mjs 内部把 cwd 切到 apps/mobile/android，故这里无需 working-directory。
+        run: node scripts/android-build.mjs assembleDebug --no-daemon
 
       - name: Decode keystore
         if: env.HAS_SIGNING == 'true'
@@ -83,13 +102,14 @@ jobs:
 
       - name: Assemble release AAB
         if: env.HAS_SIGNING == 'true'
-        working-directory: apps/mobile/android
+        # 签名四项全部来自 Secrets；app/build.gradle 的 signingConfigs.release 读取同名
+        # 环境变量（本地则回退到 .secrets/keystore.properties + release.keystore）。
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/apps/mobile/android/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew bundleRelease --no-daemon
+        run: node scripts/android-build.mjs bundleRelease --no-daemon
 
       - name: Warn when unsigned
         if: env.HAS_SIGNING != 'true'
@@ -98,7 +118,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: mixmapp-debug-apk
+          name: mixmapp-debug-apk-${{ steps.version.outputs.version_name }}
           path: apps/mobile/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
@@ -106,6 +126,6 @@ jobs:
         if: env.HAS_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: mixmapp-release-aab
+          name: mixmapp-release-aab-${{ steps.version.outputs.version_name }}
           path: apps/mobile/android/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error

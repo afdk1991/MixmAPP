@@ -1,0 +1,2090 @@
+{
+  "$comment": "严格口径域名注册表。唯一数据源：dnspod_records_2026-11-05_21-42-26.xls。只登记该表实际出现的主机；表中「记录类型 / 记录值 / 状态」列为空，故 recordType / value 一律为 null，不推测、不补全。role 是由表内备注文字归纳的业务分类，不是 DNS 字段。表外域名只出现在 cors.pendingOutsideTable 与 forbiddenStrings，不计入在用。",
+  "source": {
+    "file": "dnspod_records_2026-11-05_21-42-26.xls",
+    "sheets": [
+      "laal.top",
+      "mixm.top"
+    ],
+    "rows": {
+      "laal.top": 92,
+      "mixm.top": 103
+    },
+    "uniqueHosts": {
+      "laal.top": 45,
+      "mixm.top": 53
+    },
+    "columnsWithValues": [
+      "主机记录",
+      "线路",
+      "TTL",
+      "备注"
+    ],
+    "columnsEmpty": [
+      "记录类型",
+      "记录值",
+      "状态"
+    ],
+    "ttlObserved": [
+      600,
+      86400
+    ],
+    "note": "同一主机在表内既写短名又写全名，sourceRows 记录其全部行号；备注以 / 合并，空备注保留为 null。"
+  },
+  "generatedAt": "2026-11-14",
+  "primaryZone": "mixm.top",
+  "apiBase": "https://api.mixm.top/mixmapp/api/v1",
+  "notifyBase": "https://api.mixm.top/mixmapp/api/v1",
+  "counts": {
+    "active": 5,
+    "sharedZone": 3,
+    "platformVerification": 7,
+    "planned": 38,
+    "legacyUnused": 45
+  },
+  "active": [
+    {
+      "fqdn": "www.mixm.top",
+      "host": "www",
+      "zone": "mixm.top",
+      "sourceRows": [
+        5,
+        6
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "主站常规访问入口｜官方门户网站",
+      "role": "web-h5",
+      "projectUsage": "pending_dns",
+      "dnsState": "pending_create",
+      "landing": [
+        "`infra/nginx/www.mixm.top.conf` → `server_name`",
+        "`.env.example` L10 `CORS_ORIGINS` 生产值",
+        "`deploy/domains.json` → `domainArchitecture.primaryHost`",
+        "`README.md` 访问入口",
+        "`docs/08-platform-matrix.md`"
+      ],
+      "note": "2026-11-14 定案为主入口（H5 正式站）。表内主机名已存在，解析与证书待建。"
+    },
+    {
+      "fqdn": "mixm.top",
+      "host": "@",
+      "zone": "mixm.top",
+      "sourceRows": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "核心根域名，主站基础入口｜主站统一跳转门户",
+      "role": "root-redirect",
+      "projectUsage": "pending_dns",
+      "dnsState": "pending_create",
+      "landing": [
+        "`infra/nginx/mixm.top.conf` → `server_name mixm.top`（301 → `https://www.mixm.top`）"
+      ],
+      "note": "只做 301 到 www.mixm.top，不承载页面与 API；CORS 是否临时放行裸域见 cors.bareDomainNote。"
+    },
+    {
+      "fqdn": "api.mixm.top",
+      "host": "api",
+      "zone": "mixm.top",
+      "sourceRows": [
+        9,
+        10
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "接口服务入口｜API 统一网关",
+      "role": "api",
+      "projectUsage": "pending_dns",
+      "dnsState": "pending_create",
+      "landing": [
+        "`apps/mobile/api-base.json` → `apiBase`",
+        "`.env.example` L8 `PUBLIC_BASE_URL` 生产值",
+        "`.env.example` L79 / L83 支付回调",
+        "`infra/nginx/api.mixm.top.conf` → `server_name`",
+        "`cloudbase/functions/mixmapp-api-proxy/index.js` → `hostHeader` / `sni`",
+        "`deploy/domains.json` → `apiBase` / `notifyBase`",
+        "`.github/workflows/android.yml` → `MIXMAPP_API_BASE` 默认值"
+      ],
+      "note": "2026-11-14 定案为后端 API 与支付回调宿主；表内此前为未启用蓝图，解析与证书待建。"
+    },
+    {
+      "fqdn": "img.mixm.top",
+      "host": "img",
+      "zone": "mixm.top",
+      "sourceRows": [
+        37,
+        38
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "图片资源入口｜公共图床 + 素材资源站",
+      "role": "static-img",
+      "projectUsage": "pending_dns",
+      "dnsState": "pending_create",
+      "landing": [
+        "`infra/nginx/img.mixm.top.conf` → `server_name`"
+      ],
+      "note": "Nginx 直出 /var/lib/mixmapp/storage/；切换期仍保留 cloud.mixm.top/media/ 作回退。"
+    },
+    {
+      "fqdn": "cloud.mixm.top",
+      "host": "cloud",
+      "zone": "mixm.top",
+      "sourceRows": [
+        19,
+        20,
+        101
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "云服务模块入口｜私有云盘 / 网盘系统",
+      "role": "legacy-dual-run",
+      "projectUsage": "legacy_dual_run",
+      "dnsState": "in_use",
+      "landing": [
+        "`infra/nginx/cloud.mixm.top.conf` → `server_name`（切换期 legacy 双跑）",
+        "`cloudbase/functions/mixmapp-api-proxy/index.js` → 回退候选（仅切换期）"
+      ],
+      "conflict": "表内备注为「云服务模块入口｜私有云盘 / 网盘系统」，与 MixmAPP 实际用途不一致；记录类型/值为空，真实解析需控制台核对。",
+      "note": "2026-11-14 起不再是主入口、也不再是 API 宿主。切换期必须与 www/api 同时可用，承载已发布 APK 与历史支付回调；确认零流量后按下线清单移除。"
+    }
+  ],
+  "sharedZone": [
+    {
+      "fqdn": "data.mixm.top",
+      "host": "data",
+      "zone": "mixm.top",
+      "sourceRows": [
+        21,
+        22,
+        103
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "数据中心入口｜开放数据集平台",
+      "role": "other-project",
+      "projectUsage": "unused_other_project",
+      "landing": [],
+      "note": "同根域、非 MixmAPP；仓库内无引用。"
+    },
+    {
+      "fqdn": "gy.mixm.top",
+      "host": "gy",
+      "zone": "mixm.top",
+      "sourceRows": [
+        33,
+        34,
+        94
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "工具模块核心入口，疾风引擎承载节点｜疾风引擎在线工具平台",
+      "role": "other-project",
+      "projectUsage": "unused_other_project",
+      "landing": [],
+      "note": "同根域、非 MixmAPP；仓库内无引用。"
+    },
+    {
+      "fqdn": "mim.mixm.top",
+      "host": "mim",
+      "zone": "mixm.top",
+      "sourceRows": [
+        99
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "other-project",
+      "projectUsage": "unused_other_project",
+      "landing": [],
+      "note": "同根域、非 MixmAPP；仓库内无引用。"
+    }
+  ],
+  "platformVerification": [
+    {
+      "fqdn": "edgeonereclaim.gy.mixm.top",
+      "host": "edgeonereclaim.gy",
+      "zone": "mixm.top",
+      "sourceRows": [
+        93
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "platform-verification",
+      "projectUsage": "unused_platform_verification",
+      "landing": [],
+      "note": "表内无备注；主机名本身含 edgeonereclaim / _dnsauth 字样，具体平台归属待控制台确认，本仓不作删除建议。"
+    },
+    {
+      "fqdn": "_dnsauth.gy.mixm.top",
+      "host": "_dnsauth.gy",
+      "zone": "mixm.top",
+      "sourceRows": [
+        95
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "platform-verification",
+      "projectUsage": "unused_platform_verification",
+      "landing": [],
+      "note": "表内无备注；主机名本身含 edgeonereclaim / _dnsauth 字样，具体平台归属待控制台确认，本仓不作删除建议。"
+    },
+    {
+      "fqdn": "egeonereclaim.ai.mixm.top",
+      "host": "egeonereclaim.ai",
+      "zone": "mixm.top",
+      "sourceRows": [
+        96
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "platform-verification",
+      "projectUsage": "unused_platform_verification",
+      "landing": [],
+      "note": "表内拼写即 egeonereclaim（少一个 d），原样保留，不改写；具体平台归属待控制台确认。"
+    },
+    {
+      "fqdn": "egeonereclaim.delivery.mixm.top",
+      "host": "egeonereclaim.delivery",
+      "zone": "mixm.top",
+      "sourceRows": [
+        97
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "platform-verification",
+      "projectUsage": "unused_platform_verification",
+      "landing": [],
+      "note": "表内拼写即 egeonereclaim（少一个 d），原样保留，不改写；具体平台归属待控制台确认。"
+    },
+    {
+      "fqdn": "edgeonereclaim.probe.mixm.top",
+      "host": "edgeonereclaim.probe",
+      "zone": "mixm.top",
+      "sourceRows": [
+        98
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "platform-verification",
+      "projectUsage": "unused_platform_verification",
+      "landing": [],
+      "note": "表内无备注；主机名本身含 edgeonereclaim / _dnsauth 字样，具体平台归属待控制台确认，本仓不作删除建议。"
+    },
+    {
+      "fqdn": "_dnsauth.mim.mixm.top",
+      "host": "_dnsauth.mim",
+      "zone": "mixm.top",
+      "sourceRows": [
+        100
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "platform-verification",
+      "projectUsage": "unused_platform_verification",
+      "landing": [],
+      "note": "表内无备注；主机名本身含 edgeonereclaim / _dnsauth 字样，具体平台归属待控制台确认，本仓不作删除建议。"
+    },
+    {
+      "fqdn": "edgeonereclaim.data.mixm.top",
+      "host": "edgeonereclaim.data",
+      "zone": "mixm.top",
+      "sourceRows": [
+        102
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": null,
+      "role": "platform-verification",
+      "projectUsage": "unused_platform_verification",
+      "landing": [],
+      "note": "表内无备注；主机名本身含 edgeonereclaim / _dnsauth 字样，具体平台归属待控制台确认，本仓不作删除建议。"
+    }
+  ],
+  "planned": [
+    {
+      "fqdn": "admin.mixm.top",
+      "host": "admin",
+      "zone": "mixm.top",
+      "sourceRows": [
+        7,
+        8
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "管理后台入口｜全站统一运营管理后台",
+      "role": "未标注",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "app.mixm.top",
+      "host": "app",
+      "zone": "mixm.top",
+      "sourceRows": [
+        11,
+        12
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "APP 端接口入口｜移动端专属接口服务",
+      "role": "接口/API",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "auth.mixm.top",
+      "host": "auth",
+      "zone": "mixm.top",
+      "sourceRows": [
+        13,
+        14
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "权限验证入口｜统一身份认证与权限中心",
+      "role": "身份/账号",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "blog.mixm.top",
+      "host": "blog",
+      "zone": "mixm.top",
+      "sourceRows": [
+        15,
+        16
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "博客模块入口｜官方博客系统",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "center.mixm.top",
+      "host": "center",
+      "zone": "mixm.top",
+      "sourceRows": [
+        17,
+        18
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "用户中心入口｜用户个人中心 / 会员工作台",
+      "role": "身份/账号",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "dev.mixm.top",
+      "host": "dev",
+      "zone": "mixm.top",
+      "sourceRows": [
+        23,
+        24
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "开发测试入口｜开发环境门户 + 接口文档",
+      "role": "环境/测试",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "dh.mixm.top",
+      "host": "dh",
+      "zone": "mixm.top",
+      "sourceRows": [
+        25,
+        26
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "导航模块入口｜全站资源导航站",
+      "role": "数据/工具/资源",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "dnpj.mixm.top",
+      "host": "dnpj",
+      "zone": "mixm.top",
+      "sourceRows": [
+        27,
+        28
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "代码生成工具入口｜低代码生成平台",
+      "role": "数据/工具/资源",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "dy.mixm.top",
+      "host": "dy",
+      "zone": "mixm.top",
+      "sourceRows": [
+        29,
+        30
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "视频动态模块入口｜UGC 短视频动态社区",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "fwq.mixm.top",
+      "host": "fwq",
+      "zone": "mixm.top",
+      "sourceRows": [
+        31,
+        32
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "服务器支撑入口｜运维监控面板",
+      "role": "运维/支撑",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "help.mixm.top",
+      "host": "help",
+      "zone": "mixm.top",
+      "sourceRows": [
+        35,
+        36
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "帮助中心入口｜产品帮助文档中心",
+      "role": "运维/支撑",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "login.mixm.top",
+      "host": "login",
+      "zone": "mixm.top",
+      "sourceRows": [
+        39,
+        40
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "登录验证入口｜统一单点登录页",
+      "role": "身份/账号",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "mall.mixm.top",
+      "host": "mall",
+      "zone": "mixm.top",
+      "sourceRows": [
+        41,
+        42
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "电商商城入口｜B2C 官方商城系统",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "market.mixm.top",
+      "host": "market",
+      "zone": "mixm.top",
+      "sourceRows": [
+        43,
+        44
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "营销模块入口｜营销活动管理平台",
+      "role": "未标注",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "m.mixm.top",
+      "host": "m",
+      "zone": "mixm.top",
+      "sourceRows": [
+        45,
+        46
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "移动端适配入口｜移动端 H5 精简版官网",
+      "role": "主站/门户",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "mobile.mixm.top",
+      "host": "mobile",
+      "zone": "mixm.top",
+      "sourceRows": [
+        47,
+        48
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "移动终端专用入口｜全功能移动端站点",
+      "role": "主站/门户",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "news.mixm.top",
+      "host": "news",
+      "zone": "mixm.top",
+      "sourceRows": [
+        49,
+        50
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "资讯模块入口｜新闻资讯发布系统",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "pay.mixm.top",
+      "host": "pay",
+      "zone": "mixm.top",
+      "sourceRows": [
+        51,
+        52
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "支付结算入口｜支付聚合网关 + 对账系统",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "portal.mixm.top",
+      "host": "portal",
+      "zone": "mixm.top",
+      "sourceRows": [
+        53,
+        54
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "门户首页入口｜企业内部统一门户 / 工作台",
+      "role": "主站/门户",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "secure.mixm.top",
+      "host": "secure",
+      "zone": "mixm.top",
+      "sourceRows": [
+        55,
+        56
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "安全防护入口｜安全防护中心",
+      "role": "运维/支撑",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "service.mixm.top",
+      "host": "service",
+      "zone": "mixm.top",
+      "sourceRows": [
+        57,
+        58
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "服务支撑入口｜服务治理监控平台",
+      "role": "运维/支撑",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "shop.mixm.top",
+      "host": "shop",
+      "zone": "mixm.top",
+      "sourceRows": [
+        59,
+        60
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "线上店铺入口｜多商户店铺系统",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "sj.mixm.top",
+      "host": "sj",
+      "zone": "mixm.top",
+      "sourceRows": [
+        61,
+        62
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "数据采集入口｜爬虫调度与数据采集平台",
+      "role": "数据/工具/资源",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "sp.mixm.top",
+      "host": "sp",
+      "zone": "mixm.top",
+      "sourceRows": [
+        63,
+        64
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "视频模块入口｜长视频点播系统",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "stats.mixm.top",
+      "host": "stats",
+      "zone": "mixm.top",
+      "sourceRows": [
+        65,
+        66
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "数据统计入口｜全站数据 BI 看板",
+      "role": "数据/工具/资源",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "store.mixm.top",
+      "host": "store",
+      "zone": "mixm.top",
+      "sourceRows": [
+        67,
+        68
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "资源存储 / 下载站点｜软件源码下载分发站",
+      "role": "数据/工具/资源",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "support.mixm.top",
+      "host": "support",
+      "zone": "mixm.top",
+      "sourceRows": [
+        69,
+        70
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "技术支持入口｜工单客服系统",
+      "role": "运维/支撑",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "test.mixm.top",
+      "host": "test",
+      "zone": "mixm.top",
+      "sourceRows": [
+        71,
+        72
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "测试环境入口｜测试环境统一入口",
+      "role": "环境/测试",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "user.mixm.top",
+      "host": "user",
+      "zone": "mixm.top",
+      "sourceRows": [
+        73,
+        74
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "用户管理入口｜用户会员管理后台",
+      "role": "身份/账号",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "video.mixm.top",
+      "host": "video",
+      "zone": "mixm.top",
+      "sourceRows": [
+        75,
+        76
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "视频播放入口｜独立视频播放页",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "wp.mixm.top",
+      "host": "wp",
+      "zone": "mixm.top",
+      "sourceRows": [
+        77,
+        78
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "WordPress 相关入口｜WordPress 独立站点",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "xw.mixm.top",
+      "host": "xw",
+      "zone": "mixm.top",
+      "sourceRows": [
+        79,
+        80
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "新闻资讯入口｜自媒体资讯平台",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "yp.mixm.top",
+      "host": "yp",
+      "zone": "mixm.top",
+      "sourceRows": [
+        81,
+        82
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "商品资源入口｜货源商品库平台",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "yy.mixm.top",
+      "host": "yy",
+      "zone": "mixm.top",
+      "sourceRows": [
+        83,
+        84
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "语音相关入口｜语音工具服务平台",
+      "role": "内容/媒体",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "b2b.mixm.top",
+      "host": "b2b",
+      "zone": "mixm.top",
+      "sourceRows": [
+        85,
+        86
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "B2B 大宗商贸平台主入口｜B2B 企业批发采购平台",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "supplier.mixm.top",
+      "host": "supplier",
+      "zone": "mixm.top",
+      "sourceRows": [
+        87,
+        88
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "供应商入驻管理入口｜供应商后台管理系统",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "c2c.mixm.top",
+      "host": "c2c",
+      "zone": "mixm.top",
+      "sourceRows": [
+        89,
+        90
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "C2C 个人交易市场入口｜C2C 个人闲置 / 商品交易平台",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    },
+    {
+      "fqdn": "seller.mixm.top",
+      "host": "seller",
+      "zone": "mixm.top",
+      "sourceRows": [
+        91,
+        92
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "个人卖家管理入口｜个人卖家店铺管理后台",
+      "role": "交易/商城",
+      "projectUsage": "planned_no_dns",
+      "landing": [
+        "`deploy/domains.json` → `planned`（仅登记）"
+      ]
+    }
+  ],
+  "legacyUnused": [
+    {
+      "fqdn": "laal.top",
+      "host": "@",
+      "zone": "laal.top",
+      "sourceRows": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "line": "默认",
+      "ttl": [
+        600,
+        86400
+      ],
+      "recordType": null,
+      "value": null,
+      "remark": "核心根域名，主站基础入口｜主站统一跳转门户",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "www.laal.top",
+      "host": "www",
+      "zone": "laal.top",
+      "sourceRows": [
+        5,
+        6
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "主站常规访问入口｜官方门户网站",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "admin.laal.top",
+      "host": "admin",
+      "zone": "laal.top",
+      "sourceRows": [
+        7,
+        8
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "管理后台入口｜全站统一运营管理后台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "api.laal.top",
+      "host": "api",
+      "zone": "laal.top",
+      "sourceRows": [
+        9,
+        10
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "接口服务入口｜API 统一网关",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "app.laal.top",
+      "host": "app",
+      "zone": "laal.top",
+      "sourceRows": [
+        11,
+        12
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "APP 端接口入口｜移动端专属接口服务",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "auth.laal.top",
+      "host": "auth",
+      "zone": "laal.top",
+      "sourceRows": [
+        13,
+        14
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "权限验证入口｜统一身份认证与权限中心",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "blog.laal.top",
+      "host": "blog",
+      "zone": "laal.top",
+      "sourceRows": [
+        15,
+        16
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "博客模块入口｜官方博客系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "center.laal.top",
+      "host": "center",
+      "zone": "laal.top",
+      "sourceRows": [
+        17,
+        18
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "用户中心入口｜用户个人中心 / 会员工作台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "cloud.laal.top",
+      "host": "cloud",
+      "zone": "laal.top",
+      "sourceRows": [
+        19,
+        20
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "云服务模块入口｜私有云盘 / 网盘系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "data.laal.top",
+      "host": "data",
+      "zone": "laal.top",
+      "sourceRows": [
+        21,
+        22
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "数据中心入口｜开放数据集平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "dev.laal.top",
+      "host": "dev",
+      "zone": "laal.top",
+      "sourceRows": [
+        23,
+        24
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "开发测试入口｜开发环境门户 + 接口文档",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "dh.laal.top",
+      "host": "dh",
+      "zone": "laal.top",
+      "sourceRows": [
+        25,
+        26
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "导航模块入口｜全站资源导航站",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "dnpj.laal.top",
+      "host": "dnpj",
+      "zone": "laal.top",
+      "sourceRows": [
+        27,
+        28
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "代码生成工具入口｜低代码生成平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "dy.laal.top",
+      "host": "dy",
+      "zone": "laal.top",
+      "sourceRows": [
+        29,
+        30
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "视频动态模块入口｜UGC 短视频动态社区",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "fwq.laal.top",
+      "host": "fwq",
+      "zone": "laal.top",
+      "sourceRows": [
+        31,
+        32
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "服务器支撑入口｜运维监控面板",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "gy.laal.top",
+      "host": "gy",
+      "zone": "laal.top",
+      "sourceRows": [
+        33,
+        34
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "工具模块入口｜在线工具集合平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "help.laal.top",
+      "host": "help",
+      "zone": "laal.top",
+      "sourceRows": [
+        35,
+        36
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "帮助中心入口｜产品帮助文档中心",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "img.laal.top",
+      "host": "img",
+      "zone": "laal.top",
+      "sourceRows": [
+        37,
+        38
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "图片资源入口｜公共图床 + 素材资源站",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "login.laal.top",
+      "host": "login",
+      "zone": "laal.top",
+      "sourceRows": [
+        39,
+        40
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "登录验证入口｜统一单点登录页",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "mall.laal.top",
+      "host": "mall",
+      "zone": "laal.top",
+      "sourceRows": [
+        41,
+        42
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "电商商城入口｜B2C 官方商城系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "market.laal.top",
+      "host": "market",
+      "zone": "laal.top",
+      "sourceRows": [
+        43,
+        44
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "营销模块入口｜营销活动管理平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "m.laal.top",
+      "host": "m",
+      "zone": "laal.top",
+      "sourceRows": [
+        45,
+        46
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "移动端适配入口｜移动端 H5 精简版官网",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "mobile.laal.top",
+      "host": "mobile",
+      "zone": "laal.top",
+      "sourceRows": [
+        47,
+        48
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "移动终端专用入口｜全功能移动端站点",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "news.laal.top",
+      "host": "news",
+      "zone": "laal.top",
+      "sourceRows": [
+        49,
+        50
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "资讯模块入口｜新闻资讯发布系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "pay.laal.top",
+      "host": "pay",
+      "zone": "laal.top",
+      "sourceRows": [
+        51,
+        52
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "支付结算入口｜支付聚合网关 + 对账系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "portal.laal.top",
+      "host": "portal",
+      "zone": "laal.top",
+      "sourceRows": [
+        53,
+        54
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "门户首页入口｜企业内部统一门户 / 工作台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "secure.laal.top",
+      "host": "secure",
+      "zone": "laal.top",
+      "sourceRows": [
+        55,
+        56
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "安全防护入口｜安全防护中心",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "service.laal.top",
+      "host": "service",
+      "zone": "laal.top",
+      "sourceRows": [
+        57,
+        58
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "服务支撑入口｜服务治理监控平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "shop.laal.top",
+      "host": "shop",
+      "zone": "laal.top",
+      "sourceRows": [
+        59,
+        60
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "线上店铺入口｜多商户店铺系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "sj.laal.top",
+      "host": "sj",
+      "zone": "laal.top",
+      "sourceRows": [
+        61,
+        62
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "数据采集入口｜爬虫调度与数据采集平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "sp.laal.top",
+      "host": "sp",
+      "zone": "laal.top",
+      "sourceRows": [
+        63,
+        64
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "视频模块入口｜长视频点播系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "stats.laal.top",
+      "host": "stats",
+      "zone": "laal.top",
+      "sourceRows": [
+        65,
+        66
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "数据统计入口｜全站数据 BI 看板",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "store.laal.top",
+      "host": "store",
+      "zone": "laal.top",
+      "sourceRows": [
+        67,
+        68
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "资源存储 / 下载站点｜软件源码下载分发站",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "support.laal.top",
+      "host": "support",
+      "zone": "laal.top",
+      "sourceRows": [
+        69,
+        70
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "技术支持入口｜工单客服系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "test.laal.top",
+      "host": "test",
+      "zone": "laal.top",
+      "sourceRows": [
+        71,
+        72
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "测试环境入口｜测试环境统一入口",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "user.laal.top",
+      "host": "user",
+      "zone": "laal.top",
+      "sourceRows": [
+        73,
+        74
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "用户管理入口｜用户会员管理后台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "video.laal.top",
+      "host": "video",
+      "zone": "laal.top",
+      "sourceRows": [
+        75,
+        76
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "视频播放入口｜独立视频播放页",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "wp.laal.top",
+      "host": "wp",
+      "zone": "laal.top",
+      "sourceRows": [
+        77,
+        78
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "WordPress 相关入口｜WordPress 独立站点",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "xw.laal.top",
+      "host": "xw",
+      "zone": "laal.top",
+      "sourceRows": [
+        79,
+        80
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "新闻资讯入口｜自媒体资讯平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "yp.laal.top",
+      "host": "yp",
+      "zone": "laal.top",
+      "sourceRows": [
+        81,
+        82
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "商品资源入口｜货源商品库平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "yy.laal.top",
+      "host": "yy",
+      "zone": "laal.top",
+      "sourceRows": [
+        83,
+        84
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "语音相关入口｜语音工具服务平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "b2b.laal.top",
+      "host": "b2b",
+      "zone": "laal.top",
+      "sourceRows": [
+        85,
+        86
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "B2B 大宗商贸平台主入口｜B2B 企业批发采购平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "supplier.laal.top",
+      "host": "supplier",
+      "zone": "laal.top",
+      "sourceRows": [
+        87,
+        88
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "供应商入驻管理入口｜供应商后台管理系统",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "c2c.laal.top",
+      "host": "c2c",
+      "zone": "laal.top",
+      "sourceRows": [
+        89,
+        90
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "C2C 个人交易市场入口｜C2C 个人闲置 / 商品交易平台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    },
+    {
+      "fqdn": "seller.laal.top",
+      "host": "seller",
+      "zone": "laal.top",
+      "sourceRows": [
+        91,
+        92
+      ],
+      "line": "默认",
+      "ttl": 600,
+      "recordType": null,
+      "value": null,
+      "remark": "个人卖家管理入口｜个人卖家店铺管理后台",
+      "role": "legacy-zone",
+      "projectUsage": "unused_legacy_zone",
+      "landing": [],
+      "note": "laal.top 表内记录，与本项目无关。"
+    }
+  ],
+  "cors": {
+    "tableDerived": [
+      "https://www.mixm.top"
+    ],
+    "tableDerivedNote": "主站 CORS 白名单以 https://www.mixm.top 为主。裸域 https://mixm.top 只在 301 尚未生效、或存在站内跳转回裸域的过渡期临时放行，301 生效并确认无回跳后移除。API 自身域 https://api.mixm.top 不写入 CORS_ORIGINS——它是被调用方，不是来源。",
+    "bareDomainNote": "临时放行裸域的判断标准：浏览器地址栏出现 https://mixm.top 且未 301 到 www 的请求占比 > 0（查 Nginx access.log 的 Host 字段）；为 0 即移除。",
+    "runtimeBuiltin": [
+      "https://localhost",
+      "capacitor://localhost",
+      "http://localhost",
+      "http://127.0.0.1",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ],
+    "runtimeBuiltinNote": "来自 services/api/src/config.ts 的 BUILTIN_CORS_ORIGINS，是壳与本地调试来源，不是 DNS 记录，不参与表内校验。",
+    "pendingOutsideTable": [
+      {
+        "origin": "https://afdk1991.github.io",
+        "reason": "表外：历史 GitHub Pages 入口，xls 无对应主机",
+        "state": "pending_confirmation"
+      },
+      {
+        "origin": "https://mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com",
+        "reason": "表外：CloudBase 静态托管历史入口，xls 无对应主机",
+        "state": "pending_confirmation"
+      },
+      {
+        "origin": "https://api.mixm.app",
+        "reason": "表外且不在任何域名表内，禁止继续使用",
+        "state": "forbidden"
+      },
+      {
+        "origin": "https://mixmapp.com",
+        "reason": "表外，未在本表出现，禁止引入",
+        "state": "forbidden"
+      }
+    ]
+  },
+  "forbiddenStrings": [
+    {
+      "value": "cloud.mix.top",
+      "reason": "拼写域（少一个 m），2026-11-13 事故根因；功能路径禁止出现"
+    },
+    {
+      "value": "mix.top",
+      "reason": "拼写域（少一个 m），表内不存在；功能路径禁止出现"
+    },
+    {
+      "value": "api.mixm.app",
+      "reason": "表外域名，表内无此主机；功能路径禁止出现"
+    },
+    {
+      "value": "mixmapp.com",
+      "reason": "表外域名，表内无此主机；功能路径禁止出现"
+    },
+    {
+      "value": "laal.top",
+      "reason": "表内另一域名但与本项目无关；功能路径禁止接入"
+    }
+  ],
+  "domainArchitecture": {
+    "$comment": "主域 + 子域职责分配（2026-11-14 定案改版）。只允许使用 xls 表内主机名，不新增任何域名；laal.top 明确不参与。recordType/value 仍为 null，绑定前必须在 DNSPod 控制台核对。切换序列见 2026-11-14/deploy-domains/outputs/切换与回退序列.md。",
+    "primaryZone": "mixm.top",
+    "primaryHost": "www.mixm.top",
+    "primaryReason": "2026-11-14 定案：主入口迁到 www.mixm.top，裸域 mixm.top 只做 301 到 www。www 在 xls 表内（sourceRows 5/6，备注「主站常规访问入口｜官方门户网站」），语义与官网 / H5 正式站一致；cloud.mixm.top 降级为切换期 legacy，不再作主入口、也不再作 API 宿主。主域只能是 mixm.top——laal.top 与本项目无关，mix.top 是拼写域。",
+    "rootRedirect": {
+      "from": "mixm.top",
+      "to": "https://www.mixm.top",
+      "status": 301,
+      "config": "infra/nginx/mixm.top.conf"
+    },
+    "enabledThisRound": ["www.mixm.top", "api.mixm.top", "img.mixm.top"],
+    "enabledThisRoundReason": "三个主机均在 xls 表内，且服务端能力已存在：www 复用现有 H5 产物与 Nginx root，api 复用同一 Fastify 上游（infra/nginx/api.mixm.top.conf），img 复用 /var/lib/mixmapp/storage/ 直出。不引入新业务代码，只做 vhost 拆分与解析/证书。",
+    "retiringThisRound": ["cloud.mixm.top"],
+    "retiringNote": "cloud 不是立即删除：切换期必须与 www/api 同时可用（已发布 APK 与历史支付回调硬指向它）。下线前置是「www/api 的 healthz、meta 均正常 + 客户端基址切换并发版 + 支付回调改配并验签 + access.log 中 cloud 流量归零」。",
+    "platformAssignments": [
+      {
+        "slug": "web-h5",
+        "label": "官网 / H5 正式站",
+        "host": "www",
+        "fqdn": "www.mixm.top",
+        "inTable": true,
+        "status": "to_enable",
+        "role": "H5 正式入口（Nginx root /opt/mixmapp/current/web，history 深链接回退 index.html）；裸域 mixm.top 301 到此处",
+        "prerequisites": ["解析：www → 同一台服务器（115.159.159.11）", "证书：www.mixm.top（可用 mixm.top 泛域名证书）", "备案：mixm.top 根域已备案", "Nginx：infra/nginx/www.mixm.top.conf 已就绪", "签名：无需"],
+        "cutover": "新建解析与证书 → 双跑验证 → 切 CORS → 确认无流量后才下线 cloud 的 H5 角色"
+      },
+      {
+        "slug": "api",
+        "label": "后端 API",
+        "host": "api",
+        "fqdn": "api.mixm.top/mixmapp/api/v1",
+        "inTable": true,
+        "status": "to_enable",
+        "role": "独立 API 网关：Nginx location /mixmapp/ → 127.0.0.1:8080（剥前缀），/api/ → 同上游（原样）；与 www 跨域，需 CORS 白名单",
+        "prerequisites": ["解析：api → 同一台服务器", "证书：api.mixm.top", "Nginx：infra/nginx/api.mixm.top.conf 已就绪", "CORS：CORS_ORIGINS 必须含 https://www.mixm.top", "双跑：cloud 的 /mixmapp/ 保留至客户端切换完成"],
+        "cutover": "api 双跑验证通过前，不得让新 APK 产物指向 api"
+      },
+      {
+        "slug": "admin",
+        "label": "管理后台",
+        "host": "admin",
+        "fqdn": "admin.mixm.top",
+        "inTable": true,
+        "status": "planned_no_dns",
+        "role": "规划：全站统一运营管理后台（表内备注）",
+        "prerequisites": ["阻塞：仓库内无 admin 应用（apps/ 只有 app / mobile），无服务可挂", "证书", "解析", "后台独立鉴权与 IP 白名单"]
+      },
+      {
+        "slug": "mobile-api",
+        "label": "移动端 / 客户端接口",
+        "host": "api",
+        "fqdn": "api.mixm.top/mixmapp/api/v1",
+        "inTable": true,
+        "status": "to_enable",
+        "role": "App / 小程序 / 鸿蒙统一 api-base（apps/mobile/api-base.json 与 android.yml 的 MIXMAPP_API_BASE 指向它）；capacitor://localhost 等壳来源由 API 内置白名单处理",
+        "prerequisites": ["先完成 api.mixm.top 双跑与 healthz/meta 验证", "再改 apps/mobile/api-base.json 并重新出包（已发布 APK 仍指向 cloud，不能强切）", "app.mixm.top 专属网关保持 planned_no_dns"],
+        "cutover": "新 APK 出包必须在 api 双跑通过之后；旧 APK 靠 cloud 双跑兜底"
+      },
+      {
+        "slug": "static-img",
+        "label": "静态资源与图片",
+        "host": "img",
+        "fqdn": "img.mixm.top",
+        "inTable": true,
+        "status": "to_enable",
+        "role": "图片与静态资源独立域，Nginx 直出 /var/lib/mixmapp/storage/；切换期保留 cloud.mixm.top/media/ 作回退",
+        "prerequisites": ["证书：img.mixm.top（可用 mixm.top 泛域名证书）", "解析：img → 同一台服务器", "Nginx：infra/nginx/img.mixm.top.conf 已就绪", "签名：无需", "回滚：删解析即回到 cloud.mixm.top/media/"]
+      },
+      {
+        "slug": "docs",
+        "label": "文档站",
+        "host": "help",
+        "fqdn": "help.mixm.top",
+        "inTable": true,
+        "status": "planned_no_dns",
+        "role": "规划：帮助中心 / 产品文档中心（表内备注）；接口文档的另一备选是 dev.mixm.top",
+        "prerequisites": ["证书", "解析", "需先有文档站点产物（当前 docs 为仓库内 Markdown）"]
+      },
+      {
+        "slug": "preview",
+        "label": "预览 / 灰度环境",
+        "host": "test",
+        "fqdn": "test.mixm.top",
+        "inTable": true,
+        "status": "planned_no_dns",
+        "role": "规划：测试环境统一入口；dev.mixm.top 为开发环境门户",
+        "prerequisites": ["证书", "解析", "需独立环境实例（当前只有单台生产机 + 原子发布，无灰度槽位）", "灰度需新增 release 槽与流量切分"]
+      },
+      {
+        "slug": "health-monitor",
+        "label": "健康检查与监控",
+        "host": "fwq",
+        "fqdn": "fwq.mixm.top",
+        "inTable": true,
+        "status": "planned_no_dns",
+        "role": "规划：运维监控面板（表内备注）；健康检查改走 api.mixm.top/mixmapp/api/v1/healthz（GitHub Actions ops-nightly 每日巡检），双跑期 cloud 与 api 各查一次",
+        "prerequisites": ["证书", "解析", "需先有监控面板服务", "如需公网暴露须加访问控制", "HEALTH_BASE_URL 变量在切换完成后改为 api.mixm.top"]
+      },
+      {
+        "slug": "pay",
+        "label": "支付与回调",
+        "host": "api",
+        "fqdn": "api.mixm.top/mixmapp/api/v1/pay/notify/{wechat,alipay}",
+        "inTable": true,
+        "status": "to_enable",
+        "role": "回调迁到 api.mixm.top 的 notify 路径；双跑期 cloud 的同一路径必须保持可用，防止存量订单回调 404",
+        "prerequisites": ["api.mixm.top 双跑通过", "微信/支付宝商户平台同步改回调地址并重新验签", "改为 api 后 cloud 的 notify 至少保留一个完整对账周期", "pay.mixm.top 保持 planned_no_dns（不单开支付网关）"],
+        "cutover": "最高风险步骤：改配后用沙箱或小额单验证签名与到账，再观察对账"
+      },
+      {
+        "slug": "mail",
+        "label": "邮箱与验证",
+        "host": null,
+        "fqdn": null,
+        "inTable": false,
+        "status": "not_in_table",
+        "role": "表内无 mail/smtp 类主机，按「不造域名」原则不分配；事务邮件继续走第三方服务商，验证邮件发信域须与第三方控制台一致",
+        "prerequisites": ["如需自建发信域，须先在 DNSPod 表内新增主机并完成 SPF/DKIM/DMARC", "该 7 条 platformVerification（_dnsauth.* / edgeonereclaim.*）是平台回源校验记录，不用于邮箱"]
+      }
+    ],
+    "matrix": [
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "www.mixm.top", "environment": "正式", "status": "to_enable" },
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "mixm.top", "environment": "正式（301 → www）", "status": "to_enable" },
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "api.mixm.top", "environment": "正式", "status": "to_enable" },
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "img.mixm.top", "environment": "正式", "status": "to_enable" },
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "cloud.mixm.top", "environment": "正式（legacy 双跑）", "status": "active_legacy_dual_run" },
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "test.mixm.top", "environment": "预览/灰度", "status": "planned_no_dns" },
+      { "platform": "腾讯云自建服务器（Nginx）", "domain": "dev.mixm.top", "environment": "开发", "status": "planned_no_dns" },
+      { "platform": "GitHub Pages", "domain": "afdk1991.github.io/MixmAPP/", "environment": "预览", "status": "active_outside_table" },
+      { "platform": "CloudBase 静态托管", "domain": "mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com", "environment": "预览", "status": "suspended_outside_table" },
+      { "platform": "CloudBase 云函数 mixmapp-api-proxy", "domain": "(回源 api.mixm.top；双跑期保留 cloud 候选)", "environment": "正式", "status": "to_reconfigure" },
+      { "platform": "Android（Capacitor 壳）", "domain": "已发布 APK → cloud.mixm.top/mixmapp/api/v1；新包 → api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "dual_base_transition" },
+      { "platform": "微信小程序", "domain": "api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "build_only_not_published" },
+      { "platform": "鸿蒙 App", "domain": "api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "build_only_not_published" },
+      { "platform": "Gitee 镜像", "domain": null, "environment": "—", "status": "no_credentials" },
+      { "platform": "ghcr 镜像仓库", "domain": null, "environment": "—", "status": "active" },
+      { "platform": "EdgeOne Pages", "domain": null, "environment": "—", "status": "blocked_platform_limit" },
+      { "platform": "Cloudflare Pages / Workers", "domain": null, "environment": "—", "status": "no_credentials" },
+      { "platform": "Vercel", "domain": null, "environment": "—", "status": "no_credentials" },
+      { "platform": "Sealos", "domain": null, "environment": "—", "status": "no_credentials" },
+      { "platform": "IGA Pages", "domain": null, "environment": "—", "status": "no_credentials" }
+    ]
+  }
+}

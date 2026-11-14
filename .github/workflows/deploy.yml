@@ -10,6 +10,25 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+# 商品数据随版本发布（默认关闭）：
+#   DEPLOY_CATALOG=1  才上传数据包 / 落位 / 配置目录源 env / 增强验收
+#   SITE_BASE_URL      验收目标站点根，默认 https://www.mixm.top（双跑期可显式设 cloud）
+#   EXPECT_VERSION     可选，healthz.version 精确期望值（缺省要求非 preview）
+#
+# 致命断点（务必注意）：.gitignore 排除了 tools/egluosi-importer/source/catalog.json、
+#   source/images/、storage/、release/，因此 CI checkout 默认【没有】商品数据。
+#   数据主路径是「开发机直送生产机」，完整命令见 deploy/CATALOG-DEPLOY.md §5；
+#   若把数据注入 release/prod-catalog/ 作为 artifact，下面的打包 step 会自动携带。
+#   生产 /api/v1/admin/* 整体 404（未配 ADMIN_TOKEN），不能远程灌库；
+#   数据以「catalog.json 随包发布 + API 内嵌只读目录源（MALL_CATALOG_*）」生效。
+#
+# 静态产物：build:h5 每次重新构建；抽检 step 保证产物无四段 preview/dev 号、
+#   无「单码多端预览版」字样、API 基址不指向已失效域名 cloud.mix.top。
+#   发布产物一律从 V0.0.0.0 起算，不再有独立的旧预览序列。
+#
+# 现有门禁不变：DEPLOY_SSH_KEY_B64/DEPLOY_HOST/DEPLOY_USER 缺失 → SSH_READY=false 全跳过；
+# atomic-release.sh 健康检查失败自动回滚的逻辑不动。
+
 jobs:
   build:
     name: 构建发布包
@@ -32,12 +51,31 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build:api
-      # 静态端只发布到腾讯云服务器，H5 与 API 同域：默认 API 前缀 /mixmapp/api/v1。
-      # 需要换域名时用仓库变量 MIXMAPP_API_BASE 覆盖，不必改代码。
+      # 静态端 H5 与 API 同域：默认 API 前缀 /mixmapp/api/v1（同域相对路径）。
+      # 必须用变量 MIXMAPP_API_BASE 覆盖，禁止注入已失效域名 cloud.mix.top
+      # （实测 SSL 握手失败 SEC_E_ILLEGAL_MESSAGE，会让整站离线）。
+      # 2026-11-14 域名改版：api.mixm.top 双跑验证通过后，把仓库变量
+      # MIXMAPP_API_BASE 设为 https://api.mixm.top/mixmapp/api/v1，
+      # H5 即改为绝对基址跨域调用（CORS 白名单含 www）。在验证前保持相对路径，
+      # 由 www / cloud 的 Nginx 各自反代 /mixmapp/ 兜住。
+      # 本步骤每次重新构建 H5，是「替换 release/ 下旧预览产物」的必做步骤。
       - name: 构建 H5（同域 + /mixmapp 前缀）
         env:
           MIXMAPP_API_BASE: ${{ vars.MIXMAPP_API_BASE || '/mixmapp/api/v1' }}
         run: pnpm build:h5
+
+      # 抽检新构建产物：版本号 / 预览字样 / API 基址三项都要过，防止「只改源码不重发产物」。
+      - name: 抽检 H5 产物（版本号 / 预览字样 / API 基址）
+        run: |
+          H5=apps/app/dist/build/h5
+          [ -d "$H5" ] || { echo "✗ 缺少 H5 产物目录 $H5"; exit 1; }
+          if grep -rEq '([0-9]+\.){3}[0-9]+-(preview|dev)|单码多端预览版' "$H5"; then
+            echo "✗ H5 产物残留预览/开发版字样或四段预览号，重新构建未生效"; exit 1
+          fi
+          if grep -rq 'cloud\.mix\.top/mixmapp' "$H5"; then
+            echo "✗ H5 产物 API 基址指向已失效域名 cloud.mix.top"; exit 1
+          fi
+          echo "✓ H5 产物抽检通过（无四段预览/开发号 / 无预览字样 / 无 cloud.mix.top）"
 
       - name: 生成独立可运行 API 发布包
         run: pnpm --filter @mixmapp/api deploy --prod "$GITHUB_WORKSPACE/out/api"
@@ -53,6 +91,20 @@ jobs:
       - name: 打包 H5 产物
         run: tar -czf h5-${{ github.sha }}.tar.gz -C apps/app/dist/build/h5 .
 
+      # 商品数据包（catalog.json + 可选 products/ 图片）。数据被 gitignore 排除，
+      # CI checkout 默认没有；存在时打进独立包，不存在时给出醒目诊断，不静默跳过。
+      - name: 打包商品数据包（若存在）
+        run: |
+          if [ -d release/prod-catalog ] && [ -f release/prod-catalog/catalog.json ]; then
+            tar -czf catalog-${{ github.sha }}.tar.gz -C release/prod-catalog .
+            echo "已打包 catalog-${{ github.sha }}.tar.gz"
+          else
+            echo "SKIP CI checkout 内无 release/prod-catalog/catalog.json"
+            echo "  .gitignore 排除了 catalog.json / source/images / storage / release，CI 默认拿不到商品数据。"
+            echo "  数据主路径：开发机直送生产机，见 deploy/CATALOG-DEPLOY.md §5。"
+            echo "  若要在 CI 携带，请把数据作为 artifact/release asset 注入 release/prod-catalog/ 后重跑。"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-bundles
@@ -60,6 +112,9 @@ jobs:
           path: |
             api-${{ github.sha }}.tar.gz
             h5-${{ github.sha }}.tar.gz
+            catalog-${{ github.sha }}.tar.gz
+          # catalog 包可能尚未产出，缺文件只警告，不阻断（另两个包始终存在）
+          if-no-files-found: warn
 
   api:
     name: API + H5 原子发布（腾讯云服务器）
@@ -74,6 +129,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-bundles
+
+      # 版本号唯一事实源：version.json。线上 /healthz 与 /meta 的 version 由 api.env 的
+      # APP_VERSION 决定；不显式下发就会沿用旧的 0.0.0-preview，页面显示与产物版本脱节。
+      # 规则与 android.yml 一致：正式发布态取 released 最新号，否则取 next + -<channel>。
+      - name: 读取版本（version.json 单一事实源）
+        id: version
+        run: |
+          node -e 'const v=require("./version.json");const fs=require("fs");const formal=["stable","release"].includes(v.channel);const published=v.channel==="release"&&Array.isArray(v.released)&&v.released.length?v.released[v.released.length-1]:null;const vn=published||(v.next+(formal?"":"-"+v.channel));fs.appendFileSync(process.env.GITHUB_OUTPUT,"version_name="+vn+"\n");console.log("APP_VERSION="+vn);'
 
       - name: 写入部署私钥（base64 单行传输，避免换行符破坏 OpenSSH 私钥）
         if: env.SSH_READY == 'true'
@@ -101,15 +164,55 @@ jobs:
           scp -i ~/.ssh/deploy_key -r deploy \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/mixmapp-deploy"
 
-      - name: 远端原子发布
+      # 商品数据包只上传到 /tmp，真正的「落位 + 校验 + 配置 env」由 atomic-release.sh
+      # 的 CATALOG_ARTIFACT 统一处理（数据目录全局持久，不随 release symlink 回滚）。
+      # 缺数据包时 fail-fast，绝不让发布在缺数据情况下静默降级到 6 条演示品。
+      - name: 上传商品数据包（失败即停，不静默降级）
+        if: env.SSH_READY == 'true' && vars.DEPLOY_CATALOG == '1'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          if [ ! -f catalog-${{ github.sha }}.tar.gz ]; then
+            echo "✗ 已开启 DEPLOY_CATALOG，但本次构建没有 catalog 数据包"
+            echo "  CI checkout 无商品数据（.gitignore 排除）。请按 deploy/CATALOG-DEPLOY.md §5 从开发机直送数据到生产机，"
+            echo "  或把数据注入 release/prod-catalog/ 后重跑；勿让发布在缺数据时静默降级到 6 条演示品。"
+            exit 1
+          fi
+          scp -i ~/.ssh/deploy_key catalog-${{ github.sha }}.tar.gz \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/catalog.tar.gz"
+
+      - name: 远端原子发布（含可选商品数据落位）
         if: env.SSH_READY == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_CATALOG: ${{ vars.DEPLOY_CATALOG }}
+        run: |
+          EXTRA=""
+          if [ "$DEPLOY_CATALOG" = "1" ]; then
+            EXTRA="CATALOG_ARTIFACT=/tmp/catalog.tar.gz VERIFY_CATALOG=1"
+          fi
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo mkdir -p /opt/mixmapp/deploy && sudo cp -r /tmp/mixmapp-deploy/* /opt/mixmapp/deploy/ && \
+             sudo APP_VERSION=${{ steps.version.outputs.version_name }} ARTIFACT=/tmp/api.tar.gz WEB_ARTIFACT=/tmp/web.tar.gz $EXTRA bash /opt/mixmapp/deploy/atomic-release.sh"
+
+      # 商品数据增强验收：runner 侧 HTTP 全项 + 生产机本地资产硬验收（catalog.json 可解析 / 图片数 ≥ 871）。
+      - name: 商品数据 HTTP 增强验收（正式版本/目录源/6 类目/商品数/媒体 200）
+        if: env.SSH_READY == 'true' && vars.DEPLOY_CATALOG == '1'
+        env:
+          EXPECT_VERSION: ${{ vars.EXPECT_VERSION }}
+        run: node deploy/catalog-verify.mjs ${{ vars.SITE_BASE_URL || 'https://www.mixm.top' }}
+
+      - name: 生产机本地资产硬验收（catalog.json / 图片数）
+        if: env.SSH_READY == 'true' && vars.DEPLOY_CATALOG == '1'
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
-            'sudo mkdir -p /opt/mixmapp/deploy && sudo cp -r /tmp/mixmapp-deploy/* /opt/mixmapp/deploy/ && \
-             sudo ARTIFACT=/tmp/api.tar.gz WEB_ARTIFACT=/tmp/web.tar.gz bash /opt/mixmapp/deploy/atomic-release.sh'
+            "LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
+             STORAGE_DIR=/var/lib/mixmapp/storage node /opt/mixmapp/deploy/catalog-verify.mjs"
 
       - name: 线上健康校验
         if: env.SSH_READY == 'true' && vars.HEALTH_BASE_URL != ''

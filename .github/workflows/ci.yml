@@ -55,6 +55,9 @@ jobs:
       - name: 版本一致性（version.json ↔ 各包 ↔ README）
         run: pnpm version:check
 
+      - name: 域名一致性（deploy/domains.json ↔ api-base / nginx / env）
+        run: pnpm domains:check
+
       - name: 规则检查
         run: pnpm lint
 

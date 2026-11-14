@@ -3,17 +3,20 @@
  * 版本号单一事实源：version.json
  *
  * 规约（详见 docs/19-versioning.md）：
- * - 首个对外正式版本 = V0.0.0，之后每次功能/模块更新按 V0.0.1、V0.0.2 递增
+ * - 四段式版本：X.Y.Z.B，基线 = V0.0.0.0（2026-11-14 全平台 / 全渠道强制重置）
+ * - 之后每次功能/模块更新只递增第 4 段：V0.0.0.1、V0.0.0.2 ……
  * - 发布前不得占用正式版本号：没有真正对外发布，就不能把该号写进 released，也不能打 tag
- * - 内部 / 预览 / 草稿构建一律显示 V0.0.0-preview，正式上线才显示 V0.0.0
+ * - 渠道：release（正式）/ preview（预览）/ dev（开发）；非 release 一律显示 <next>-<channel>
+ * - 正式发布态下，展示层 / 构建元数据统一取「最新已发布正式号」，next 仅表示下一个待发布工作号
+ * - npm 包版本必须是三段式 semver，映射规则 = 取四段号的前三段（0.0.0.0 → 0.0.0）
  * - 任何一处版本必须与 README 同步，不一致即门禁失败
  *
  * 命令：
  *   node scripts/version.mjs show      打印当前版本（含展示形式）
  *   node scripts/version.mjs check     校验全部版本位是否一致（CI 门禁用）
  *   node scripts/version.mjs sync      把 version.json 同步到各处（包、env、config、manifest、前端常量、README；Android gradle 直接读 version.json，不落字面量）
- *   node scripts/version.mjs bump      递增补丁号（只允许在上一版已发布之后）
- *   node scripts/version.mjs release   正式发布：占用当前号、打 tag 提示、推进到下一个 preview
+ *   node scripts/version.mjs bump      递增工作补丁号（只允许在上一版已发布之后）
+ *   node scripts/version.mjs release   正式发布：占用当前号、打 tag 提示、推进到下一个工作号，进入 release 正式态
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -22,7 +25,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION_FILE = join(root, 'version.json');
-const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+/** 四段式版本 X.Y.Z.B（每段非负整数、无前导零） */
+const SEMVER4 = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 const PKG_FILES = [
   'package.json',
@@ -31,6 +35,8 @@ const PKG_FILES = [
   'services/api/package.json',
   'packages/contracts/package.json',
   'packages/ids/package.json',
+  // CloudBase 云函数独立部署包（不在 pnpm workspace 内，但版本号同样纳管）
+  'cloudbase/functions/mixmapp-api-proxy/package.json',
 ];
 
 const ENV_FILE = '.env.example';
@@ -42,6 +48,8 @@ const MANIFEST_FILE = join('apps', 'app', 'src', 'manifest.json');
 const GRADLE_FILE = join('apps', 'mobile', 'android', 'app', 'build.gradle');
 /** 前端展示兜底常量（由本脚本生成，禁止手改） */
 const APP_VERSION_FILE = join('apps', 'app', 'src', 'version.ts');
+/** 一键安装向导生成的 api.env 模板（APP_VERSION 由本脚本同步，防止发版后漏改） */
+const INSTALL_FILE = join('install', 'server.mjs');
 const BEGIN = '<!-- version:begin -->';
 const END = '<!-- version:end -->';
 
@@ -75,14 +83,17 @@ function applyEol(text, eol) {
 function loadState() {
   if (!existsSync(VERSION_FILE)) fail('缺少 version.json');
   const state = JSON.parse(readFileSync(VERSION_FILE, 'utf8'));
-  if (!SEMVER.test(state.next ?? '')) fail(`version.json next 不是合法 X.Y.Z：${state.next}`);
+  if (!SEMVER4.test(state.next ?? '')) fail(`version.json next 不是合法四段式 X.Y.Z.B：${state.next}`);
   if (!Number.isInteger(state.build) || state.build < 1) {
     fail(`version.json build 必须是 >= 1 的整数：${state.build}`);
   }
-  if (state.channel !== 'preview' && state.channel !== 'release') {
-    fail(`version.json channel 只能是 preview 或 release：${state.channel}`);
+  if (!['preview', 'release', 'dev'].includes(state.channel)) {
+    fail(`version.json channel 只能是 preview / release / dev：${state.channel}`);
   }
   if (!Array.isArray(state.released)) fail('version.json released 必须是数组');
+  for (const version of state.released) {
+    if (!SEMVER4.test(version)) fail(`version.json released 含非法四段式版本号：${version}`);
+  }
   return state;
 }
 
@@ -90,9 +101,26 @@ function saveState(state) {
   writeFileSync(VERSION_FILE, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 }
 
-/** 展示用版本（含 -preview 后缀） */
+/** 最新已发布的正式版本号（裸 X.Y.Z.B）；非 release 渠道还没有正式号，返回 null */
+function releasedVersion(state) {
+  if (state.channel !== 'release') return null;
+  return state.released[state.released.length - 1] ?? state.next;
+}
+
+/** 展示用版本：release 显示最新已发布正式号（裸号）；preview / dev 带 -<channel> 后缀 */
 function displayVersion(state) {
-  return state.channel === 'preview' ? `${state.next}-preview` : state.next;
+  if (state.channel === 'release') return releasedVersion(state) ?? state.next;
+  return `${state.next}-${state.channel}`;
+}
+
+/** 构建元数据用四段式裸版本号：release 态取已发布正式号，其余态取 next */
+function buildVersion(state) {
+  return releasedVersion(state) ?? state.next;
+}
+
+/** npm / semver 只接受三段式：四段号截取前三段（0.0.0.0 → 0.0.0） */
+function npmVersion(version) {
+  return version.split('.').slice(0, 3).join('.');
 }
 
 /** 对外展示（带 V 前缀） */
@@ -100,9 +128,9 @@ function publicVersion(state) {
   return `V${displayVersion(state)}`;
 }
 
-function bumpPatch(version) {
-  const [major, minor, patch] = version.split('.').map(Number);
-  return `${major}.${minor}.${patch + 1}`;
+function bumpFourth(version) {
+  const [major, minor, patch, build] = version.split('.').map(Number);
+  return `${major}.${minor}.${patch}.${build + 1}`;
 }
 
 /** 查询某个 tag 是否存在；返回 null 表示当前环境没有可用的 git 仓库 */
@@ -121,16 +149,21 @@ function gitTag(tag) {
 function readmeBlock(state) {
   const current = publicVersion(state);
   const currentNote =
-    state.channel === 'preview' ? '内部预览构建，未对外发布' : '正式发布版本';
+    state.channel === 'release'
+      ? '正式发布版本'
+      : state.channel === 'preview'
+        ? '内部预览构建，未对外发布'
+        : '开发构建，未对外发布';
   const released =
     state.released.length === 0
       ? '无'
       : state.released.map((v) => `\`V${v}\``).join('、');
+  const first = state.released[0] ?? state.next;
   return [
     BEGIN,
     `当前构建版本：**${current}**（${currentNote}）`,
     `已发布版本：${released}`,
-    '版本规约：首发 `V0.0.0`，之后按补丁递增；发布前不占用正式版本号；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)',
+    `版本规约：四段式，首发 \`V${first}\`，之后按第 4 位递增；npm 包版本取前三段；正式发布态以已发布版本为准；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)`,
     END,
   ].join('\n');
 }
@@ -161,13 +194,16 @@ function replaceField(text, pattern, value) {
 
 function sync() {
   const state = loadState();
+  const built = buildVersion(state);
 
   for (const file of PKG_FILES) {
     const pkg = JSON.parse(readText(file));
-    if (pkg.version !== state.next) {
-      pkg.version = state.next;
+    // npm / pnpm 只接受三段式 semver：四段号的第 4 段不写入 package.json
+    const pkgVersion = npmVersion(built);
+    if (pkg.version !== pkgVersion) {
+      pkg.version = pkgVersion;
       writeText(file, `${JSON.stringify(pkg, null, 2)}\n`);
-      console.log(`  · ${file} → ${state.next}`);
+      console.log(`  · ${file} → ${pkgVersion}`);
     }
   }
 
@@ -193,15 +229,23 @@ function sync() {
     console.log(`  · ${APP_VERSION_FILE} → ${displayVersion(state)}`);
   }
 
+  const install = readText(INSTALL_FILE);
+  const installNext = install.replace(/'APP_VERSION=[^']*'/, `'APP_VERSION=${displayVersion(state)}'`);
+  if (installNext !== install) {
+    if (!/'APP_VERSION=[^']*'/.test(install)) fail(`${INSTALL_FILE} 里找不到 APP_VERSION 模板`);
+    writeText(INSTALL_FILE, installNext);
+    console.log(`  · ${INSTALL_FILE} → ${displayVersion(state)}`);
+  }
+
   const manifest = readText(MANIFEST_FILE);
   const manifestNext = replaceField(
     manifest,
     /("versionName"\s*:\s*")([^"]*)(")/,
-    state.next,
+    built,
   ).replace(/"versionCode"\s*:\s*"([^"]*)"/, `"versionCode": "${state.build}"`);
   if (manifestNext !== manifest) {
     writeText(MANIFEST_FILE, manifestNext);
-    console.log(`  · ${MANIFEST_FILE} → ${state.next} / build ${state.build}`);
+    console.log(`  · ${MANIFEST_FILE} → ${built} / build ${state.build}`);
   }
 
   // Android 壳从仓库根 version.json 动态读取 versionCode/versionName，
@@ -231,15 +275,19 @@ function sync() {
 
 function check() {
   const state = loadState();
+  const built = buildVersion(state);
   const problems = [];
 
+  // 任何通道下 next 都不得与已发布号重复：预览期防提前占号，正式态防把工作号误当已发布
   if (state.released.includes(state.next)) {
-    problems.push(`版本 ${state.next} 已在 released 列表里，属于「已占用」，不能再作为待发布版本`);
+    problems.push(`版本 ${state.next} 已在 released 列表里，属于「已占用」，不能再作为待发布工作号`);
   }
 
   for (const file of PKG_FILES) {
     const version = JSON.parse(readText(file)).version;
-    if (version !== state.next) problems.push(`${file} 的 version=${version}，应为 ${state.next}`);
+    // package.json 只承载三段式映射号，四段号的第 4 段由 version.json / 构建元数据承载
+    const expected = npmVersion(built);
+    if (version !== expected) problems.push(`${file} 的 version=${version}，应为 ${expected}`);
   }
 
   if (!readText(ENV_FILE).includes(expectedEnvLine(state))) {
@@ -247,6 +295,9 @@ function check() {
   }
   if (!readText(CONFIG_FILE).includes(expectedConfigLine(state))) {
     problems.push(`${CONFIG_FILE} 的 APP_VERSION 默认值不是 ${displayVersion(state)}`);
+  }
+  if (!readText(INSTALL_FILE).includes(`'APP_VERSION=${displayVersion(state)}'`)) {
+    problems.push(`${INSTALL_FILE} 的 APP_VERSION 模板不是 ${displayVersion(state)}`);
   }
 
   const versionNow = existsSync(join(root, APP_VERSION_FILE)) ? readText(APP_VERSION_FILE) : '';
@@ -256,8 +307,8 @@ function check() {
 
   const manifest = readText(MANIFEST_FILE);
   const manifestName = /"versionName"\s*:\s*"([^"]*)"/.exec(manifest)?.[1];
-  if (manifestName !== state.next) {
-    problems.push(`${MANIFEST_FILE} 的 versionName=${manifestName}，应为 ${state.next}（构建元数据用裸版本号，展示层才带 -preview）`);
+  if (manifestName !== built) {
+    problems.push(`${MANIFEST_FILE} 的 versionName=${manifestName}，应为 ${built}（构建元数据用裸正式版本号）`);
   }
   const manifestBuild = /"versionCode"\s*:\s*"([^"]*)"/.exec(manifest)?.[1];
   if (manifestBuild !== String(state.build)) {
@@ -265,7 +316,7 @@ function check() {
   }
 
   // Android 壳动态读取根 version.json：门禁只校验接线（指向文件、解析 JSON、
-  // versionCode 取自 build、versionName 取自 next+channel 后缀），不再匹配
+  // versionCode 取自 build、versionName 取自 next），不再匹配
   // 已不存在的 versionName/versionCode 字面量。
   const gradle = readText(GRADLE_FILE);
   if (!/rootProject\.file\(['"]\.\.\/\.\.\/\.\.\/version\.json['"]\)/.test(gradle)) {
@@ -278,7 +329,7 @@ function check() {
     problems.push(`${GRADLE_FILE} 的 versionCode 未取自 version.json 的 build`);
   }
   if (!/versionName\s+mixmVersionName/.test(gradle) || !/mixmVersionName\s*=.*mixmVersion\.next/.test(gradle)) {
-    problems.push(`${GRADLE_FILE} 的 versionName 未取自 version.json 的 next（+ channel 后缀）`);
+    problems.push(`${GRADLE_FILE} 的 versionName 未取自 version.json 的 next`);
   }
 
   const readme = readText(README_FILE);
@@ -296,7 +347,7 @@ function check() {
     problems.forEach((p) => console.error(`✗ ${p}`));
     process.exit(1);
   }
-  console.log(`✓ 版本一致：${publicVersion(state)}（包 ${PKG_FILES.length} 个、env、config、manifest、gradle、前端常量、README、tag 均已核对）`);
+  console.log(`✓ 版本一致：${publicVersion(state)}（包 ${PKG_FILES.length} 个、env、config、install、manifest、gradle、前端常量、README、tag 均已核对）`);
 }
 
 function bump() {
@@ -305,7 +356,7 @@ function bump() {
     fail(`当前 ${state.next} 还没正式发布，不能先占用下一个号（规约：发布前不得占用）`);
   }
   const prev = state.next;
-  state.next = bumpPatch(prev);
+  state.next = bumpFourth(prev);
   state.channel = 'preview';
   saveState(state);
   console.log(`✓ ${prev} 已发布，工作版本推进到 ${publicVersion(state)}`);
@@ -314,8 +365,8 @@ function bump() {
 
 function release() {
   const state = loadState();
-  if (state.channel === 'release' || state.released.includes(state.next)) {
-    fail(`${state.next} 已经是发布状态，无需重复发布`);
+  if (state.released.includes(state.next)) {
+    fail(`${state.next} 已登记发布，无需重复发布`);
   }
   const tag = `v${state.next}`;
   const existing = gitTag(tag);
@@ -334,20 +385,21 @@ function release() {
     }
   }
 
-  const releasedVersion = state.next;
-  state.released.push(releasedVersion);
+  const releasedVer = state.next;
+  state.released.push(releasedVer);
   state.build += 1;
-  state.channel = 'preview';
-  state.next = bumpPatch(releasedVersion);
+  state.channel = 'release';
+  state.next = bumpFourth(releasedVer);
   saveState(state);
   sync();
 
   console.log('');
-  console.log(`✓ 已登记正式发布：V${releasedVersion}（tag ${tag}）`);
+  console.log(`✓ 已登记正式发布：V${releasedVer}（tag ${tag}）`);
+  console.log(`  当前对外版本：${publicVersion(state)}（channel=release，展示与构建元数据统一取已发布正式号）`);
+  console.log(`  下一个待发布工作号：${state.next} / build ${state.build}`);
   console.log(`  下一步（由发布流程执行，脚本不自动打 tag，避免误触发上线）：`);
-  console.log(`    git add -A && git commit -m "release: V${releasedVersion}"`);
-  console.log(`    git tag -a ${tag} -m "MixmAPP ${releasedVersion}" && git push origin main ${tag}`);
-  console.log(`  当前工作版本：${publicVersion(state)} / build ${state.build}`);
+  console.log(`    git add -A && git commit -m "release: V${releasedVer}"`);
+  console.log(`    git tag -a ${tag} -m "MixmAPP ${releasedVer}" && git push origin main ${tag}`);
 }
 
 const command = process.argv[2];
