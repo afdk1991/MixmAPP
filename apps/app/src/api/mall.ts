@@ -25,6 +25,27 @@ export type MallProductDto = ProductDto & {
   priceCapturedAt?: string;
   /** 来源站点详情页完整 URL */
   sourceUrl?: string;
+  /** 面价，厘/支（源站元/千支），有值时用它精确计价与展示 */
+  priceLi?: number;
+  /** 折扣百分比，100 = 无折扣 */
+  discountPct?: number;
+  /** 特价，厘/支 */
+  salePriceLi?: number;
+  /** 类目属性（按类目实际存在形态，空值不入库） */
+  attributes?: Record<string, string>;
+  /** 优惠活动文案与有效期 */
+  promotions?: Array<{ text: string; kind?: string; validFrom?: string; validTo?: string }>;
+  /** 包装换算文案原文，如「1箱=16盒,1盒=2000支」 */
+  packagingDesc?: string;
+  /** 购买方式（箱/盒/袋…） */
+  unitOptions?: Array<{ code: string; name: string }>;
+  /** 单位换算：需求支数 = 包装数 × unitConversions[选中单位] */
+  unitConversions?: Record<string, number>;
+  /** 商品详图（按三级类目共享） */
+  specImage?: string;
+  minOrderQty?: number;
+  qtyStep?: number;
+  maxOrderQty?: number;
 };
 
 /** 分类 tab 接口返回项：code 稳定短码，count 为该分类商品数。 */
@@ -32,6 +53,21 @@ export type MallCategoryDto = {
   code: string;
   name: string;
   count: number;
+};
+
+/** 分类树节点：level 1/2/3，id 形如 c1:002 / c2:002:007 / c3:007。 */
+export type MallCategoryNodeDto = {
+  id: string;
+  code: string;
+  name: string;
+  level: number;
+  count: number;
+};
+
+/** 三级类目下的规格筛选项，取值只来自源站真实选项与商品实际取值。 */
+export type MallSpecOptionsDto = {
+  dims: string[];
+  lens: string[];
 };
 
 /**
@@ -68,6 +104,29 @@ export function priceText(fen: number | null | undefined): string {
 /** 价格旁的单位后缀：有单位时返回 `元/支`，否则空串。 */
 export function priceUnitLabel(product: Pick<MallProductDto, 'unit'>): string {
   return product.unit ? `元/${product.unit}` : '';
+}
+
+/**
+ * 厘/支 → 展示单价（元/支）。源站面价按「元/千支」给，85 即 0.085 元/支；
+ * 保留到 4 位小数并去掉多余的 0，避免 0.085 被四舍五入成 0.09 的错觉。
+ */
+export function unitPriceText(priceLi?: number | null): string {
+  if (priceLi == null || !Number.isFinite(priceLi)) return '';
+  if (priceLi % 1000 === 0) return String(priceLi / 1000);
+  let text = (priceLi / 1000).toFixed(4).replace(/0+$/, '');
+  if (text.endsWith('.')) text = `${text}00`;
+  else if (/\.\d$/.test(text)) text = `${text}0`;
+  return text;
+}
+
+/** 金额：有厘/支精确价时按支数算（1 分 = 10 厘），否则回落到旧的分/件口径。 */
+export function lineTotalFen(
+  product: Pick<MallProductDto, 'priceFen' | 'priceLi'>,
+  quantity: number,
+): number {
+  const li = product.priceLi;
+  if (li != null && li > 0) return Math.round((li * quantity) / 10);
+  return (product.priceFen ?? 0) * quantity;
 }
 
 /** 包装量文案：有数量与单位时返回 `100 支/包`，否则空串。 */
