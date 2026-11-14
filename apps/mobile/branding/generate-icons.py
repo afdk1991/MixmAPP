@@ -1,128 +1,182 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""MixmAPP Android 图标 / 启动图生成器（唯一事实源，改动请改这里再重跑）。
+"""MixmAPP 品牌标识生成器（PNG 派生物，唯一矢量源见 branding/mixm-logo.svg）。
 
-画法取自 apps/app/src/components/mx-logo/mx-logo.vue：
-  方框内 “MX” 连字 + 品牌青底线；深底态用 $deep 作底、$paper 作字。
-色值取自 apps/app/src/uni.scss。
+规格（与 SVG 注释中的常量一一对应，改动必须同时改两处）：
+    - 字标：MixmAPP（整词，7 个字符；不再出现孤立的 Mixm / MX）
+    - 字重 800，字距 -3%（em）
+    - 底线：品牌青 #0F9D8F，宽度与字标等宽，厚度 10% 字高，间距 16% 字高
+    - 纸底 #F4F4F1；字标 #111111
+    - 图标不叠胶囊（7 字符在 48dp 下会糊），以「整词 + 品牌青横线」为识别锚点
+本仓没有 SVG 光栅化器（cairosvg / ImageMagick 均未安装），PNG 由本脚本用系统 800
+字重无衬线（Segoe UI Bold，回退 Arial Bold / DejaVu Sans Bold）按同一几何渲染。
 
-用法（仓库根）：
-    python apps/mobile/branding/generate-icons.py
-
-产物（apps/mobile/android/app/src/main/res）：
-    mipmap-{mdpi..xxxhdpi}/ic_launcher.png          48/72/96/144/192 深底圆角方块
+产物：
+    mipmap-{mdpi..xxxhdpi}/ic_launcher.png          48/72/96/144/192 纸底圆角方块
     mipmap-{...}/ic_launcher_round.png              同上，圆形裁切
-    mipmap-{...}/ic_launcher_foreground.png         108/162/216/324/432 透明层（自适应图标前景）
-    drawable{,-port,-land}-*/splash.png             与 Capacitor 原有尺寸一一对应
+    mipmap-{...}/ic_launcher_foreground.png         108/162/216/324/432 透明前景层
+    drawable{,-port,-land}-*/splash.png             启动图
+    values/ic_launcher_background.xml               背景层色值（纸底）
+    branding/icon-512.png                           上架 512×512
+    apps/app/src/static/{logo.png,logo-192.png,logo-48.png,favicon.png}
+                                                    H5 页头 / PWA / favicon
 """
 import os
-import struct
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 RES = os.path.join(ROOT, 'apps', 'mobile', 'android', 'app', 'src', 'main', 'res')
+STATIC = os.path.join(ROOT, 'apps', 'app', 'src', 'static')
+BRANDING = os.path.join(ROOT, 'apps', 'mobile', 'branding')
+STORE_ICON = os.path.join(BRANDING, 'icon-512.png')
 
-DEEP = '#0b0f0e'          # $deep 主视觉深场
-DEEP_3 = '#1d2a26'        # $deep-3 描边
-PAPER = '#f4f4f1'         # $paper 暖白
-BRAND = '#0f9d8f'         # $brand 品牌青
-SOFT = (244, 244, 241, 18)   # 深底上的方框填充 rgba(244,244,241,0.07)
-BORDER = (244, 244, 241, 66)  # 深底上的描边 rgba(244,244,241,0.26)
+PAPER = (244, 244, 241)   # $paper 纸底，与 ic_launcher_background 一致
+INK = (17, 17, 17)        # 字标黑
+BRAND = (15, 157, 143)    # $brand 品牌青
+MUTED = (138, 143, 139)   # MIXMAPP ACCOUNT 灰
 
-FONT_CANDIDATES = [
+WORD = 'MixmAPP'
+# 字标宽度占载体边长的比例
+# adaptive 前景 108dp 的可见区只有 72dp：0.64 × 108 = 69dp 刚好落在圆形遮罩内，
+# 0.74 会让首尾字母被遮罩切掉（2026-11-15 真机截图实测后修正）
+FG_MARK_RATIO = 0.64
+LEGACY_MARK_RATIO = 0.86   # 各密度 legacy（圆角方块）
+ROUND_MARK_RATIO = 0.78    # 圆形 legacy，留出圆周余量
+H5_MARK_RATIO = 0.80       # H5 logo / favicon
+SPLASH_MARK_RATIO = 0.56   # 启动页（相对短边）
+
+# 底线几何（相对字标宽 / 字高）
+UNDERLINE_W = 1.0
+UNDERLINE_H = 0.10
+UNDERLINE_GAP = 0.16
+# 字距：-3% em
+TRACKING_EM = -0.03
+
+FONT_CANDIDATES = (
     r'C:\Windows\Fonts\seguibl.ttf',
+    r'C:\Windows\Fonts\segoeuib.ttf',
     r'C:\Windows\Fonts\arialbd.ttf',
     '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
-]
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+)
 
 
-def load_font(px):
+def load_font(size):
     for path in FONT_CANDIDATES:
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(path, px)
+                return ImageFont.truetype(path, size)
             except OSError:
                 continue
-    return ImageFont.load_default()
+    raise SystemExit('找不到可用的 800 字重无衬线字体，请安装 Segoe UI Bold / Arial Bold')
 
 
-def draw_monogram(canvas, box, fill_bg=None, border=None, mono=PAPER, underline=BRAND):
-    """在 box=(x,y,w,h) 内画 MX 连字 + 品牌底线；fill_bg/border 传 None 表示只画字（透明前景）。"""
-    x, y, w, h = box
-    radius = int(w * 0.14)
-    if fill_bg or border:
-        # 半透明的方框必须走 alpha_composite，ImageDraw 在 RGBA 画布上会直接写入 alpha 而不是混合
-        layer = Image.new('RGBA', canvas.size, (0, 0, 0, 0))
-        ImageDraw.Draw(layer).rounded_rectangle(
-            [x, y, x + w, y + h], radius=radius,
-            fill=fill_bg, outline=border, width=max(1, int(w * 0.006)))
-        canvas.alpha_composite(layer)
-    d = ImageDraw.Draw(canvas, 'RGBA')
-    # 字号：让 “MX” 视觉宽度约占方框 52%
-    size = int(h * 0.52)
-    while size > 8:
-        f = load_font(size)
-        tw = d.textbbox((0, 0), 'MX', font=f)[2]
-        if tw <= w * 0.54:
-            break
-        size -= 1
-    f = load_font(size)
-    bbox = d.textbbox((0, 0), 'MX', font=f)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    tx = x + (w - tw) / 2 - bbox[0]
-    ty = y + h * 0.44 - (bbox[1] + th / 2)
-    d.text((tx, ty), 'MX', font=f, fill=mono)
-    # 底线：左右各缩进 18%，高度 3.3%，底边距离下方 22%
-    bh = max(1, int(h * 0.033))
-    d.rectangle([x + w * 0.18, y + h * 0.78 - bh, x + w * 0.82, y + h * 0.78], fill=underline)
+def render_wordmark():
+    """把 “MixmAPP” 渲成 alpha 掩膜（透明底），返回裁剪后的掩膜。"""
+    ss = 2                      # 2x 超采样，边缘交给缩小抗锯齿
+    font_pt = 400 * ss
+    font = load_font(font_pt)
+    probe = ImageDraw.Draw(Image.new('L', (8, 8)))
+    tracking = TRACKING_EM * font_pt
+    widths, boxes = [], []
+    for ch in WORD:
+        box = probe.textbbox((0, 0), ch, font=font)
+        boxes.append(box)
+        widths.append(box[2] - box[0])
+    total = sum(widths) + tracking * (len(WORD) - 1)
+    top = min(b[1] for b in boxes)
+    bottom = max(b[3] for b in boxes)
+    height = bottom - top
+    canvas = Image.new('L', (int(total) + font_pt // 2, height + font_pt // 2), 0)
+    draw = ImageDraw.Draw(canvas)
+    x = font_pt // 8
+    for ch, box in zip(WORD, boxes):
+        draw.text((x - box[0], -top), ch, font=font, fill=255)
+        x += (box[2] - box[0]) + tracking
+    return canvas.crop(canvas.getbbox())
 
 
-def circle_mask(size):
-    mask = Image.new('L', (size * 4, size * 4), 0)
-    ImageDraw.Draw(mask).ellipse([0, 0, size * 4 - 1, size * 4 - 1], fill=255)
+def mark_geometry(mask):
+    gw, gh = mask.size
+    return gw, gh
+
+
+def compose_mark(size_w, mask, ratio=1.0):
+    """按字标宽度 size_w 生成「词标 + 品牌青横线」的透明图层。"""
+    gw, gh = mask.size
+    w = max(1, int(round(size_w)))
+    h = max(1, int(round(w * gh / gw)))
+    uh = max(1, int(round(h * UNDERLINE_H)))
+    gap = max(1, int(round(h * UNDERLINE_GAP)))
+    total_h = h + gap + uh
+    canvas = Image.new('RGBA', (w, total_h), (0, 0, 0, 0))
+    glyph = mask.resize((w, h), Image.LANCZOS)
+    canvas.paste(Image.new('RGBA', (w, h), INK + (255,)), (0, 0), glyph)
+    ImageDraw.Draw(canvas).rectangle(
+        [0, h + gap, w - 1, h + gap + uh - 1],
+        fill=BRAND + (255,))
+    return canvas
+
+
+def place_mark(canvas, mark, center):
+    cx, cy = center
+    canvas.alpha_composite(mark, (int(round(cx - mark.width / 2)),
+                                  int(round(cy - mark.height / 2))))
+    return canvas
+
+
+def rounded_mask(size, radius_ratio=0.22):
+    scale = 4
+    mask = Image.new('L', (size * scale, size * scale), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [0, 0, size * scale - 1, size * scale - 1],
+        radius=int(size * scale * radius_ratio), fill=255)
     return mask.resize((size, size), Image.LANCZOS)
 
 
-def legacy_icon(size, round_icon=False, background=DEEP, outline=None):
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    if round_icon:
-        draw_monogram(img, (0, 0, size, size), mono=PAPER)
-        tile = Image.new('RGBA', (size, size), background)
-        draw_monogram(tile, (0, 0, size, size), mono=PAPER)
-        tile.putalpha(circle_mask(size))
-        return Image.alpha_composite(img, tile)
-    draw_monogram(img, (0, 0, size, size), fill_bg=background, border=outline, mono=PAPER)
-    return img
+def circle_mask(size):
+    scale = 4
+    mask = Image.new('L', (size * scale, size * scale), 0)
+    ImageDraw.Draw(mask).ellipse([0, 0, size * scale - 1, size * scale - 1], fill=255)
+    return mask.resize((size, size), Image.LANCZOS)
 
 
-def foreground(size):
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    inset = size * 0.17   # 内容收在 66% 安全区内
-    draw_monogram(img, (inset, inset, size - inset * 2, size - inset * 2), mono=PAPER)
-    return img
+def legacy_icon(size, mask, round_icon=False):
+    tile = Image.new('RGBA', (size, size), PAPER + (255,))
+    ratio = ROUND_MARK_RATIO if round_icon else LEGACY_MARK_RATIO
+    place_mark(tile, compose_mark(size * ratio, mask), (size / 2, size / 2))
+    tile.putalpha(rounded_mask(size) if not round_icon else circle_mask(size))
+    return tile
 
 
-def splash(width, height):
-    img = Image.new('RGBA', (width, height), DEEP)
-    d = ImageDraw.Draw(img)
+def foreground(size, mask):
+    canvas = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    place_mark(canvas, compose_mark(size * FG_MARK_RATIO, mask), (size / 2, size / 2))
+    return canvas
+
+
+def monochrome(size, mask):
+    """monochrome 层：同形白色剪影（系统按 alpha 染色）。"""
+    layer = foreground(size, mask)
+    solid = Image.new('RGBA', layer.size, (255, 255, 255, 0))
+    solid.putalpha(layer.getchannel('A'))
+    return solid
+
+
+def splash(width, height, mask):
+    img = Image.new('RGBA', (width, height), PAPER + (255,))
     short = min(width, height)
-    box = int(short * 0.20)
-    cx, cy = width // 2, height // 2
-    draw_monogram(img, (cx - box // 2, cy - box * 0.62, box, box),
-                  fill_bg=SOFT, border=BORDER, mono=PAPER)
-    # 字标
-    size = max(10, int(short * 0.085))
-    f = load_font(size)
-    word = 'MixmAPP'
-    tw = d.textbbox((0, 0), word, font=f)[2]
-    d.text((cx - tw / 2 - int(size * 0.02), cy + box * 0.52), word, font=f, fill=PAPER)
-    # 等宽小字
-    size2 = max(7, int(short * 0.036))
-    f2 = load_font(size2)
-    sub = 'M U L T I - E N D   I D E N T I T Y'
-    sw = d.textbbox((0, 0), sub, font=f2)[2]
-    d.text((cx - sw / 2, cy + box * 0.52 + size * 1.5), sub, font=f2,
-           fill=(244, 244, 241, 128))
+    d = ImageDraw.Draw(img, 'RGBA')
+    mark = compose_mark(short * SPLASH_MARK_RATIO, mask)
+    x = (width - mark.width) // 2
+    y = (height - mark.height) // 2 - int(short * 0.06)
+    img.alpha_composite(mark, (x, y))
+
+    sub = 'M I X M A P P   A C C O U N T'
+    size = max(7, int(short * 0.026))
+    font = load_font(size)
+    tw = d.textbbox((0, 0), sub, font=font)[2]
+    d.text(((width - tw) / 2, y + mark.height + short * 0.05), sub, font=font, fill=MUTED + (255,))
     return img
 
 
@@ -149,32 +203,56 @@ SPLASHES = {
 }
 
 
-def save(img, folder, name):
-    out = os.path.join(RES, folder)
-    os.makedirs(out, exist_ok=True)
-    path = os.path.join(out, name)
-    img.save(path, 'PNG', optimize=True)
-    return path
+def master_logo(size, mask, mark_ratio=H5_MARK_RATIO):
+    img = Image.new('RGBA', (size, size), PAPER + (255,))
+    place_mark(img, compose_mark(size * mark_ratio, mask), (size / 2, size / 2))
+    return img
 
 
 def main():
+    mask = render_wordmark()
+    gw, gh = mark_geometry(mask)
+
     written = 0
     for density, (legacy, fg) in DENSITIES.items():
-        save(legacy_icon(legacy), f'mipmap-{density}', 'ic_launcher.png')
-        save(legacy_icon(legacy, round_icon=True), f'mipmap-{density}', 'ic_launcher_round.png')
-        save(foreground(fg), f'mipmap-{density}', 'ic_launcher_foreground.png')
+        out_dir = os.path.join(RES, f'mipmap-{density}')
+        os.makedirs(out_dir, exist_ok=True)
+        legacy_icon(legacy, mask).save(
+            os.path.join(out_dir, 'ic_launcher.png'), 'PNG', optimize=True)
+        legacy_icon(legacy, mask, round_icon=True).save(
+            os.path.join(out_dir, 'ic_launcher_round.png'), 'PNG', optimize=True)
+        foreground(fg, mask).save(
+            os.path.join(out_dir, 'ic_launcher_foreground.png'), 'PNG', optimize=True)
         written += 3
+
     for folder, sizes in SPLASHES.items():
+        out_dir = os.path.join(RES, folder)
+        os.makedirs(out_dir, exist_ok=True)
         for w, h in sizes:
-            save(splash(w, h), folder, 'splash.png')
+            splash(w, h, mask).save(os.path.join(out_dir, 'splash.png'), 'PNG', optimize=True)
             written += 1
-    # 自适应图标的底色资源
+
     bg_path = os.path.join(RES, 'values', 'ic_launcher_background.xml')
+    os.makedirs(os.path.dirname(bg_path), exist_ok=True)
     with open(bg_path, 'w', encoding='utf-8', newline='') as f:
         f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n')
-        f.write('    <color name="ic_launcher_background">#0B0F0E</color>\n</resources>\n')
+        f.write('    <color name="ic_launcher_background">#F4F4F1</color>\n</resources>\n')
     written += 1
-    print(f'✓ 生成 {written} 个文件：图标 15 + 启动图 11 + 背景色 1')
+
+    master_logo(512, mask).convert('RGB').save(STORE_ICON, 'PNG', optimize=True)
+    written += 1
+
+    # H5 侧：页头 logo / PWA 图标 / favicon 全部由同一母版派生
+    os.makedirs(STATIC, exist_ok=True)
+    for name, px, ratio in (('logo.png', 1024, 0.80), ('logo-192.png', 192, 0.84),
+                            ('logo-48.png', 48, 0.88), ('favicon.png', 48, 0.88)):
+        master_logo(px, mask, ratio).convert('RGB').save(
+            os.path.join(STATIC, name), 'PNG', optimize=True)
+        written += 1
+
+    print(f'✓ 生成 {written} 个文件（图标 15 + 启动图 11 + 背景色 1 + 上架图 1 + H5 4）')
+    print(f'  字标掩膜 {gw}×{gh}（字形 “{WORD}”），底线 {UNDERLINE_H:.0%} 高 / 间距 {UNDERLINE_GAP:.0%}')
+    print(f'  48dp 图标字标宽 {round(48 * LEGACY_MARK_RATIO)}px，字高 {round(48 * LEGACY_MARK_RATIO * gh / gw)}px')
     print(f'  输出目录：{RES}')
 
 

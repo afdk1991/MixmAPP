@@ -3,7 +3,7 @@
     <mx-bar />
 
     <view class="brand">
-      <mx-logo size="lg" tone="light" sub="MULTI-END IDENTITY" />
+      <mx-logo size="lg" tone="light" sub="MIXMAPP ACCOUNT" />
       <view class="brand-meta">
         <text class="brand-ver mono">V{{ APP_VERSION }} · 正式发布</text>
         <text class="brand-env mono">ENV · {{ env }}</text>

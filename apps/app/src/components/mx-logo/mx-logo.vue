@@ -1,14 +1,11 @@
 <template>
   <view class="mx-logo" :class="[`mx-logo--${size}`, `mx-logo--${tone}`]">
     <view class="mx-logo-mark">
-      <text class="mx-logo-mono">MX</text>
+      <text class="mx-logo-mono">MixmAPP</text>
       <view class="mx-logo-underline" />
     </view>
 
-    <view v-if="word" class="mx-logo-text">
-      <text class="mx-logo-word">{{ wordmark }}</text>
-      <text v-if="sub" class="mx-logo-sub">{{ sub }}</text>
-    </view>
+    <text v-if="sub" class="mx-logo-sub">{{ sub }}</text>
   </view>
 </template>
 
@@ -19,18 +16,12 @@ withDefaults(
     size?: 'sm' | 'md' | 'lg';
     /** 色调：ink 浅底 / light 深底 */
     tone?: 'ink' | 'light';
-    /** 是否显示字标 */
-    word?: boolean;
-    /** 字标文案 */
-    wordmark?: string;
-    /** 字标下的等宽小字，如 MULTI-END IDENTITY */
+    /** 胶囊右侧的等宽小字，如 MIXMAPP ACCOUNT */
     sub?: string;
   }>(),
   {
     size: 'md',
     tone: 'ink',
-    word: true,
-    wordmark: 'MixmAPP',
     sub: '',
   },
 );
@@ -42,7 +33,8 @@ withDefaults(
   align-items: center;
 }
 
-/* ---------- 标志：方框内 “MX” 连字 + 品牌色底线 ---------- */
+/* ---------- 标志：白底圆角胶囊内 “MixmAPP” 字标 + 品牌青底线 ---------- */
+/* 规格对齐 branding/mixm-logo.svg：胶囊圆角 = 高 × 0.29，字标宽 = 胶囊宽 × 0.86 */
 .mx-logo-mark {
   position: relative;
   flex-shrink: 0;
@@ -51,8 +43,7 @@ withDefaults(
   align-items: center;
   justify-content: center;
   border: 1rpx solid $paper-3;
-  background: $shell;
-  overflow: hidden;
+  background: #fff;
 }
 
 .mx-logo-mono {
@@ -60,36 +51,20 @@ withDefaults(
   font-family: $font-display;
   font-weight: 800;
   line-height: 1;
-  letter-spacing: -2rpx;
-  color: $ink;
+  letter-spacing: -0.03em;
+  color: #111;
 }
 
 .mx-logo-underline {
   position: absolute;
-  left: 18%;
-  right: 18%;
-  bottom: 22%;
+  left: 9%;
+  right: 9%;
+  bottom: 14%;
   height: 3rpx;
   background: $brand;
 }
 
-.mx-logo-text {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.mx-logo-word {
-  display: block;
-  font-family: $font-display;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: $ls-tight;
-  color: $ink;
-}
-
 .mx-logo-sub {
-  display: block;
   font-family: $font-mono;
   line-height: 1;
   letter-spacing: 2rpx;
@@ -100,92 +75,59 @@ withDefaults(
 /* ---------- 尺寸 ---------- */
 .mx-logo--sm {
   .mx-logo-mark {
-    width: 40rpx;
-    height: 40rpx;
-    border-radius: 8rpx;
+    height: 44rpx;
+    padding: 0 14rpx;
+    border-radius: 13rpx;
   }
 
   .mx-logo-mono {
-    font-size: 26rpx;
-  }
-
-  .mx-logo-text {
-    margin-left: 12rpx;
-  }
-
-  .mx-logo-word {
-    font-size: 28rpx;
+    font-size: 22rpx;
   }
 
   .mx-logo-sub {
+    margin-left: 12rpx;
     font-size: 16rpx;
-    margin-top: 5rpx;
   }
 }
 
 .mx-logo--md {
   .mx-logo-mark {
-    width: 60rpx;
-    height: 60rpx;
-    border-radius: 10rpx;
+    height: 64rpx;
+    padding: 0 20rpx;
+    border-radius: 19rpx;
   }
 
   .mx-logo-mono {
-    font-size: 32rpx;
-  }
-
-  .mx-logo-text {
-    margin-left: 16rpx;
-  }
-
-  .mx-logo-word {
-    font-size: 36rpx;
+    font-size: 30rpx;
   }
 
   .mx-logo-sub {
+    margin-left: 16rpx;
     font-size: 18rpx;
-    margin-top: 6rpx;
   }
 }
 
 .mx-logo--lg {
   .mx-logo-mark {
-    width: 92rpx;
-    height: 92rpx;
-    border-radius: 14rpx;
+    height: 96rpx;
+    padding: 0 30rpx;
+    border-radius: 28rpx;
   }
 
   .mx-logo-mono {
-    font-size: 46rpx;
-  }
-
-  .mx-logo-text {
-    margin-left: 22rpx;
-  }
-
-  .mx-logo-word {
-    font-size: 48rpx;
+    font-size: 44rpx;
   }
 
   .mx-logo-sub {
-    font-size: 26rpx;
-    margin-top: 8rpx;
+    margin-left: 22rpx;
+    font-size: 24rpx;
   }
 }
 
-/* ---------- 深底反白 ---------- */
+/* ---------- 深底：胶囊仍为白底黑字（参考图口径），仅副标反白 ---------- */
 .mx-logo--light {
   .mx-logo-mark {
-    background: rgba(244, 244, 241, 0.05);
-    border-color: rgba(244, 244, 241, 0.26);
-  }
-
-  .mx-logo-mono {
-    color: #f4f4f1;
-  }
-
-  .mx-logo-word {
-    color: #f4f4f1;
+    border-color: rgba(17, 17, 17, 0.07);
   }
 
   .mx-logo-sub {

@@ -1,17 +1,20 @@
 <template>
   <view class="halo">
     <view class="page page--wide home">
+      <!-- 桌面端顶部导航（移动端不渲染，仍走底部 tabBar） -->
+      <mx-bar desktop-only hide-back />
+
       <!-- ---------- 档案封面（深场） ---------- -->
       <view class="hero">
         <view class="hero-inner">
-          <text class="hero-eyebrow mono">MULTI-END IDENTITY</text>
+          <text class="hero-eyebrow mono">SINGLE SIGN-ON · 多端通行同一账号</text>
           <view class="hero-title-wrap">
             <text class="hero-title">一张通行证</text>
             <text class="hero-title hero-title--accent">通行所有星域</text>
           </view>
           <text class="hero-lede">Web・Android・iOS・鸿蒙 —— 注册即签发星际联邦通行证，并分配唯一的 MixmAPP 公民编号</text>
 
-          <mx-logo class="hero-logo" size="lg" tone="light" sub="MIXMAPP APP" />
+          <mx-logo class="hero-logo" size="lg" tone="light" sub="MIXMAPP ACCOUNT" />
 
           <view class="hero-meta">
             <view class="meta-item">
@@ -135,8 +138,8 @@
                   lazy-load
                   @error="markBroken(product.id)"
                 />
-                <view v-else class="pick-cover-ph">
-                  <text class="pick-cover-char">{{ product.title.slice(0, 1) }}</text>
+                <view v-else class="pick-cover-ph" :style="tintOf(product)">
+                  <text class="pick-cover-char" :class="{ 'pick-cover-char--on-tint': !!coverTint(product) }">{{ product.title.slice(0, 1) }}</text>
                 </view>
                 <text v-if="product.brand" class="pick-cover-tag mono">{{ product.brand }}</text>
                 <view
@@ -168,7 +171,7 @@
                   </view>
                   <view v-else class="pick-price">
                     <text class="pick-cur mono">¥</text>
-                    <text class="pick-amount mono">{{ priceText(product.priceFen) }}</text>
+                    <text class="pick-amount mono">{{ listPriceText(product) }}</text>
                     <text v-if="priceUnitLabel(product)" class="pick-unit mono">{{ priceUnitLabel(product) }}</text>
                   </view>
                 </view>
@@ -245,21 +248,22 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { metaApi, mallApi, mediaUrl, ApiError } from '../../api/client';
+import { metaApi, mallApi, productCover, coverTint, ApiError } from '../../api/client';
 import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
+import MxBar from '../../components/mx-bar/mx-bar.vue';
 import type { MallCategoryDto, MallProductDto } from '../../api/mall';
 import {
   breadcrumbLabel,
   INQUIRY_NOTICE,
   isInquiryProduct,
   isOutOfStock,
+  listPriceText,
   OUT_OF_STOCK_NOTICE,
   packLabel,
-  priceText,
   priceUnitLabel,
   specEntries,
 } from '../../api/mall';
@@ -303,8 +307,8 @@ const mallError = ref('');
 const brokenImages = reactive(new Set<string>());
 
 /**
- * 分类完全由后端 `/mall/categories` 驱动（catalog 侧只返回 6 个真实一级类目）。
- * 不再用硬编码分类黑名单，仅过滤空 code / 空 name 的脏数据，避免无名 tab。
+ * 分类完全由后端分类树驱动：取一级节点（6 个真实类目），与商城页同一口径。
+ * 不用 `/mall/categories` 的扁平聚合，避免混入演示类目、计数口径也不一致。
  */
 const tabCategories = computed(() =>
   categories.value
@@ -314,8 +318,10 @@ const tabCategories = computed(() =>
 
 async function loadCategories(): Promise<void> {
   try {
-    const list = await mallApi.listCategories();
-    categories.value = Array.isArray(list) ? list : [];
+    const list = await mallApi.listCategoryChildren();
+    categories.value = (Array.isArray(list) ? list : [])
+      .filter((node) => node && node.id && node.name)
+      .map((node) => ({ code: node.id, name: node.name, count: node.count ?? 0 }));
   } catch {
     categories.value = [];
   }
@@ -326,7 +332,7 @@ async function loadProducts(): Promise<void> {
   mallError.value = '';
   try {
     const list = await mallApi.listProducts({
-      category: activeCategory.value || undefined,
+      cat: activeCategory.value || undefined,
       page: 1,
       pageSize: PAGE_SIZE,
     });
@@ -349,8 +355,13 @@ function switchCategory(code: string): void {
 }
 
 function coverOf(product: MallProductDto): string {
-  const first = Array.isArray(product.images) ? product.images[0] : undefined;
-  return mediaUrl(first);
+  return productCover(product);
+}
+
+/** 无图自有商品（cover 存的是色值）的占位底色。 */
+function tintOf(product: MallProductDto): Record<string, string> {
+  const tint = coverTint(product);
+  return tint ? { background: tint } : {};
 }
 
 function isBroken(id: string): boolean {
@@ -898,6 +909,12 @@ onPullDownRefresh(() => {
   color: $ink-4;
 }
 
+/* 自有商品没有实物图，后端 cover 存的是品牌色：占位块铺该底色，首字改白，避免灰字压彩色。 */
+.pick-cover-char--on-tint {
+  color: $on-deep;
+  opacity: 0.92;
+}
+
 .pick-cover-tag {
   position: absolute;
   left: 16rpx;
@@ -1119,26 +1136,172 @@ onPullDownRefresh(() => {
   }
 }
 
-/* ---------- 平板 / 折叠屏展开态：左目录 + 右索引双栏 ---------- */
+/* ---------- 桌面 / 折叠屏展开态：横幅 CTA + 三~四列目录 + 双栏索引 ---------- */
 @media (min-width: 1000px) {
+  .home {
+    /* 宽屏已隐藏底部 tabBar，取消为标签栏预留的安全距离 */
+    padding-bottom: 0;
+  }
+
+  /* 版心不再被拉伸的移动端布局占满：CTA 与目录通栏，两个索引块并排 */
   .body {
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    column-gap: $sp-6;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 40px;
     align-items: start;
+    padding-top: 36px;
   }
 
-  /* 左栏：快捷入口 + 精选目录；右栏：能力入口 + 覆盖范围 */
-  .body > :nth-of-type(n + 3) {
-    grid-column: 2;
-  }
-
+  .body > .cta,
+  .body > .pick,
   .body > .footer {
     grid-column: 1 / -1;
   }
 
+  /* ---------- 封面：标题左、徽标与元信息右 ---------- */
+  .hero {
+    padding: 56px 40px 44px;
+  }
+
+  .hero-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.55fr);
+    column-gap: 48px;
+    align-items: start;
+  }
+
+  .hero-eyebrow,
+  .hero-title-wrap,
+  .hero-lede {
+    grid-column: 1;
+  }
+
+  .hero-lede {
+    max-width: 620px;
+    padding-right: 0;
+  }
+
+  .hero-logo,
+  .hero-meta {
+    grid-column: 2;
+  }
+
+  .hero-logo {
+    margin-top: 0;
+  }
+
+  .hero-meta {
+    flex-direction: column;
+    margin-top: 32px;
+    padding-top: 0;
+    border-top: none;
+    row-gap: 18px;
+  }
+
+  .meta-sep {
+    display: none;
+  }
+
+  .hero-error {
+    grid-column: 1 / -1;
+  }
+
+  /* ---------- CTA：横向通栏 ---------- */
+  .cta {
+    padding: 26px 30px;
+  }
+
+  .cta-main {
+    margin-top: 10px;
+  }
+
+  .section {
+    margin-top: 44px;
+  }
+
+  /* ---------- 精选目录：等高网格，宽屏 4 列 ---------- */
+  .pick-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 18px;
+  }
+
   .pick-card {
-    width: 48.6%;
+    width: auto;
+    height: 100%;
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pick-cover,
+  .pick-sk-cover {
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+
+  .pick-info {
+    flex: 1;
+    min-height: 0;
+    padding: 14px 16px 16px;
+  }
+
+  .pick-name {
+    font-size: 15px;
+  }
+
+  .pick-amount {
+    font-size: 24px;
+  }
+
+  /* 分类 chip：桌面关掉横向滚动，六个一级分类一次铺开 */
+  .pick-chips {
+    margin-top: 18px;
+    white-space: normal;
+  }
+
+  .pick-chips :deep(.uni-scroll-view) {
+    overflow: visible !important;
+  }
+
+  .pick-chips :deep(.uni-scroll-view-content) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    white-space: normal;
+  }
+
+  .pick-chip {
+    height: 32px;
+    margin-right: 0;
+    padding: 0 14px;
+  }
+
+  /* ---------- 索引块：收紧行高，提高信息密度 ---------- */
+  .index-row {
+    padding: 10px 0;
+  }
+
+  .section-note {
+    max-width: 90%;
+  }
+
+  .footer {
+    padding-top: 56px;
   }
 }
+
+@media (min-width: 1200px) {
+  /* 首页版心比通用 page--wide 更宽，桌面视觉重心不塌在中间一窄条 */
+  .home {
+    --shell-w: 1320px;
+    max-width: 1320px;
+  }
+
+  .pick-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 </style>

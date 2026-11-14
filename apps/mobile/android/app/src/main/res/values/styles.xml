@@ -25,7 +25,7 @@
              被 Capacitor 的 setContentView 替换后出现白/黑闪。注意是 windowBackground，
              不是 View 级的 android:background。 -->
         <item name="android:windowBackground">@drawable/splash</item>
-        <!-- Android 12+ 系统启动屏：深墨底 + 品牌 MX -->
+        <!-- Android 12+ 系统启动屏：纸底 + MixmAPP 前景层 -->
         <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>

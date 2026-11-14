@@ -87,8 +87,9 @@ public class MainActivity extends BridgeActivity {
             + "font-family:-apple-system,system-ui,'PingFang SC','Microsoft YaHei',sans-serif;"
             + "display:flex;align-items:center;justify-content:center;padding:24px}"
             + ".card{width:100%;max-width:340px;text-align:center}"
-            + ".logo{width:72px;height:72px;margin:0 auto 20px;border-radius:20px;background:#0f9d8f;"
-            + "color:#fff;font-size:28px;font-weight:700;line-height:72px;letter-spacing:1px}"
+            + ".logo{display:inline-block;margin:0 auto 18px;padding:12px 20px 16px;border-radius:16px;"
+            + "background:#F4F4F1;color:#111;font-size:20px;font-weight:800;letter-spacing:-.4px;line-height:1}"
+            + ".logo i{display:block;height:2px;margin-top:8px;border-radius:1px;background:#0f9d8f}"
             + "h1{font-size:20px;margin:0 0 6px;letter-spacing:.5px}"
             + ".t{font-size:16px;margin:18px 0 6px}"
             + ".d{font-size:13px;line-height:1.7;color:#9AA7A2;margin:0 0 28px}"
@@ -97,7 +98,7 @@ public class MainActivity extends BridgeActivity {
             + ".primary{background:#0f9d8f;color:#fff;font-weight:600}"
             + ".ghost{background:transparent;color:#8fe9dd;border:1px solid #2A3A35}"
             + "</style></head><body><div class=\"card\">"
-            + "<div class=\"logo\">MX</div><h1>MixmAPP</h1>"
+            + "<div class=\"logo\">MixmAPP<i></i></div><h1>MixmAPP</h1>"
             + "<p class=\"t\">网络开小差了</p>"
             + "<p class=\"d\">暂时无法连接到服务器。请检查网络设置后重试，或稍后再来。</p>"
             + "<button class=\"primary\" onclick=\"location.href='mixmapp-action://reload'\">重新加载</button>"
@@ -430,6 +431,9 @@ public class MainActivity extends BridgeActivity {
             reloadMainFrame();
         } else if ("network-settings".equals(host)) {
             openNetworkSettings();
+        } else if ("exit".equals(host)) {
+            // 首启隐私页「暂不同意 → 退出应用」：直接结束 Activity，不留在后台
+            finish();
         }
         return true; // 吞掉所有 mixmapp-action:// 请求，绝不交给系统浏览器
     }

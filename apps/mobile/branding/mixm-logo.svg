@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300" role="img" aria-label="MixmAPP · MIXMAPP ACCOUNT">
+  <!--
+    MixmAPP 品牌标识 —— 全项目唯一矢量源（用户参考图版式，字标统一为 MixmAPP）
+    ─────────────────────────────────────────────────────────────
+    取色：
+      纸底 paper      #F4F4F1
+      胶囊 pill       #FFFFFF（描边 #111111 @ 7%）
+      字标 ink        #111111
+      品牌青 brand    #0F9D8F（字标下方横线）
+      副标 muted      #8A8F8B（MIXMAPP ACCOUNT）
+      口号 faint      #A7ACA7（SINGLE SIGN-ON · 多端通行同一账号）
+    几何（本 viewBox 900×300 内）：
+      胶囊   x=0 y=0 w=560 h=132 r=38（圆角 = 高 × 0.29）
+      字标   "MixmAPP" 字号 100 / 字重 800 / 字距 -0.03em / 宽 480（textLength 锁定）
+              左右内边距各 40，字标宽 = 胶囊宽 × 0.857
+      横线   x=40 y=112 w=480 h=8 r=4（与字标等宽，距字标基线 12）
+      副标   "MIXMAPP ACCOUNT" 字号 26 / 字距 10 / muted
+      口号   "SINGLE SIGN-ON · 多端通行同一账号" 字号 26 / 字距 8 / faint
+    ─────────────────────────────────────────────────────────────
+    派生规则（apps/mobile/branding/generate-icons.py 按此常量实现）：
+      · 启动器图标不画胶囊，直接用「MixmAPP + 品牌青横线」这一组（mark）：
+        字标宽 = 图标边长 × 0.86（legacy 48dp 起）/ 0.74（adaptive 前景 108dp）
+        48dp 下四个字组合仍为一整词，横线提供品牌识别锚点
+      · 启动页 = 纸底 + mark + MIXMAPP ACCOUNT
+      · H5 logo / favicon = 纸底 + mark（字标宽 = 边长 × 0.80）
+      改字形/字距/配色请只改本文件与脚本同名常量，两者必须一致。
+  -->
+  <g id="mark">
+    <rect x="0" y="0" width="560" height="132" rx="38" fill="#FFFFFF"/>
+    <rect x="0.5" y="0.5" width="559" height="131" rx="37.5" fill="none"
+          stroke="#111111" stroke-opacity="0.07"/>
+    <text x="40" y="112" textLength="480" lengthAdjust="spacingAndGlyphs"
+          font-family="Segoe UI, Inter, Helvetica Neue, Arial, sans-serif"
+          font-size="100" font-weight="800" letter-spacing="-3"
+          fill="#111111">MixmAPP</text>
+    <rect x="40" y="124" width="480" height="8" rx="4" fill="#0F9D8F"/>
+  </g>
+
+  <text x="4" y="184" font-family="Segoe UI, Inter, Helvetica Neue, Arial, sans-serif"
+        font-size="26" font-weight="500" letter-spacing="10" fill="#8A8F8B">MIXMAPP ACCOUNT</text>
+
+  <text x="4" y="266" font-family="Segoe UI, Inter, Helvetica Neue, Arial, sans-serif"
+        font-size="26" font-weight="400" letter-spacing="8" fill="#A7ACA7">SINGLE SIGN-ON · 多端通行同一账号</text>
+</svg>
