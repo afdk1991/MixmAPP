@@ -63,6 +63,10 @@ const RELEASE_ROOT = (() => {
  */
 const PREFIX = argOf('prefix', null) === true ? null : argOf('prefix', null);
 const SERVICE_NAME = String(argOf('service-name', 'mixmapp-api'));
+// 日志目录固定 /var/log/mixmapp；文件名按服务名派生（默认 mixmapp-api，自定义 drill 各写各的），
+// 避免多实例/演练把日志追加到生产 api.log。
+const LOG_DIR = '/var/log/mixmapp';
+const LOG_TAG = SERVICE_NAME.replace(/[^a-zA-Z0-9_-]+/g, '-');
 const NGINX_CONF = argOf('nginx-conf', null) === true ? null : argOf('nginx-conf', null);
 const NGINX_LISTEN = argOf('nginx-listen', null) === true ? null : argOf('nginx-listen', null);
 const H5_OVERRIDE = argOf('h5', null) === true ? null : argOf('h5', null);
@@ -353,10 +357,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${PATHS.etc} /var/log/mixmapp
+ReadWritePaths=${PATHS.etc} ${LOG_DIR}
 LimitNOFILE=65535
-StandardOutput=append:/var/log/mixmapp/api.log
-StandardError=append:/var/log/mixmapp/api.err.log
+StandardOutput=append:${LOG_DIR}/${LOG_TAG}.log
+StandardError=append:${LOG_DIR}/${LOG_TAG}.err.log
 
 [Install]
 WantedBy=multi-user.target
@@ -378,7 +382,7 @@ async function install(cfg, push) {
   step(`准备目录 ${PATHS.etc}`);
   if (!DEV) {
     await fsp.mkdir(PATHS.etc, { recursive: true, mode: 0o750 });
-    await fsp.mkdir('/var/log/mixmapp', { recursive: true });
+    await fsp.mkdir(LOG_DIR, { recursive: true });
     await fsp.mkdir(PATHS.releases, { recursive: true });
     await fsp.mkdir(PATHS.web, { recursive: true });
   }
@@ -427,7 +431,7 @@ async function install(cfg, push) {
     }
     await new Promise((res) => setTimeout(res, 1500));
   }
-  if (!healthy) throw new Error('API 未在 30s 内就绪，请查看 /var/log/mixmapp/api.err.log');
+  if (!healthy) throw new Error(`API 未在 30s 内就绪，请查看 ${LOG_DIR}/${LOG_TAG}.err.log`);
 
   step('部署前端单文件 H5');
   const h5 =

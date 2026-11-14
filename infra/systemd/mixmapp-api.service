@@ -23,8 +23,8 @@ ProtectHome=true
 ReadWritePaths=/opt/mixmapp /var/log/mixmapp
 LimitNOFILE=65535
 
-StandardOutput=append:/var/log/mixmapp/api.log
-StandardError=append:/var/log/mixmapp/api.err.log
+StandardOutput=append:/var/log/mixmapp/mixmapp-api.log
+StandardError=append:/var/log/mixmapp/mixmapp-api.err.log
 
 [Install]
 WantedBy=multi-user.target
