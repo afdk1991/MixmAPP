@@ -2,6 +2,206 @@
  * 视觉规则：石墨黑标题 + 等宽小标签 + 发丝线分隔 + 12rpx 控件圆角 + 几乎无阴影。
  */
 
+/* ---------- 主题变量：uni.scss 的色板在这里落成 CSS 变量 ----------
+ * 页面仍然只写 $paper / $ink 这类 SCSS 变量（见 uni.scss 的 var(--mx-*) 映射），
+ * 明暗两套值集中在本文件。:root 规则只能放在这里：theme.scss 由 App.vue 只 import
+ * 一次，而 uni.scss 会被 Vite 注入到每个 <style lang="scss">，写进去会重复生成。
+ */
+:root {
+  color-scheme: light;
+
+  /* 画布 / 外壳 */
+  --mx-paper: #f4f4f1;
+  --mx-paper-2: #ebece7;
+  --mx-paper-3: #dedfd8;
+  --mx-shell: #ffffff;
+  --mx-shell-fade: rgba(255, 255, 255, 0);
+
+  /* 文字 */
+  --mx-ink: #111413;
+  --mx-ink-2: #333a37;
+  --mx-ink-3: #6b736e;
+  --mx-ink-4: #9aa39d;
+
+  /* 主视觉深场 */
+  --mx-deep: #0b0f0e;
+  --mx-deep-2: #131b19;
+  --mx-deep-3: #1d2a26;
+
+  /* 强调色 */
+  --mx-brand: #0f9d8f;
+  --mx-brand-deep: #0a7a70;
+  --mx-brand-soft: #e2f1ee;
+  --mx-signal: #b3372a;
+  --mx-amber: #a4761c;
+
+  /* 深场上的文字 / 强调 */
+  --mx-on-deep: #f4f4f1;
+  --mx-on-deep-2: rgba(244, 244, 241, 0.72);
+  --mx-on-deep-3: rgba(244, 244, 241, 0.46);
+  --mx-on-deep-line: rgba(244, 244, 241, 0.18);
+  --mx-brand-on-deep: #8fe9dd;
+  --mx-amber-on-deep: #e0a963;
+
+  /* 实心反白按钮：浅色=墨黑底浅字，深色=浅底深字（不再复用会反转的 $ink） */
+  --mx-solid: #111413;
+  --mx-on-solid: #f4f4f1;
+
+  /* 骨架屏 */
+  --mx-sk-base: #ebece7;
+  --mx-sk-sheen: #f6f6f2;
+}
+
+/* 深色主题：暖石墨底，不是纯黑；品牌青保持原色，保证「青字压深底」的对比度 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --mx-paper: #121716;
+    --mx-paper-2: #1b211f;
+    --mx-paper-3: #2b3330;
+    --mx-shell: #171d1b;
+    --mx-shell-fade: rgba(23, 29, 27, 0);
+
+    --mx-ink: #eceee9;
+    --mx-ink-2: #c9cfca;
+    --mx-ink-3: #a2aaa5;
+    --mx-ink-4: #868e89;
+
+    --mx-deep: #080b0a;
+    --mx-deep-2: #0e1413;
+    --mx-deep-3: #16201d;
+
+    --mx-brand: #0f9d8f;
+    --mx-brand-deep: #6ee3d4;
+    --mx-brand-soft: #12312c;
+    --mx-signal: #e2695c;
+    --mx-amber: #e0a963;
+
+    --mx-on-deep: #f4f4f1;
+    --mx-on-deep-2: rgba(244, 244, 241, 0.72);
+    --mx-on-deep-3: rgba(244, 244, 241, 0.46);
+    --mx-on-deep-line: rgba(244, 244, 241, 0.18);
+    --mx-brand-on-deep: #8fe9dd;
+    --mx-amber-on-deep: #e0a963;
+
+    --mx-solid: #eceee9;
+    --mx-on-solid: #0f1413;
+
+    --mx-sk-base: #1b211f;
+    --mx-sk-sheen: #242c29;
+  }
+}
+
+/* 根节点铺满主题底色：页面内容短于视口、或单页 body 透明（uni-app 非首层页面）时，
+ * 露出来的 html/body 不能是浏览器默认白底。 */
+html,
+body,
+uni-app,
+uni-page,
+uni-page-wrapper {
+  background-color: var(--mx-paper);
+}
+
+/* 收起 uni-app 内置变量，避免其后代组件（loading / modal 等）在深色下取到白底黑字 */
+html {
+  --UI-BG: var(--mx-paper);
+  --UI-BG-0: var(--mx-shell);
+  --UI-BG-1: var(--mx-paper-2);
+  --UI-BG-2: var(--mx-paper-2);
+  --UI-BG-3: var(--mx-paper-3);
+  --UI-BG-4: var(--mx-paper-3);
+  --UI-FG: var(--mx-ink);
+  --UI-FG-0: var(--mx-ink);
+  --UI-FG-1: var(--mx-ink-2);
+  --UI-FG-2: var(--mx-ink-3);
+  --UI-FG-3: var(--mx-ink-4);
+  --primary-color: var(--mx-brand);
+}
+
+/* ---------- 框架级组件：tabBar / 弹窗 / 输入占位 ---------- */
+/* tabBar 的颜色/边框来自 pages.json 的静态配置，H5 会写成行内样式，只能 !important 覆盖。
+ * 浅色沿用配置值（#f4f4f1），深色才切成 shell 底 + 深色发丝线。
+ * 文字色不覆盖：#8A938F 与 #0f9d8f 落在深色底上均 >=4.5:1，
+ * 而 unselected/selected 只靠行内颜色区分，统一刷色会丢掉选中态。 */
+.uni-tabbar {
+  background-color: var(--mx-paper) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .uni-tabbar {
+    background-color: var(--mx-shell) !important;
+  }
+
+  .uni-tabbar-border {
+    background-color: var(--mx-paper-3) !important;
+  }
+}
+
+/* uni.showModal：H5 用 DOM 实现，默认白底 + 深灰字，深色下必须整体换掉。
+ *
+ * 注意：uni 框架的 modal 基础样式（.uni-modal{background-color:#fff}、
+ * __btn_default{color:#353535}、__btn_primary{color:#007aff}）在最终 CSS 里排在
+ * 本文件之后，同等权重会把上面的变量覆盖回去；而按钮文案还带着行内
+ * style="color:..."。所以这里必须用 !important，才能同时压过「后置同权重规则」和
+ * 「行内样式」两种来源。代价是页面无法再自定义 confirmColor/cancelColor（当前无此用法）。 */
+.uni-modal {
+  background-color: var(--mx-shell) !important;
+  color: var(--mx-ink) !important;
+}
+
+.uni-modal__title {
+  color: var(--mx-ink) !important;
+}
+
+.uni-modal__bd {
+  color: var(--mx-ink-3) !important;
+}
+
+.uni-modal__textarea {
+  background-color: var(--mx-paper-2) !important;
+  color: var(--mx-ink) !important;
+}
+
+.uni-modal__ft:after,
+.uni-modal__btn:after {
+  border-top-color: var(--mx-paper-3) !important;
+  border-left-color: var(--mx-paper-3) !important;
+  color: var(--mx-paper-3) !important;
+}
+
+.uni-modal__btn_default {
+  color: var(--mx-ink-2) !important;
+}
+
+.uni-modal__btn_primary {
+  color: var(--mx-brand) !important;
+}
+
+.uni-modal__btn:active {
+  background-color: var(--mx-paper-2) !important;
+}
+
+/* 输入控件底色：uni 框架自带 uni{background-color:#fff}（见 uni.css），
+ * 深色下会露出一块白底。这里用 0,0,2 的权重把它置为透明，
+ * 页面自己的 .field / .search-input / .rs-textarea 等类选择器（0,1,0）仍是更高优先级，
+ * 仍可显式给出纸色/壳色底。 */
+html body uni-input,
+html body uni-textarea {
+  background-color: transparent;
+}
+
+/* 输入占位：H5 用独立元素渲染 placeholder（uni-input / uni-textarea 自定义标签）。
+ * uni.css 的 .uni-input-placeholder 是类选择器（0,1,0），必须抬到 (0,1,2) 才能压住它的 #757575。 */
+html body uni-input-placeholder,
+html body uni-textarea-placeholder,
+html body .uni-input-placeholder,
+html body .uni-textarea-placeholder,
+html body input::placeholder,
+html body textarea::placeholder {
+  color: var(--mx-ink-4);
+}
+
 /* ---------- 排版原子 ---------- */
 .serif {
   /* 变量名沿用，实际为展示无衬线：粗重 + 负字距 */
@@ -119,13 +319,14 @@
   transition: transform 0.16s ease, opacity 0.16s ease;
 
   &--deep {
-    background: $ink;
-    color: #f4f4f1;
+    /* 深浅两套主题都保持「实心反白」：浅色墨黑底浅字，深色浅底深字 */
+    background: $solid;
+    color: $on-solid;
   }
 
   &--brand {
     background: $brand;
-    color: #ffffff;
+    color: $on-solid;
   }
 
   &--ghost {
@@ -281,7 +482,7 @@
 }
 
 .sk {
-  background: linear-gradient(100deg, $paper-2 18%, #f6f6f2 38%, $paper-2 58%);
+  background: linear-gradient(100deg, var(--mx-sk-base) 18%, var(--mx-sk-sheen) 38%, var(--mx-sk-base) 58%);
   background-size: 300% 100%;
   border-radius: 10rpx;
   animation: sk-sweep 1.5s ease-in-out infinite;
@@ -369,15 +570,17 @@
 }
 
 /* ---------- 桌面 / 平板：版心收在 750px，避免 H5 被拉成通栏 ---------- */
+/* --shell-w 由页面自定义（如 .page--wide），固定在子组件里也能继承到 */
 @media (min-width: 768px) {
   .page {
-    max-width: 750px;
+    max-width: var(--shell-w, 750px);
     margin-left: auto;
     margin-right: auto;
     box-sizing: border-box;
   }
 
   .page--auth {
+    --shell-w: 520px;
     max-width: 520px;
   }
 
@@ -394,4 +597,61 @@
     width: 702px;
     transform: translateX(-50%);
   }
+}
+
+/* ---------- 平板 / 折叠屏展开态：双栏相关页面放宽版心 ---------- */
+@media (min-width: 1000px) {
+  .page--wide {
+    --shell-w: 1000px;
+    max-width: 1000px;
+  }
+}
+
+/* ---------- 页面转场：路由切换后整体淡入，代替 WebView 直接硬切 ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  uni-page-body {
+    animation: page-enter 200ms ease-out;
+  }
+}
+
+/* ---------- 原生手感：点击 / 滚动 / 文本缩放 ---------- */
+/* 去掉 WebView 默认的蓝色点击方块，保留组件自身的 .is-press 反馈 */
+page,
+view,
+text,
+scroll-view {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 整页不做「橡皮筋」拖动，滚动交给内部 scroll-view，接近 Android 原生列表 */
+page {
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* 可点击元素统一给一点按压反馈（没用 hover-class 的地方也能有手感） */
+button,
+[role="button"] {
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+button:active,
+[role="button"]:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* 放大系统字体后，避免长文本被裁切 */
+text {
+  overflow-wrap: break-word;
 }

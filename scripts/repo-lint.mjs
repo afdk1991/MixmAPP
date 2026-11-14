@@ -14,7 +14,15 @@ import { extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const SKIP = new Set(['node_modules', 'dist', 'build', 'unpackage', '.git', 'coverage', '.uni', '.gradle', 'android', 'ios', 'vendor']);
+// 与 .gitignore 对齐：已忽略的构建产物 / 运行时缓存 / 机密目录不参与仓库规则检查。
+// 否则 walk(ROOT) 会把 .edge-profile（内置浏览器 profile）和 release/ 下的临时脚本
+// 一并当源码扫进来，产生与仓库无关的误报（2026-11-14 实测 17 处假红）。
+// .edge-profile-research 同理：ui-review 研究线使用的临时 Edge profile（62MB 缓存 +
+// 扩展解包产物，含瞬时 Temp 文件，会直接让 statSync ENOENT 崩溃）。
+const SKIP = new Set([
+  'node_modules', 'dist', 'build', 'unpackage', '.git', 'coverage', '.uni', '.gradle',
+  'android', 'ios', 'vendor', '.edge-profile', '.edge-profile-research', 'release', 'out', 'storage', '.secrets',
+]);
 const EXT = new Set(['.ts', '.js', '.mjs', '.vue']);
 
 const violations = [];
@@ -32,6 +40,10 @@ function walk(dir) {
 function check(file) {
   const rel = relative(ROOT, file).replaceAll('\\', '/');
   if (rel.startsWith('scripts/')) return;
+  // ui-review/ 是本地布局审计工具，必须按 '/pages/...' 硬编码页面清单才能逐页访问；
+  // 这不是「页面跳转」代码，故只豁免路由字面量这一条规则。
+  // console.log / 硬编码密钥 / TODO / .only 等其余规则对它照常生效，不放水。
+  const isReviewTool = rel.startsWith('ui-review/');
   const text = readFileSync(file, 'utf8');
   const lines = text.split(/\r?\n/);
   const ROUTES_FILE = 'apps/app/src/routes.ts';
@@ -51,7 +63,7 @@ function check(file) {
       violations.push(`${rel}:${no} 残留 TODO/FIXME`);
     }
     // 页面跳转必须走 ROUTES 常量，禁止再散落 '/pages/...' 字面量
-    if (rel !== ROUTES_FILE && /['"`]\/pages\//.test(line)) {
+    if (!isReviewTool && rel !== ROUTES_FILE && /['"`]\/pages\//.test(line)) {
       violations.push(`${rel}:${no} 出现路由字面量，请改用 apps/app/src/routes.ts 的 ROUTES 常量`);
     }
   });
@@ -71,7 +83,20 @@ function checkRoutes() {
   const registered = [...(pagesJson.pages ?? [])];
   for (const sub of pagesJson.subPackages ?? []) registered.push(...(sub.pages ?? []).map((p) => ({ ...p, subPackage: true })));
   const pagePaths = registered.map((p) => '/' + p.path);
-  for (const item of pagesJson.tabBar?.list ?? []) pagePaths.push(item.pagePath.startsWith('/') ? item.pagePath : '/' + item.pagePath);
+  // uni-app 规范要求 tabBar 页必须同时出现在 pages 数组里，所以它们不是「重复注册」。
+  // 这里改为只校验：tab 指向的页面确实已注册、且 tab 内部不重复，不再把 tab 路径重复算作注册项。
+  const registeredSet = new Set(pagePaths);
+  const seenTabs = new Set();
+  for (const item of pagesJson.tabBar?.list ?? []) {
+    const p = item.pagePath.startsWith('/') ? item.pagePath : '/' + item.pagePath;
+    if (seenTabs.has(p)) violations.push(`apps/app/src/pages.json tabBar 页面重复：${p}`);
+    seenTabs.add(p);
+    if (!registeredSet.has(p)) {
+      violations.push(
+        `apps/app/src/pages.json tabBar 的 ${p} 未在 pages 中注册（uni-app 要求 tabBar 页同时出现在 pages 数组里）`,
+      );
+    }
+  }
 
   // 1) 同一页面不许重复注册
   const seen = new Map();

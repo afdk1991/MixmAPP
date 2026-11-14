@@ -35,6 +35,11 @@
 
 ## 三、`mixm.top` 下已解析的记录（同根域，含其他项目）
 
+> **口径（2026-11-14 收紧）**：本节是 2026-11-13 的线上实测记录，**不是 DNSPod 导出表**。DNSPod 导出表
+> `dnspod_records_2026-11-05_21-42-26.xls` 只有「主机记录 / 线路 / TTL / 备注」四列，记录类型、记录值、
+> 状态三列全空；下表 `A →`、`CNAME →` 等指向来自 `Resolve-DnsName` 实测，仅作运维参考。域名落点与
+> 表内归属以 `deploy/domains.json` 为准，表外来源（GitHub Pages、CloudBase、`mix.top`）不计入在用。
+
 | 域名 | 解析 | 实测 | 归属 |
 |---|---|---|---|
 | `mim.mixm.top` | A → 115.159.159.11 | ✅ 200，`<title>Mim</title>` | Mim 主站（自建服务器，nginx vhost `mim.conf`） |
@@ -47,7 +52,9 @@ DNSPod `mixm.top` 区里与 cloud 相关的记录共 3 条：`cloud` A 115.159.1
 
 ## 四、规划但尚未建解析的子域
 
-来源：仓库根目录 `dnspod_records_2026-11-05_21-42-26.xls`（`mixm.top` 表，46 条主机记录）。该表「记录类型」「记录值」两列为空，属命名模板而非可导入的真实解析；下表为逐条用途。
+来源：仓库根目录 `dnspod_records_2026-11-05_21-42-26.xls`（`mixm.top` 表，103 行原始记录、53 个唯一主机）。该表「记录类型」「记录值」「状态」列为空，属命名模板而非可导入的真实解析；下表为逐条用途。
+
+机器可读版本见 [deploy/domains.json](../deploy/domains.json)：在用 1 个（`cloud`）+ 同根域其他项目 3 个（`mim`/`data`/`gy`）+ EdgeOne 验证 7 条 + 规划未解析 42 个。仓库改动后执行 `pnpm domains:check` 校验一致性。
 
 | 类别 | 主机记录 | 规划用途（取自 xls 备注） | 解析状态 |
 |---|---|---|---|

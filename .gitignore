@@ -22,6 +22,11 @@ coverage/
 *.aab
 *.ipa
 *.hap
+
+# 本地签名密钥与口令说明（机密，绝不入库）
+.secrets/
+*.keystore
+*.jks
 backups/
 .pnpm-store/
 out/
@@ -33,3 +38,6 @@ tools/egluosi-importer/source/images/
 
 # 本地化后的商品图（运行时媒体目录，按抓取重建）
 storage/
+
+# 内置浏览器调试 profile（运行时缓存，约 81MB；不入库，也不应被仓库工具扫描）
+.edge-profile/

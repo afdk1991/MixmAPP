@@ -27,6 +27,7 @@ declare module 'fastify' {
     auth: import('../modules/auth.js').AuthService;
     pay: import('../modules/pay.js').PayService;
     mall: import('../modules/mall.js').MallService;
+    catalog: import('../modules/catalog-source.js').CatalogSource;
     map: import('../adapters/map.js').MapProvider;
     storage: import('../adapters/storage.js').StorageProvider;
     push: import('../adapters/push.js').PushProvider;

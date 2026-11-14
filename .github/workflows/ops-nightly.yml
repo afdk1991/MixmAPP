@@ -27,18 +27,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      SSH_READY: ${{ secrets.DEPLOY_SSH_KEY != '' }}
+      # 与 deploy.yml 保持同一来源：DEPLOY_SSH_KEY 是裸私钥，多行内容在 Secret 里会被折叠，
+      # 曾导致 "Load key ... error in libcrypto" 直接鉴权失败。统一改用 base64 版本。
+      SSH_READY: ${{ secrets.DEPLOY_SSH_KEY_B64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - name: 写入部署私钥
         if: env.SSH_READY == 'true'
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
       - name: 远端备份
         if: env.SSH_READY == 'true'
@@ -50,4 +53,4 @@ jobs:
             'sudo -u mixmapp bash -lc "cd /opt/mixmapp/current && set -a && . /etc/mixmapp/api.env && set +a && node scripts/backup.mjs"'
       - name: 无凭据时跳过
         if: env.SSH_READY != 'true'
-        run: echo "SKIP 未配置 DEPLOY_SSH_KEY，未执行备份"
+        run: echo "SKIP 未配置 DEPLOY_SSH_KEY_B64，未执行备份"

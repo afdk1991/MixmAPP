@@ -1,18 +1,19 @@
 <template>
-  <view class="page">
+  <view class="page page--wide">
     <mx-bar />
     <view class="head">
       <view class="head-top">
         <view class="head-title">
           <text class="eyebrow">MIXMAPP STORE</text>
           <text class="title">商城</text>
-          <text class="sub">五金目录选品 · 询价对接报价</text>
+          <text class="count mono">目录 · {{ products.length }} 件</text>
         </view>
         <view class="cart-btn" hover-class="is-press" @tap="goCart">
           <text class="cart-text">购物车</text>
           <text class="cart-arrow mono">→</text>
         </view>
       </view>
+      <view class="rule head-rule" />
 
       <view class="search">
         <view class="search-mark">
@@ -20,11 +21,12 @@
           <view class="search-handle" />
         </view>
         <input
-          v-model="keyword"
+          :value="keyword"
           class="search-input"
           placeholder="搜商品，如 螺丝 / 丝锥 / M6"
           placeholder-class="field-ph"
           confirm-type="search"
+          @input="onKeywordInput"
           @confirm="onSearch"
         />
         <view class="search-go" hover-class="is-press" @tap="onSearch">
@@ -32,24 +34,96 @@
         </view>
       </view>
 
-      <scroll-view :scroll-x="true" class="tabs" :show-scrollbar="false">
+      <!-- 分类三层下钻：一级 → 二级 → 三级，逐层由 `/mall/categories?parent=` 驱动 -->
+      <scroll-view :scroll-x="true" class="chips" :show-scrollbar="false">
         <view
-          v-for="item in tabs"
-          :key="item.code"
-          class="tab"
-          :class="{ 'tab--active': active === item.code }"
-          @tap="switchCategory(item.code)"
+          v-for="item in levelOneTabs"
+          :key="item.id || 'all'"
+          class="chip"
+          :class="{ 'chip--active': l1 === item.id }"
+          @tap="selectLevel1(item.id)"
         >
-          <text class="tab-label">
-            {{ item.name }}<text v-if="item.count > 0" class="tab-count mono">{{ item.count }}</text>
-          </text>
-          <view class="tab-line" />
+          <text class="chip-label">{{ item.name }}</text>
+          <text v-if="item.count > 0" class="chip-count mono">{{ item.count }}</text>
         </view>
       </scroll-view>
+
+      <scroll-view
+        v-if="levelTwoTabs.length > 1"
+        :scroll-x="true"
+        class="chips chips--sub"
+        :show-scrollbar="false"
+      >
+        <view
+          v-for="item in levelTwoTabs"
+          :key="item.id || 'all2'"
+          class="chip chip--sub"
+          :class="{ 'chip--active': l2 === item.id }"
+          @tap="selectLevel2(item.id)"
+        >
+          <text class="chip-label">{{ item.name }}</text>
+          <text v-if="item.count > 0" class="chip-count mono">{{ item.count }}</text>
+        </view>
+      </scroll-view>
+
+      <scroll-view
+        v-if="levelThreeTabs.length > 1"
+        :scroll-x="true"
+        class="chips chips--sub"
+        :show-scrollbar="false"
+      >
+        <view
+          v-for="item in levelThreeTabs"
+          :key="item.id || 'all3'"
+          class="chip chip--sub"
+          :class="{ 'chip--active': l3 === item.id }"
+          @tap="selectLevel3(item.id)"
+        >
+          <text class="chip-label">{{ item.name }}</text>
+          <text v-if="item.count > 0" class="chip-count mono">{{ item.count }}</text>
+        </view>
+      </scroll-view>
+
+      <!-- 三级类目下才有规格筛选；选项来自源站 ccc_filter 真实取值，无选项不渲染 -->
+      <view v-if="dimsOptions.length" class="spec-group">
+        <text class="spec-label mono">直径</text>
+        <scroll-view :scroll-x="true" class="chips chips--spec" :show-scrollbar="false">
+          <view class="chip chip--spec" :class="{ 'chip--active': !dims }" @tap="selectDims('')">
+            <text class="chip-label">不限</text>
+          </view>
+          <view
+            v-for="opt in dimsOptions"
+            :key="`d-${opt}`"
+            class="chip chip--spec"
+            :class="{ 'chip--active': dims === opt }"
+            @tap="selectDims(opt)"
+          >
+            <text class="chip-label mono">{{ opt }}</text>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view v-if="lensOptions.length" class="spec-group">
+        <text class="spec-label mono">长度</text>
+        <scroll-view :scroll-x="true" class="chips chips--spec" :show-scrollbar="false">
+          <view class="chip chip--spec" :class="{ 'chip--active': !lens }" @tap="selectLens('')">
+            <text class="chip-label">不限</text>
+          </view>
+          <view
+            v-for="opt in lensOptions"
+            :key="`l-${opt}`"
+            class="chip chip--spec"
+            :class="{ 'chip--active': lens === opt }"
+            @tap="selectLens(opt)"
+          >
+            <text class="chip-label mono">{{ opt }}</text>
+          </view>
+        </scroll-view>
+      </view>
     </view>
 
     <view v-if="loading" class="grid wrap">
-      <view v-for="i in 4" :key="i" class="product">
+      <view v-for="i in 4" :key="i" class="card">
         <view class="sk cover-sk" />
         <view class="p-info">
           <view class="sk sk-line" />
@@ -83,17 +157,18 @@
         <view
           v-for="product in products"
           :key="product.id"
-          class="product"
+          class="card"
           hover-class="is-press"
           @tap="openDetail(product)"
         >
           <view class="cover">
             <image
-              v-if="coverOf(product)"
+              v-if="coverOf(product) && !isBroken(product.id)"
               class="cover-img"
               :src="coverOf(product)"
               mode="aspectFill"
               lazy-load
+              @error="markBroken(product.id)"
             />
             <view v-else class="cover-placeholder">
               <view class="cover-ring" />
@@ -119,7 +194,8 @@
           </view>
           <view class="p-info">
             <text class="p-name">{{ product.title }}</text>
-            <text class="p-sub">{{ product.subtitle }}</text>
+            <text v-if="cardMeta(product)" class="p-sub">{{ cardMeta(product) }}</text>
+            <text v-if="cardSpec(product)" class="p-spec mono">{{ cardSpec(product) }}</text>
             <view class="p-foot">
               <view v-if="isInquiryProduct(product)" class="p-price p-price--inquiry">
                 <text class="p-inquiry">询价</text>
@@ -133,8 +209,15 @@
               </view>
               <view class="p-meta">
                 <text v-if="packLabel(product)" class="p-pack mono">{{ packLabel(product) }}</text>
-                <text v-if="!isOutOfStock(product) && product.stock > 0" class="p-stock mono">余 {{ product.stock }}</text>
-                <text v-else-if="isOutOfStock(product)" class="p-stock p-stock--oos mono">缺货</text>
+                <view v-if="isInquiryProduct(product)" class="status-chip status-chip--inquiry">
+                  <text class="status-chip-text mono">询价待报</text>
+                </view>
+                <view v-else-if="isOutOfStock(product)" class="status-chip status-chip--oos">
+                  <text class="status-chip-text mono">缺货</text>
+                </view>
+                <view v-else class="status-chip status-chip--stock">
+                  <text class="status-chip-text mono">{{ isBulkStock(product.stock) ? '在售' : `在售 · 余 ${product.stock}` }}</text>
+                </view>
               </view>
             </view>
           </view>
@@ -151,26 +234,43 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { onLoad, onReachBottom, onShow } from '@dcloudio/uni-app';
-import type { MallCategoryDto, MallProductDto } from '../../api/mall';
+import { computed, reactive, ref } from 'vue';
+import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
+import type { MallCategoryNodeDto, MallProductDto } from '../../api/mall';
 import {
+  breadcrumbLabel,
   INQUIRY_NOTICE,
+  isBulkStock,
   isInquiryProduct,
   isOutOfStock,
   OUT_OF_STOCK_NOTICE,
   packLabel,
   priceText,
   priceUnitLabel,
+  specEntries,
 } from '../../api/mall';
 import { mallApi, mediaUrl } from '../../api/client';
 import { ROUTES } from '../../routes';
+import { goTo } from '../../navigation';
 
 const PAGE_SIZE = 20;
 
-/** 分类由 `/mall/categories` 接口驱动；接口未就绪时兜底只留「全部」。 */
-const categories = ref<MallCategoryDto[]>([]);
-const active = ref('');
+/**
+ * 分类三层下钻状态：l1/l2/l3 存分类树节点 id（c1:002 / c2:002:007 / c3:007）。
+ * 上级切换时清空下级选择，避免残留的深层节点把结果收敛到空集。
+ */
+const l1 = ref('');
+const l2 = ref('');
+const l3 = ref('');
+const l1Nodes = ref<MallCategoryNodeDto[]>([]);
+const l2Nodes = ref<MallCategoryNodeDto[]>([]);
+const l3Nodes = ref<MallCategoryNodeDto[]>([]);
+/** 规格筛选：只在三级类目下出现，取值来自 `/mall/specs?c3=` 的真实选项。 */
+const dims = ref('');
+const lens = ref('');
+const dimsOptions = ref<string[]>([]);
+const lensOptions = ref<string[]>([]);
+
 const keyword = ref('');
 const products = ref<MallProductDto[]>([]);
 const page = ref(1);
@@ -179,23 +279,114 @@ const loadingMore = ref(false);
 const noMore = ref(false);
 const error = ref('');
 
-/** 迁移自带的演示品分类（英文代码），不计入五金目录选品 tab，避免商城出现无名分类 */
-const DEMO_CATEGORY_CODES = new Set(['featured', 'life', 'digital', 'wear']);
+/** 图片 404 兜底：记录加载失败的 productId，命中后改用文字占位，避免破图。 */
+const brokenImages = reactive(new Set<string>());
+/** 搜索防抖计时器，避免逐字触发网关请求。 */
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+/** 深链带入的旧分类参数，待一级树加载后匹配。 */
+let pendingCategory = '';
 
-const tabs = computed(() => [
-  { code: '', name: '全部', count: 0 },
-  ...categories.value
-    .filter((item) => !DEMO_CATEGORY_CODES.has(item.code))
-    .map((item) => ({ code: item.code, name: item.name, count: item.count ?? 0 })),
-]);
+type TreeNode = { id: string; code: string; name: string; count: number };
 
-async function loadCategories(): Promise<void> {
+/** 每层都带「全部」占位；接口已过滤空分类，不用再额外筛。 */
+function withAll(nodes: MallCategoryNodeDto[]): TreeNode[] {
+  return [
+    { id: '', code: '', name: '全部', count: 0 },
+    ...nodes
+      .filter((n) => n && n.id && n.name)
+      .map((n) => ({ id: n.id, code: n.code, name: n.name, count: n.count ?? 0 })),
+  ];
+}
+
+const levelOneTabs = computed(() => withAll(l1Nodes.value));
+const levelTwoTabs = computed(() => (l1.value ? withAll(l2Nodes.value) : []));
+const levelThreeTabs = computed(() => (l2.value ? withAll(l3Nodes.value) : []));
+
+/** 收敛到当前选中的最深节点；三级 > 二级 > 一级。 */
+const activeCat = computed(() => l3.value || l2.value || l1.value || '');
+
+async function loadLevelOne(): Promise<void> {
   try {
-    const list = await mallApi.listCategories();
-    categories.value = Array.isArray(list) ? list : [];
+    const list = await mallApi.listCategoryChildren();
+    l1Nodes.value = Array.isArray(list) ? list : [];
   } catch {
-    categories.value = [];
+    l1Nodes.value = [];
   }
+  // 深链 ?category= 兼容：既接受节点 id（c1:002）也接受旧短码（002 / eg-screw）
+  if (pendingCategory) {
+    const hit = l1Nodes.value.find((n) => n.id === pendingCategory || n.code === pendingCategory);
+    pendingCategory = '';
+    if (hit) void selectLevel1(hit.id);
+  }
+}
+
+async function loadChildren(parent: string, level: 2 | 3): Promise<void> {
+  try {
+    const list = await mallApi.listCategoryChildren(parent);
+    const rows = Array.isArray(list) ? list : [];
+    if (level === 2) l2Nodes.value = rows;
+    else l3Nodes.value = rows;
+  } catch {
+    if (level === 2) l2Nodes.value = [];
+    else l3Nodes.value = [];
+  }
+}
+
+async function loadSpecs(c3: string): Promise<void> {
+  dims.value = '';
+  lens.value = '';
+  dimsOptions.value = [];
+  lensOptions.value = [];
+  if (!c3) return;
+  try {
+    const opts = await mallApi.listSpecOptions(c3);
+    dimsOptions.value = Array.isArray(opts?.dims) ? opts.dims : [];
+    lensOptions.value = Array.isArray(opts?.lens) ? opts.lens : [];
+  } catch {
+    dimsOptions.value = [];
+    lensOptions.value = [];
+  }
+}
+
+async function selectLevel1(id: string): Promise<void> {
+  if (l1.value === id) return;
+  l1.value = id;
+  l2.value = '';
+  l3.value = '';
+  l2Nodes.value = [];
+  l3Nodes.value = [];
+  await loadSpecs('');
+  if (id) void loadChildren(id, 2);
+  refresh();
+}
+
+async function selectLevel2(id: string): Promise<void> {
+  if (l2.value === id) return;
+  l2.value = id;
+  l3.value = '';
+  l3Nodes.value = [];
+  await loadSpecs('');
+  if (id) void loadChildren(id, 3);
+  refresh();
+}
+
+async function selectLevel3(id: string): Promise<void> {
+  if (l3.value === id) return;
+  l3.value = id;
+  await loadSpecs(id);
+  refresh();
+}
+
+function selectDims(value: string): void {
+  if (dims.value === value) return;
+  dims.value = value;
+  refresh();
+}
+
+function selectLens(value: string): void {
+  if (lens.value === value) return;
+  lens.value = value;
+  refresh();
 }
 
 async function fetchPage(reset: boolean): Promise<void> {
@@ -210,7 +401,9 @@ async function fetchPage(reset: boolean): Promise<void> {
   }
   try {
     const list = await mallApi.listProducts({
-      category: active.value || undefined,
+      cat: activeCat.value || undefined,
+      dims: dims.value || undefined,
+      lens: lens.value || undefined,
       keyword: keyword.value.trim() || undefined,
       page: page.value,
       pageSize: PAGE_SIZE,
@@ -236,13 +429,30 @@ function refresh(): void {
   void fetchPage(true);
 }
 
-function switchCategory(code: string): void {
-  if (active.value === code) return;
-  active.value = code;
-  refresh();
+/** 输入即检索（350ms 防抖），键盘「搜索」/按钮立即检索并取消在途防抖。 */
+function inputValue(e: unknown): string {
+  const event = e as { detail?: { value?: string }; target?: { value?: string } };
+  return event?.detail?.value ?? event?.target?.value ?? '';
+}
+
+function scheduleSearch(): void {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    searchTimer = null;
+    refresh();
+  }, 350);
+}
+
+function onKeywordInput(e: unknown): void {
+  keyword.value = inputValue(e);
+  scheduleSearch();
 }
 
 function onSearch(): void {
+  if (searchTimer) {
+    clearTimeout(searchTimer);
+    searchTimer = null;
+  }
   refresh();
 }
 
@@ -255,12 +465,33 @@ function coverOf(product: MallProductDto): string {
   return mediaUrl(first);
 }
 
+function isBroken(id: string): boolean {
+  return brokenImages.has(id);
+}
+
+function markBroken(id: string): void {
+  brokenImages.add(id);
+}
+
+/** 卡片副行：优先分类面包屑，退回 subtitle。 */
+function cardMeta(product: MallProductDto): string {
+  return breadcrumbLabel(product.categoryPath) || product.subtitle || '';
+}
+
+/** 规格摘要：取前两条有效规格，拼成一行短文案。 */
+function cardSpec(product: MallProductDto): string {
+  return specEntries(product.specs)
+    .slice(0, 2)
+    .map(([key, value]) => `${key} ${value}`)
+    .join(' · ');
+}
+
 function openDetail(product: MallProductDto): void {
-  uni.navigateTo({ url: `${ROUTES.mallDetail}?id=${encodeURIComponent(product.id)}` });
+  goTo(`${ROUTES.mallDetail}?id=${encodeURIComponent(product.id)}`);
 }
 
 function goCart(): void {
-  uni.navigateTo({ url: ROUTES.cart });
+  goTo(ROUTES.cart);
 }
 
 async function addToCart(product: MallProductDto): Promise<void> {
@@ -278,7 +509,7 @@ async function addToCart(product: MallProductDto): Promise<void> {
   } catch (e) {
     const message = e instanceof Error ? e.message : '加入购物车失败';
     if (message.includes('登录')) {
-      uni.navigateTo({ url: ROUTES.login });
+      goTo(ROUTES.login);
       return;
     }
     uni.showToast({ title: message, icon: 'none' });
@@ -290,16 +521,23 @@ onLoad((options) => {
   const q = (options?.['keyword'] as string | undefined) ?? '';
   const c = (options?.['category'] as string | undefined) ?? '';
   keyword.value = q.trim();
-  active.value = c;
+  pendingCategory = c.trim();
 });
 
 onShow(() => {
-  void loadCategories();
+  void loadLevelOne();
   refresh();
 });
 
 onReachBottom(() => {
   loadMore();
+});
+
+/** 原生下拉刷新：分类与第一页商品同时重取，两者都落定后收起指示器 */
+onPullDownRefresh(() => {
+  void Promise.allSettled([loadLevelOne(), fetchPage(true)]).then(() =>
+    uni.stopPullDownRefresh(),
+  );
 });
 </script>
 
@@ -307,12 +545,13 @@ onReachBottom(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-3 $sp-8;
+  /* tabBar 页面：为原生底部标签栏留安全距离，避免列表底部被遮挡 */
+  padding: 0 $sp-3 calc(140rpx + env(safe-area-inset-bottom));
 }
 
-/* ---------- 页头 ---------- */
+/* ---------- 页头：eyebrow + 大标 + 等宽计数 + 发丝线 ---------- */
 .head {
-  padding: $sp-5 4rpx $sp-3;
+  padding: $sp-5 0 $sp-3;
 }
 
 .head-top {
@@ -323,6 +562,7 @@ onReachBottom(() => {
 
 .head-title {
   flex: 1;
+  min-width: 0;
 }
 
 .title {
@@ -332,33 +572,37 @@ onReachBottom(() => {
   font-size: $fs-h1;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  line-height: 1.2;
-  letter-spacing: 1rpx;
+  line-height: $lh-tight;
   color: $ink;
 }
 
-.sub {
+.count {
   display: block;
   margin-top: 10rpx;
   font-size: $fs-meta;
-  letter-spacing: 0.5rpx;
+  letter-spacing: $ls-label;
   color: $ink-3;
+}
+
+.head-rule {
+  margin-top: $sp-3;
 }
 
 .cart-btn {
   margin-top: 20rpx;
   display: flex;
   align-items: center;
-  height: 64rpx;
+  height: 88rpx;
   padding: 0 22rpx;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
   background: $shell;
+  flex-shrink: 0;
 }
 
 .cart-text {
   font-size: $fs-micro;
-  letter-spacing: 0.5rpx;
+  letter-spacing: 1rpx;
   color: $ink-2;
 }
 
@@ -377,7 +621,6 @@ onReachBottom(() => {
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
-  box-shadow: $shadow-card;
 }
 
 .search-mark {
@@ -411,7 +654,7 @@ onReachBottom(() => {
 .search-input {
   flex: 1;
   height: 96rpx;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   color: $ink;
 }
 
@@ -419,7 +662,7 @@ onReachBottom(() => {
   height: 72rpx;
   padding: 0 28rpx;
   border-radius: $r-control;
-  background: $ink;
+  background: $solid;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -428,56 +671,90 @@ onReachBottom(() => {
 .search-go-text {
   font-size: $fs-meta;
   letter-spacing: 1rpx;
-  color: #f4f8f6;
+  color: $on-solid;
 }
 
-.tabs {
+/* ---------- 分类 chip：分类用 control 圆角 ---------- */
+.chips {
   margin-top: $sp-4;
   white-space: nowrap;
 }
 
-.tab {
+/* 二/三级与规格行收紧间距，保持深色主题变量不变 */
+.chips--sub {
+  margin-top: $sp-2;
+}
+
+.chips--spec {
+  margin-top: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.chip {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 12rpx 0 0;
-  margin-right: 40rpx;
+  align-items: center;
+  height: 64rpx;
+  padding: 0 24rpx;
+  margin-right: 16rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  background: $shell;
 }
 
-.tab-label {
-  font-size: 30rpx;
-  letter-spacing: 0.5rpx;
-  color: $ink-3;
-  padding-bottom: 12rpx;
+.chip--sub {
+  height: 56rpx;
+  padding: 0 20rpx;
+  margin-right: 12rpx;
 }
 
-.tab-count {
-  margin-left: 8rpx;
-  font-size: 24rpx;
+.chip--spec {
+  height: 52rpx;
+  padding: 0 18rpx;
+  margin-right: 10rpx;
+}
+
+.spec-group {
+  display: flex;
+  align-items: center;
+  margin-top: $sp-2;
+}
+
+.spec-label {
+  flex: 0 0 auto;
+  width: 68rpx;
+  font-size: $fs-micro;
   color: $ink-4;
 }
 
-.tab--active .tab-label {
-  color: $ink;
+.chip--active {
+  background: $brand-soft;
+  border-color: transparent;
+}
+
+.chip-label {
+  font-family: $font-mono;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.chip--active .chip-label {
+  color: $brand-deep;
   font-weight: 600;
 }
 
-.tab-line {
-  width: 100%;
-  height: 3rpx;
-  border-radius: 3rpx;
-  background: transparent;
+.chip-count {
+  margin-left: 8rpx;
+  font-size: $fs-micro;
+  color: $ink-4;
 }
 
-.tab--active .tab-line {
-  background: $brand;
-}
-
-/* ---------- 商品网格 ---------- */
+/* ---------- 目录索引卡 ---------- */
 .list-head {
   display: flex;
   justify-content: space-between;
-  padding: $sp-2 4rpx $sp-3;
+  padding: $sp-2 0 $sp-3;
 }
 
 .wrap {
@@ -486,20 +763,27 @@ onReachBottom(() => {
   justify-content: space-between;
 }
 
-.product {
+.card {
   width: 48.6%;
-  margin-bottom: $sp-3;
+  margin-bottom: $sp-4;
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-card;
-  box-shadow: $shadow-card;
   overflow: hidden;
   transition: transform 0.16s ease;
 }
 
+/* ---------- 平板 / 折叠屏展开态：商品网格三栏 ---------- */
+@media (min-width: 1000px) {
+  .card {
+    width: 32%;
+  }
+}
+
 .cover {
   position: relative;
-  height: 280rpx;
+  width: 100%;
+  height: 300rpx;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -533,7 +817,7 @@ onReachBottom(() => {
   width: 210rpx;
   height: 210rpx;
   border-radius: 50%;
-  border: 1rpx solid rgba(17, 20, 19, 0.12);
+  border: 1rpx solid $paper-3;
   top: 46rpx;
   left: 50%;
   margin-left: -105rpx;
@@ -544,12 +828,12 @@ onReachBottom(() => {
   left: 20rpx;
   top: 20rpx;
   z-index: 2;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   text-transform: uppercase;
   color: $ink-3;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1rpx solid rgba(17, 20, 19, 0.18);
+  background: $shell;
+  border: 1rpx solid $paper-3;
   border-radius: 6rpx;
   padding: 4rpx 10rpx;
 }
@@ -573,7 +857,8 @@ onReachBottom(() => {
   width: 88rpx;
   height: 88rpx;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.94);
+  background: $shell;
+  border: 1rpx solid $paper-3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -590,10 +875,10 @@ onReachBottom(() => {
 }
 
 .p-info {
-  padding: 20rpx 22rpx 22rpx;
+  padding: $sp-3;
   display: flex;
   flex-direction: column;
-  min-height: 168rpx;
+  min-height: 176rpx;
 }
 
 .p-name {
@@ -610,20 +895,26 @@ onReachBottom(() => {
   -webkit-line-clamp: 2;
 }
 
-.p-sub {
+.p-sub,
+.p-spec {
   display: block;
   margin-top: 6rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.p-spec {
+  margin-top: 4rpx;
+  color: $ink-4;
+}
+
 .p-foot {
   display: block;
   margin-top: auto;
-  padding-top: 16rpx;
+  padding-top: $sp-2;
 }
 
 .p-price {
@@ -639,29 +930,23 @@ onReachBottom(() => {
 }
 
 .p-amount {
+  font-family: $font-mono;
   font-size: 40rpx;
-  font-weight: 700;
+  font-weight: 800;
   color: $ink;
 }
 
 .p-unit {
   margin-left: 6rpx;
-  font-size: 24rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
 .p-old {
   margin-left: 8rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
   text-decoration: line-through;
-}
-
-.p-oos {
-  margin-left: 8rpx;
-  font-size: 24rpx;
-  letter-spacing: 1rpx;
-  color: #a4761c;
 }
 
 .p-price--inquiry {
@@ -670,13 +955,13 @@ onReachBottom(() => {
 
 .p-inquiry {
   font-size: 36rpx;
-  font-weight: 700;
+  font-weight: 800;
   color: $brand-deep;
 }
 
 .p-inquiry-sub {
   margin-left: 10rpx;
-  font-size: 24rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-3;
 }
@@ -685,24 +970,54 @@ onReachBottom(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 4rpx;
+  margin-top: $sp-1;
 }
 
 .p-pack {
-  font-size: 24rpx;
+  font-size: $fs-micro;
   color: $ink-3;
   margin-right: 12rpx;
 }
 
-.p-stock {
-  font-size: 26rpx;
-  color: $ink-4;
+/* 状态 chip：仅状态用 pill 圆角 */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 40rpx;
+  padding: 0 16rpx;
+  border-radius: $r-pill;
 }
 
-.p-stock--oos {
-  color: #a4761c;
+.status-chip--stock {
+  background: $brand-soft;
 }
 
+.status-chip--stock .status-chip-text {
+  color: $brand-deep;
+}
+
+.status-chip--oos {
+  background: $paper-2;
+}
+
+.status-chip--oos .status-chip-text {
+  color: $amber;
+}
+
+.status-chip--inquiry {
+  background: $paper-2;
+}
+
+.status-chip--inquiry .status-chip-text {
+  color: $ink-2;
+}
+
+.status-chip-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+}
+
+/* ---------- 骨架 ---------- */
 .cover-sk {
   height: 300rpx;
   border-radius: 0;
@@ -725,12 +1040,12 @@ onReachBottom(() => {
 }
 
 .list-foot {
-  padding: $sp-3 4rpx $sp-6;
+  padding: $sp-3 0 $sp-6;
   text-align: center;
 }
 
 .foot-note {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-4;
 }

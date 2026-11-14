@@ -2,24 +2,18 @@
   <view class="page">
     <mx-bar />
     <block v-if="user">
+      <!-- ---------- 深场通行证：页面唯一强视觉块，下沿直接切纸面 ---------- -->
       <view class="pass">
         <view class="pass-foil" />
-        <text class="pass-watermark mono">IF</text>
-        <view class="pass-seal">
-          <text class="pass-seal-text mono">FED</text>
-        </view>
 
         <view class="pass-head">
-          <view class="pass-brand">
-            <text class="pass-kicker mono">INTERSTELLAR FEDERATION</text>
-            <text class="pass-title">星际联邦通行证</text>
-          </view>
-          <view class="pass-state" :class="{ 'pass-state--guest': user.isGuest }">
+          <mx-logo size="md" tone="light" sub="INTERSTELLAR FEDERATION" />
+          <view class="tag tag--dark pass-state" :class="{ 'pass-state--guest': user.isGuest }">
             <text class="pass-state-text mono">{{ user.isGuest ? 'GUEST' : 'CITIZEN' }}</text>
           </view>
         </view>
 
-        <text class="pass-label mono">星际联邦通行证公民编号 / CITIZEN NO.</text>
+        <text class="pass-label mono">公民编号 / CITIZEN NO.</text>
         <text class="pass-no mono">{{ user.accountNo }}</text>
         <text class="pass-id mono">数字 ID · {{ user.id }}</text>
 
@@ -54,30 +48,71 @@
         <text class="pass-foot mono">该编号全局唯一，可直接作为登录账号使用</text>
       </view>
 
-      <view class="sheet profile">
-        <view class="profile-head">
-          <text class="eyebrow">PROFILE</text>
-          <text class="profile-title">账号资料</text>
+      <!-- ---------- 身份 ---------- -->
+      <view class="sec">
+        <view class="sec-head">
+          <text class="eyebrow">IDENTITY</text>
+          <text class="sec-title">身份</text>
         </view>
-        <view class="row"><text class="k">昵称</text><text class="v">{{ user.nickname }}</text></view>
-        <view class="row"><text class="k">用户名</text><text class="v">{{ user.username ?? '未设置' }}</text></view>
-        <view class="row"><text class="k">通行证公民编号</text><text class="v v--mono mono">{{ user.accountNo }}</text></view>
-        <view class="row"><text class="k">手机号</text><text class="v mono">{{ user.phone ?? '未绑定' }}</text></view>
-        <view class="row"><text class="k">邮箱</text><text class="v">{{ user.email ?? '未绑定' }}</text></view>
-        <view class="row"><text class="k">注册时间</text><text class="v mono">{{ createdText }}</text></view>
+        <view class="rule" />
         <view class="row">
+          <text class="k">昵称</text>
+          <text class="v">{{ user.nickname }}</text>
+        </view>
+        <view class="row">
+          <text class="k">用户名</text>
+          <text class="v">{{ user.username ?? '未设置' }}</text>
+        </view>
+        <view class="row">
+          <text class="k">手机号</text>
+          <text class="v mono">{{ user.phone ?? '未绑定' }}</text>
+        </view>
+        <view class="row">
+          <text class="k">邮箱</text>
+          <text class="v">{{ user.email ?? '未绑定' }}</text>
+        </view>
+        <view class="row" :class="{ 'row--last': !user.bindings.length }">
           <text class="k">第三方绑定</text>
           <text class="v">{{ bindingText }}</text>
         </view>
-        <view class="row row--last">
-          <text class="k">数字 ID</text>
-          <text class="v v--mono mono">{{ user.id }}</text>
+        <view v-if="user.bindings.length" class="bind-actions">
+          <text
+            v-for="b in user.bindings"
+            :key="b"
+            class="bind-chip mono"
+            @tap="unbind(b)"
+          >解绑 {{ bindingLabel(b) }}</text>
         </view>
       </view>
 
-      <view v-if="user.isGuest" class="sheet upgrade">
-        <text class="eyebrow">UPGRADE</text>
-        <text class="upgrade-title">升级为正式账号</text>
+      <!-- ---------- 资产 ---------- -->
+      <view class="sec">
+        <view class="sec-head">
+          <text class="eyebrow">ASSETS</text>
+          <text class="sec-title">资产</text>
+        </view>
+        <view class="rule" />
+        <view class="row">
+          <text class="k">通行证公民编号</text>
+          <text class="v v--mono mono">{{ user.accountNo }}</text>
+        </view>
+        <view class="row">
+          <text class="k">数字 ID</text>
+          <text class="v v--mono mono">{{ user.id }}</text>
+        </view>
+        <view class="row row--last">
+          <text class="k">注册时间</text>
+          <text class="v mono">{{ createdText }}</text>
+        </view>
+      </view>
+
+      <!-- ---------- 游客升级 ---------- -->
+      <view v-if="user.isGuest" class="sec upgrade">
+        <view class="sec-head">
+          <text class="eyebrow">UPGRADE</text>
+          <text class="sec-title">升级为正式账号</text>
+        </view>
+        <view class="rule" />
         <text class="hint">补设用户名与密码后，换设备也能用「用户名 + 密码」登录。</text>
         <text class="label mt">用户名</text>
         <input
@@ -103,8 +138,13 @@
         </view>
       </view>
 
-      <view class="sheet links">
-        <text class="eyebrow">SHORTCUTS</text>
+      <!-- ---------- 入口 ---------- -->
+      <view class="sec">
+        <view class="sec-head">
+          <text class="eyebrow">ENTRIES</text>
+          <text class="sec-title">入口</text>
+        </view>
+        <view class="rule" />
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.mall)">
           <text class="link-title">去商城</text>
           <text class="link-desc">商品 · 购物车 · 订单</text>
@@ -120,6 +160,11 @@
           <text class="link-desc">下单后可查看进度</text>
           <text class="link-arrow mono">→</text>
         </view>
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
+          <text class="link-title">隐私政策与权限说明</text>
+          <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>
+          <text class="link-arrow mono">→</text>
+        </view>
         <view class="link-row link-row--last" hover-class="is-press" @tap="go(ROUTES.about)">
           <text class="link-title">关于与能力</text>
           <text class="link-desc">能力矩阵与版本</text>
@@ -133,8 +178,8 @@
     </block>
 
     <block v-else>
-      <view class="guest-hero">
-        <text class="eyebrow eyebrow--light">NO CREDENTIAL</text>
+      <view class="guest">
+        <text class="eyebrow">NO CREDENTIAL</text>
         <text class="guest-title">登录 / 领取联邦通行证</text>
         <text class="guest-lede">登录已有通行证，或注册即签发星际联邦通行证，并分配唯一的 MixmAPP 星际联邦通行证公民编号。</text>
       </view>
@@ -148,11 +193,19 @@
         </view>
       </view>
 
-      <view class="sheet links">
-        <text class="eyebrow">BROWSE</text>
+      <view class="sec">
+        <view class="sec-head">
+          <text class="eyebrow">BROWSE</text>
+        </view>
+        <view class="rule" />
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.mall)">
           <text class="link-title">去商城</text>
           <text class="link-desc">商品 · 结算 · 订单</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
+          <text class="link-title">隐私政策与权限说明</text>
+          <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>
           <text class="link-arrow mono">→</text>
         </view>
         <view class="link-row link-row--last" hover-class="is-press" @tap="go(ROUTES.about)">
@@ -168,9 +221,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
+import type { OAuthProviderKey } from '@mixmapp/contracts';
 import { session, logout, refreshProfile } from '../../stores/session';
 import { meApi, ApiError } from '../../api/client';
 import { ROUTES } from '../../routes';
+import { goTo } from '../../navigation';
+import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
 const user = computed(() => session.user);
 const createdShort = computed(() => {
@@ -182,12 +238,24 @@ const createdText = computed(() =>
   user.value ? new Date(user.value.createdAt).toLocaleString() : '',
 );
 const BINDING_LABEL: Record<string, string> = {
-  github: 'GitHub',
   wechat: '微信',
+  wechat_mp: '微信公众号',
   qq: 'QQ',
+  weibo: '微博',
+  alipay: '支付宝',
+  douyin: '抖音',
+  dingtalk: '钉钉',
+  wecom: '企业微信',
   apple: 'Apple',
   google: 'Google',
+  facebook: 'Facebook',
+  github: 'GitHub',
+  gitee: 'Gitee',
 };
+
+function bindingLabel(key: string): string {
+  return BINDING_LABEL[key] ?? key;
+}
 const bindingText = computed(() => {
   if (!user.value) return '';
   const list = user.value.bindings;
@@ -200,7 +268,7 @@ const upError = ref('');
 const upgrading = ref(false);
 
 function go(url: string): void {
-  uni.navigateTo({ url });
+  goTo(url);
 }
 
 function copyId(): void {
@@ -208,6 +276,24 @@ function copyId(): void {
   uni.setClipboardData({
     data: user.value.accountNo,
     success: () => uni.showToast({ title: '已复制', icon: 'success' }),
+  });
+}
+
+/** 解绑前二次确认；服务端会拒绝「解绑后没有任何登录方式」的操作。 */
+function unbind(provider: string): void {
+  uni.showModal({
+    title: '解绑确认',
+    content: `确定解绑 ${bindingLabel(provider)}？解绑后将不能用它登录。`,
+    success: async (res) => {
+      if (!res.confirm) return;
+      try {
+        await meApi.unbindOAuth(provider as OAuthProviderKey);
+        await refreshProfile();
+        uni.showToast({ title: '已解绑', icon: 'none' });
+      } catch (e) {
+        uni.showToast({ title: e instanceof ApiError ? e.message : '解绑失败', icon: 'none' });
+      }
+    },
   });
 }
 
@@ -251,10 +337,11 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: $sp-4 $sp-3 $sp-8;
+  /* tabBar 页面：为原生底部标签栏留安全距离 */
+  padding: $sp-4 $sp-3 calc(140rpx + env(safe-area-inset-bottom));
 }
 
-/* ---------- 通行证 ---------- */
+/* ---------- 深场通行证 ---------- */
 .pass {
   position: relative;
   overflow: hidden;
@@ -263,9 +350,8 @@ onShow(() => {
     radial-gradient(130% 100% at 92% -16%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 56%),
     radial-gradient(90% 80% at 0% 110%, rgba(244, 244, 241, 0.05), rgba(244, 244, 241, 0) 60%),
     linear-gradient(152deg, #0b0f0e 0%, #11201d 58%, #16302a 128%);
-  border: 1rpx solid rgba(244, 244, 241, 0.16);
-  border-radius: $r-shell;
-  box-shadow: 0 24rpx 56rpx -28rpx rgba(11, 15, 14, 0.5);
+  border: 1rpx solid $on-deep-line;
+  border-radius: $r-shell $r-shell 0 0;
 }
 
 .pass-foil {
@@ -279,37 +365,6 @@ onShow(() => {
   pointer-events: none;
 }
 
-.pass-watermark {
-  position: absolute;
-  right: -10rpx;
-  bottom: -26rpx;
-  font-size: 130rpx;
-  line-height: 1;
-  letter-spacing: 6rpx;
-  color: rgba(244, 244, 241, 0.06);
-}
-
-.pass-seal {
-  position: absolute;
-  right: -56rpx;
-  bottom: 44rpx;
-  z-index: 1;
-  width: 220rpx;
-  height: 220rpx;
-  border: 2rpx solid rgba(244, 244, 241, 0.14);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.pass-seal-text {
-  font-size: 56rpx;
-  letter-spacing: 6rpx;
-  color: rgba(244, 244, 241, 0.14);
-}
-
 .pass-head {
   position: relative;
   z-index: 2;
@@ -318,26 +373,7 @@ onShow(() => {
   justify-content: space-between;
 }
 
-.pass-kicker {
-  display: block;
-  font-size: 26rpx;
-  letter-spacing: 2.4rpx;
-  color: rgba(244, 244, 241, 0.55);
-}
-
-.pass-title {
-  display: block;
-  margin-top: 10rpx;
-  font-family: $font-display;
-  font-size: 44rpx;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  color: #f4f4f1;
-}
-
 .pass-state {
-  padding: 6rpx 16rpx;
-  border: 1rpx solid rgba(244, 244, 241, 0.2);
   border-radius: $r-pill;
 }
 
@@ -346,13 +382,13 @@ onShow(() => {
 }
 
 .pass-state--guest .pass-state-text {
-  color: #e0a963;
+  color: $amber-on-deep;
 }
 
 .pass-state-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
-  color: rgba(244, 244, 241, 0.8);
+  color: $on-deep-2;
 }
 
 .pass-label {
@@ -360,9 +396,9 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: $sp-6;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
-  color: rgba(196, 219, 255, 0.48);
+  color: $on-deep-3;
 }
 
 .pass-no {
@@ -374,7 +410,7 @@ onShow(() => {
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0;
-  color: #f3f8ff;
+  color: $on-deep;
   word-break: break-all;
 }
 
@@ -383,9 +419,9 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: 6rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: rgba(196, 219, 255, 0.56);
+  color: $on-deep-3;
   word-break: break-all;
 }
 
@@ -426,9 +462,9 @@ onShow(() => {
 
 .pass-k {
   display: block;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
-  color: rgba(196, 219, 255, 0.44);
+  color: $on-deep-3;
 }
 
 .pass-v {
@@ -436,9 +472,9 @@ onShow(() => {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   margin-top: 8rpx;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   line-height: 1.35;
-  color: rgba(240, 247, 255, 0.92);
+  color: $on-deep;
   overflow: hidden;
 }
 
@@ -454,7 +490,7 @@ onShow(() => {
   padding: 0 26rpx;
   margin-right: 14rpx;
   border: 1rpx solid rgba(240, 201, 124, 0.32);
-  border-radius: $r-pill;
+  border-radius: $r-control;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -463,7 +499,7 @@ onShow(() => {
 .pass-btn-text {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: #f4f4f1;
+  color: $on-deep;
 }
 
 .pass-foot {
@@ -472,23 +508,24 @@ onShow(() => {
   display: block;
   max-width: 74%;
   margin-top: $sp-3;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 0.5rpx;
-  color: rgba(196, 219, 255, 0.46);
+  color: $on-deep-3;
 }
 
-/* ---------- 资料 ---------- */
-.profile {
-  margin-top: $sp-4;
-  padding: $sp-4 $sp-4 8rpx;
+/* ---------- 分节（身份 / 资产 / 入口） ---------- */
+.sec {
+  margin-top: $sp-5;
 }
 
-.profile-head {
-  padding-bottom: $sp-3;
-  border-bottom: 1rpx solid $paper-2;
+.sec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: $sp-2;
 }
 
-.profile-title {
+.sec-title {
   display: block;
   margin-top: 10rpx;
   font-family: $font-display;
@@ -496,6 +533,11 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $ink;
+}
+
+.rule {
+  height: 1rpx;
+  background: $paper-3;
 }
 
 .row {
@@ -510,16 +552,32 @@ onShow(() => {
   border-bottom: none;
 }
 
+.bind-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 0 0 18rpx;
+}
+
+.bind-chip {
+  padding: 8rpx 18rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  font-size: $fs-micro;
+  color: $ink-3;
+  background: $shell;
+}
+
 .k {
   flex-shrink: 0;
   margin-right: $sp-3;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
 .v {
   flex: 1;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   line-height: 1.5;
   color: $ink;
   text-align: right;
@@ -527,7 +585,7 @@ onShow(() => {
 }
 
 .v--mono {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.45;
   letter-spacing: 0;
   color: $ink-3;
@@ -535,22 +593,9 @@ onShow(() => {
 
 /* ---------- 升级 ---------- */
 .upgrade {
-  margin-top: $sp-3;
-  padding: $sp-4;
-}
-
-.upgrade-title {
-  display: block;
-  margin-top: 12rpx;
-  font-family: $font-display;
-  font-size: $fs-h2;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  color: $ink;
-}
-
-.upgrade .hint {
-  margin-top: 10rpx;
+  .hint {
+    margin-top: 12rpx;
+  }
 }
 
 .mt {
@@ -566,10 +611,11 @@ onShow(() => {
 }
 
 .btn-text {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 600;
   letter-spacing: 2rpx;
-  color: #f4f8f6;
+  /* 只用于 .btn--deep（底色 $solid）：深色下底色变浅，文字必须跟着切到 $on-solid */
+  color: $on-solid;
 }
 
 .btn-text--dark {
@@ -583,12 +629,7 @@ onShow(() => {
   color: $signal;
 }
 
-/* ---------- 快捷入口 ---------- */
-.links {
-  margin-top: $sp-3;
-  padding: $sp-4 $sp-4 8rpx;
-}
-
+/* ---------- 入口行：发丝线分隔，不叠卡片 ---------- */
 .link-row {
   display: flex;
   align-items: center;
@@ -602,7 +643,7 @@ onShow(() => {
 
 .link-title {
   font-family: $font-display;
-  font-size: 34rpx;
+  font-size: $fs-h3;
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $ink;
@@ -612,14 +653,14 @@ onShow(() => {
 .link-desc {
   flex: 1;
   margin-left: $sp-3;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
   text-align: right;
 }
 
 .link-arrow {
   margin-left: 14rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
 }
 
@@ -631,42 +672,33 @@ onShow(() => {
 }
 
 .logout-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $signal;
 }
 
-/* ---------- 未登录 ---------- */
-.guest-hero {
-  padding: $sp-6 $sp-5;
-  background:
-    radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.24), rgba(15, 157, 143, 0) 58%),
-    linear-gradient(158deg, #08110f 0%, #0e2925 100%);
-  border-radius: $r-shell;
-}
-
-.eyebrow--light {
-  color: rgba(242, 245, 243, 0.6);
+/* ---------- 未登录（纸面） ---------- */
+.guest {
+  padding: $sp-5 0 $sp-3;
 }
 
 .guest-title {
   display: block;
-  margin-top: $sp-4;
+  margin-top: $sp-3;
   font-family: $font-display;
-  font-size: 56rpx;
+  font-size: $fs-h1;
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: 1.25;
-  letter-spacing: 2rpx;
-  color: #f4f8f6;
+  color: $ink;
 }
 
 .guest-lede {
   display: block;
   margin-top: $sp-3;
-  font-size: 30rpx;
-  line-height: 1.7;
-  color: rgba(242, 245, 243, 0.66);
+  font-size: $fs-meta;
+  line-height: $lh-body;
+  color: $ink-3;
 }
 
 .guest-actions {

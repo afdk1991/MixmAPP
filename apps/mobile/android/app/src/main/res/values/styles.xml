@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
+    <!-- Base application theme. DayNight：跟随系统深浅色（Activity 主题同样是 DayNight）。 -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.DarkActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
@@ -22,8 +21,11 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
-        <!-- Android 12+ 系统启动屏：深墨底 + 品牌 MX，避免默认白屏闪一下 -->
+        <!-- 低版本（<31）兜底：窗口级背景用 splash.png，避免 core-splashscreen 兼容 View
+             被 Capacitor 的 setContentView 替换后出现白/黑闪。注意是 windowBackground，
+             不是 View 级的 android:background。 -->
+        <item name="android:windowBackground">@drawable/splash</item>
+        <!-- Android 12+ 系统启动屏：深墨底 + 品牌 MX -->
         <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>

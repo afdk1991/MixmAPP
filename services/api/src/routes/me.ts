@@ -4,8 +4,10 @@ import {
   bindPhoneSchema,
   bindUsernameSchema,
   oauthLoginSchema,
+  OAUTH_PROVIDER_KEYS,
   pushTokenSchema,
   updateProfileSchema,
+  type OAuthProviderKey,
 } from '@mixmapp/contracts';
 import { IdFactory } from '@mixmapp/ids';
 import { parse } from '../lib/validate.js';
@@ -44,10 +46,34 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/me/bind/oauth', { preHandler: app.requireAuth }, async (request) => {
     const body = parse(oauthLoginSchema, request.body);
+    if (!(OAUTH_PROVIDER_KEYS as readonly string[]).includes(body.provider)) {
+      throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${body.provider}`);
+    }
     return {
-      data: await app.auth.linkOAuth(request.userId as string, body.provider, body.code),
+      data: await app.auth.linkOAuth(
+        request.userId as string,
+        body.provider as OAuthProviderKey,
+        body.code,
+      ),
     };
   });
+
+  app.delete<{ Params: { provider: string } }>(
+    '/me/bind/oauth/:provider',
+    { preHandler: app.requireAuth },
+    async (request) => {
+      const provider = request.params.provider;
+      if (!(OAUTH_PROVIDER_KEYS as readonly string[]).includes(provider)) {
+        throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${provider}`);
+      }
+      return {
+        data: await app.auth.unlinkOAuth(
+          request.userId as string,
+          provider as OAuthProviderKey,
+        ),
+      };
+    },
+  );
 
   app.post('/me/push-token', { preHandler: app.requireAuth }, async (request) => {
     const body = parse(pushTokenSchema, request.body);

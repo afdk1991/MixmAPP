@@ -1,25 +1,40 @@
 /* MixmAPP 设计令牌 · 「MX / 联邦」体系（2026-11-13 重设计）
  * 画布 = 暖白纸  /  深场 = 石墨黑  /  强调 = 品牌青  /  文字 = 墨黑
  * 规矩：任何页面只从这组值取值，禁止再写裸色值；字重只用 400 / 600 / 800 三档。
+ *
+ * 深色主题：颜色值本身不在这里写死，统一映射到 styles/theme.scss 的 --mx-* CSS 变量
+ *（:root 明色 + @media (prefers-color-scheme: dark) 深色）。页面代码一行都不用改。
  */
 
 /* ---------- 色板 ---------- */
-$paper: #f4f4f1;        // 页面底：暖白纸（比旧冷灰更有质感）
-$paper-2: #ebece7;      // 次级底 / 骨架
-$paper-3: #dedfd8;      // 发丝线 / 描边
-$shell: #ffffff;        // 卡片外壳
-$ink: #111413;          // 正文：石墨黑
-$ink-2: #333a37;
-$ink-3: #6b736e;
-$ink-4: #9aa39d;
-$deep: #0b0f0e;         // 主视觉深场
-$deep-2: #131b19;
-$deep-3: #1d2a26;
-$brand: #0f9d8f;        // 品牌青（唯一强调色）
-$brand-deep: #0a7a70;
-$brand-soft: #e2f1ee;
-$signal: #b3372a;       // 错误 / 危险
-$amber: #a4761c;        // 提醒
+$paper: var(--mx-paper);         // 页面底：暖白纸（深色=暖石墨）
+$paper-2: var(--mx-paper-2);     // 次级底 / 骨架
+$paper-3: var(--mx-paper-3);     // 发丝线 / 描边
+$shell: var(--mx-shell);         // 卡片外壳
+$ink: var(--mx-ink);             // 正文（深色反转成近白）
+$ink-2: var(--mx-ink-2);
+$ink-3: var(--mx-ink-3);
+$ink-4: var(--mx-ink-4);
+$deep: var(--mx-deep);           // 主视觉深场（两套主题都是深色）
+$deep-2: var(--mx-deep-2);
+$deep-3: var(--mx-deep-3);
+$brand: var(--mx-brand);         // 品牌青（唯一强调色）
+$brand-deep: var(--mx-brand-deep);
+$brand-soft: var(--mx-brand-soft);
+$signal: var(--mx-signal);       // 错误 / 危险
+$amber: var(--mx-amber);         // 提醒
+
+/* 实心反白按钮（原先把 $ink 当底色用，深色下会和文字一起反转，故单独拆出） */
+$solid: var(--mx-solid);
+$on-solid: var(--mx-on-solid);
+
+/* ---------- 深场文字 / 深场强调：页面里原先裸写的浅绿白统一收口到这里 ---------- */
+$on-deep: var(--mx-on-deep);                            // 深场主文字
+$on-deep-2: var(--mx-on-deep-2);                        // 深场次级文字
+$on-deep-3: var(--mx-on-deep-3);                        // 深场说明 / 禁用
+$on-deep-line: var(--mx-on-deep-line);                  // 深场发丝线
+$brand-on-deep: var(--mx-brand-on-deep);                // 深场上的品牌青（提亮保证对比）
+$amber-on-deep: var(--mx-amber-on-deep);                // 深场上的提醒色
 
 /* ---------- 圆角：三档，收敛 pill 滥用 ---------- */
 $r-shell: 40rpx;        // 大区块 / 通行证

@@ -37,6 +37,33 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     return { data: snapshot() };
   });
 
+  // ===== 账号合并审计 =====
+  /** 历史重复账号真实条数：同一 union_id 落在多个账号上（不猜、不估算）。 */
+  app.get('/admin/merges/candidates', async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    return { data: await app.auth.mergeCandidates() };
+  });
+
+  app.get('/admin/merges', async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    const query = (request.query ?? {}) as { limit?: string };
+    const limit = query.limit ? Number(query.limit) : 50;
+    return { data: await app.auth.listMerges(limit) };
+  });
+
+  app.get('/admin/merges/:id', async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    const params = request.params as { id: string };
+    return { data: await app.auth.getMerge(params.id) };
+  });
+
+  /** 按合并前快照回滚（仅 completed 可回滚；刷新令牌无法复活）。 */
+  app.post('/admin/merges/:id/rollback', async (request) => {
+    await guard(request as unknown as { headers: Record<string, unknown> });
+    const params = request.params as { id: string };
+    return { data: await app.auth.rollbackMerge(params.id) };
+  });
+
   app.post('/admin/orders/sweep', async (request) => {
     await guard(request as unknown as { headers: Record<string, unknown> });
     const cancelled = await app.mall.sweepExpiredOrders(app.cfg.orderTtlMinutes);

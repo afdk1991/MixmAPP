@@ -13,6 +13,7 @@ import type {
 } from '@mixmapp/contracts';
 import { importCatalogSchema } from '@mixmapp/contracts';
 import { IdFactory } from '@mixmapp/ids';
+import type { CatalogSource } from './catalog-source.js';
 import { projectRoot, type Config } from '../config.js';
 import type {
   CartItemRecord,
@@ -26,6 +27,21 @@ import { AppError } from '../lib/errors.js';
 import { parse } from '../lib/validate.js';
 
 export type ImportCategoryCount = { code: string; name: string; count: number };
+/** 分类树节点：level 1/2/3，id 形如 c1:002 / c2:002:007 / c3:007。 */
+export type CategoryNode = { id: string; code: string; name: string; level: number; count: number };
+
+/** 单行金额：有厘/支精确价时用它（1 分 = 10 厘），否则回落到旧的分/件口径。 */
+function lineTotalFen(product: Pick<ProductRecord, 'priceFen' | 'priceLi'>, quantity: number): number {
+  const li = product.priceLi;
+  if (li != null && li > 0) return Math.round((li * quantity) / 10);
+  return product.priceFen * quantity;
+}
+
+/** 购买方式回显，如「2箱」「3盒」。 */
+function unitLabel(product: ProductRecord, packUnit: string, packQty: number): string {
+  const name = product.unitOptions?.find((u) => u.code === packUnit)?.name ?? packUnit;
+  return `${packQty}${name}`;
+}
 
 export type ImportReport = {
   batch: string;
@@ -51,8 +67,15 @@ export class MallService {
   constructor(
     private readonly config: Config,
     private readonly store: Store,
+    /** 内嵌只读目录源；不传（如单元测试直接 new MallService）时一律走数据库路径。 */
+    private readonly catalog?: CatalogSource,
   ) {
     this.ids = new IdFactory({ workerId: config.ids.workerId });
+  }
+
+  /** 目录源是否接管公开读：off / 未注入 / DB 已有真实目录数据时为 false。 */
+  private async useCatalog(): Promise<boolean> {
+    return this.catalog ? this.catalog.isActive() : false;
   }
 
   private toProductDto(product: ProductRecord): ProductDto {
@@ -78,6 +101,22 @@ export class MallService {
       ...(product.priceSource ? { priceSource: product.priceSource } : {}),
       ...(product.priceCapturedAt ? { priceCapturedAt: product.priceCapturedAt } : {}),
       ...(product.sourceUrl ? { sourceUrl: product.sourceUrl } : {}),
+      ...(product.priceLi != null ? { priceLi: product.priceLi } : {}),
+      ...(product.discountPct != null ? { discountPct: product.discountPct } : {}),
+      ...(product.salePriceLi != null ? { salePriceLi: product.salePriceLi } : {}),
+      ...(product.attributes && Object.keys(product.attributes).length
+        ? { attributes: product.attributes }
+        : {}),
+      ...(product.promotions?.length ? { promotions: product.promotions } : {}),
+      ...(product.packagingDesc ? { packagingDesc: product.packagingDesc } : {}),
+      ...(product.unitOptions?.length ? { unitOptions: product.unitOptions } : {}),
+      ...(product.unitConversions && Object.keys(product.unitConversions).length
+        ? { unitConversions: product.unitConversions }
+        : {}),
+      ...(product.specImage ? { specImage: product.specImage } : {}),
+      ...(product.minOrderQty != null ? { minOrderQty: product.minOrderQty } : {}),
+      ...(product.qtyStep != null ? { qtyStep: product.qtyStep } : {}),
+      ...(product.maxOrderQty != null ? { maxOrderQty: product.maxOrderQty } : {}),
     };
   }
 
@@ -88,6 +127,9 @@ export class MallService {
       priceFen: item.priceFen,
       quantity: item.quantity,
       subtotalFen: item.subtotalFen,
+      ...(item.packUnit ? { packUnit: item.packUnit } : {}),
+      ...(item.packQty != null ? { packQty: item.packQty } : {}),
+      ...(item.priceLi != null ? { priceLi: item.priceLi } : {}),
     };
   }
 
@@ -107,8 +149,12 @@ export class MallService {
   }
 
   async listProducts(query: ProductQueryInput): Promise<ProductDto[]> {
+    if (await this.useCatalog()) return this.catalog!.listProducts(query);
     const rows = await this.store.mall.products.list({
       ...(query.category ? { category: query.category } : {}),
+      ...(query.cat ? { cat: query.cat } : {}),
+      ...(query.dims ? { dims: query.dims } : {}),
+      ...(query.lens ? { lens: query.lens } : {}),
       ...(query.keyword ? { keyword: query.keyword } : {}),
       limit: query.pageSize,
       offset: (query.page - 1) * query.pageSize,
@@ -117,15 +163,31 @@ export class MallService {
   }
 
   async getProduct(productId: string): Promise<ProductDto> {
+    if (await this.useCatalog()) {
+      const fromCatalog = this.catalog!.getProduct(productId);
+      if (fromCatalog) return fromCatalog;
+      // 目录源未命中时回退数据库，兼容仍指向库内旧商品的详情链接。
+    }
     const product = await this.store.mall.products.findById(productId);
     if (!product) throw AppError.notFound('商品不存在或已下架');
     return this.toProductDto(product);
   }
 
-  /** 公开分类聚合：数据层全量 group by（PG）/ Map 统计（memory），返回 [{code,name,count}]，供前端 tab 使用。 */
+  /** 公开分类聚合：目录源激活时只返回 6 个真实中文类目；否则走数据层全量聚合。 */
   async listCategories(): Promise<ImportCategoryCount[]> {
+    if (await this.useCatalog()) return this.catalog!.listCategories();
     const rows = await this.store.mall.products.aggregateCategories();
     return [...rows].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+  }
+
+  /** 分类树下一层：parent 为空取一级，否则取该节点直接子级（只返回有商品的活分类）。 */
+  async listCategoryChildren(parent: string | null): Promise<CategoryNode[]> {
+    return this.store.mall.products.listChildCategories(parent);
+  }
+
+  /** 三级类目下真实存在的规格候选（dims/lens），用于筛选条展示。 */
+  async listSpecOptions(c3: string): Promise<{ dims: string[]; lens: string[] }> {
+    return this.store.mall.products.listSpecOptions(c3);
   }
 
   /**
@@ -306,7 +368,14 @@ export class MallService {
         priceFen: product.priceFen,
         quantity: item.quantity,
         stock: product.stock,
-        subtotalFen: product.priceFen * item.quantity,
+        subtotalFen: lineTotalFen(product, item.quantity),
+        ...(item.packUnit ? { packUnit: item.packUnit } : {}),
+        ...(item.packQty != null ? { packQty: item.packQty } : {}),
+        ...(product.priceLi != null ? { priceLi: product.priceLi } : {}),
+        ...(product.unit ? { unitName: product.unit } : {}),
+        ...(item.packUnit && item.packQty != null
+          ? { packLabel: unitLabel(product, item.packUnit, item.packQty) }
+          : {}),
       });
     }
     return {
@@ -316,23 +385,45 @@ export class MallService {
     };
   }
 
+  /** 箱/盒购买时，以商品换算表把包装数展开成支数；换算缺失时退回前端传来的数量。 */
+  private resolveQuantity(
+    product: ProductRecord,
+    quantity: number,
+    packUnit?: string,
+    packQty?: number,
+  ): number {
+    if (!packUnit || packQty == null) return quantity;
+    const conv = product.unitConversions?.[packUnit];
+    return conv && conv > 0 ? conv * packQty : quantity;
+  }
+
   /**
    * 询价商品（priceSource='inquiry'）或 0 元商品不允许加购/下单。
    * 前端已按 priceSource/priceFen 隐藏入口，这里是服务端二次兜底，避免 0 元单落地。
    */
   private assertOrderable(product: ProductRecord): void {
+    if (product.listed === false) {
+      throw AppError.conflict(`${product.title} 已下架，暂不可购买`);
+    }
     if (product.priceSource === 'inquiry' || product.priceFen <= 0) {
       throw AppError.conflict(`${product.title} 需询价，暂不支持直接下单`);
     }
   }
 
-  async addToCart(userId: string, productId: string, quantity: number): Promise<CartDto> {
+  async addToCart(
+    userId: string,
+    productId: string,
+    quantity: number,
+    packUnit?: string,
+    packQty?: number,
+  ): Promise<CartDto> {
     const product = await this.store.mall.products.findById(productId);
     if (!product) throw AppError.notFound('商品不存在或已下架');
     this.assertOrderable(product);
+    const addQty = this.resolveQuantity(product, quantity, packUnit, packQty);
     const existing = await this.store.mall.carts.find(userId, productId);
-    const nextQuantity = (existing?.quantity ?? 0) + quantity;
-    if (nextQuantity > 99) throw AppError.conflict('单个商品最多 99 件');
+    const nextQuantity = (existing?.quantity ?? 0) + addQty;
+    if (nextQuantity > product.maxOrderQty!) throw AppError.conflict('单个商品数量超出上限');
     if (nextQuantity > product.stock) throw AppError.conflict(`${product.title} 库存不足`);
 
     const now = new Date();
@@ -341,6 +432,8 @@ export class MallService {
       userId,
       productId,
       quantity: nextQuantity,
+      packUnit: packUnit ?? existing?.packUnit ?? null,
+      packQty: packQty ?? existing?.packQty ?? null,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -348,13 +441,27 @@ export class MallService {
     return this.getCart(userId);
   }
 
-  async updateCartQuantity(userId: string, productId: string, quantity: number): Promise<CartDto> {
+  async updateCartQuantity(
+    userId: string,
+    productId: string,
+    quantity: number,
+    packUnit?: string,
+    packQty?: number,
+  ): Promise<CartDto> {
     const existing = await this.store.mall.carts.find(userId, productId);
     if (!existing) throw AppError.notFound('购物车里没有该商品');
     const product = await this.store.mall.products.findById(productId);
     if (!product) throw AppError.notFound('商品不存在或已下架');
-    if (quantity > product.stock) throw AppError.conflict(`${product.title} 库存不足`);
-    await this.store.mall.carts.upsert({ ...existing, quantity, updatedAt: new Date() });
+    this.assertOrderable(product);
+    const nextQuantity = this.resolveQuantity(product, quantity, packUnit, packQty);
+    if (nextQuantity > product.stock) throw AppError.conflict(`${product.title} 库存不足`);
+    await this.store.mall.carts.upsert({
+      ...existing,
+      quantity: nextQuantity,
+      packUnit: packUnit ?? existing.packUnit ?? null,
+      packQty: packQty ?? existing.packQty ?? null,
+      updatedAt: new Date(),
+    });
     return this.getCart(userId);
   }
 
@@ -395,20 +502,45 @@ export class MallService {
       (await this.store.mall.carts.listByUser(userId)).map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
+        ...(item.packUnit ? { packUnit: item.packUnit } : {}),
+        ...(item.packQty != null ? { packQty: item.packQty } : {}),
       }));
     if (requested.length === 0) throw AppError.conflict('购物车是空的，无法下单');
 
-    const lines: Array<{ product: ProductRecord; quantity: number }> = [];
+    const lines: Array<{
+      product: ProductRecord;
+      quantity: number;
+      packUnit?: string | undefined;
+      packQty?: number | undefined;
+    }> = [];
+    const merged = new Map<string, (typeof lines)[number]>();
     for (const line of requested) {
       const product = await this.store.mall.products.findById(line.productId);
       if (!product) throw AppError.notFound(`商品不存在或已下架：${line.productId}`);
       this.assertOrderable(product);
-      if (product.stock < line.quantity) throw AppError.conflict(`库存不足：${product.title}`);
-      lines.push({ product, quantity: line.quantity });
+      const quantity = this.resolveQuantity(product, line.quantity, line.packUnit, line.packQty);
+      // 同一商品多行（不同购买方式）合并成一行扣库存与计价，避免超卖判断被拆散
+      const prev = merged.get(product.id);
+      if (prev) prev.quantity += quantity;
+      else {
+        const entry = {
+          product,
+          quantity,
+          ...(line.packUnit ? { packUnit: line.packUnit } : {}),
+          ...(line.packQty != null ? { packQty: line.packQty } : {}),
+        };
+        merged.set(product.id, entry);
+        lines.push(entry);
+      }
+    }
+    for (const line of lines) {
+      if (line.product.stock < line.quantity) {
+        throw AppError.conflict(`库存不足：${line.product.title}`);
+      }
     }
 
     // 先扣库存再落单：任一失败即整单失败；已扣的那几行必须归还，否则库存会凭空消失
-    const deducted: Array<{ product: ProductRecord; quantity: number }> = [];
+    const deducted: typeof lines = [];
     try {
       for (const line of lines) {
         const ok = await this.store.mall.products.decrementStock(line.product.id, line.quantity);
@@ -422,7 +554,7 @@ export class MallService {
       throw error;
     }
 
-    const totalFen = lines.reduce((sum, line) => sum + line.product.priceFen * line.quantity, 0);
+    const totalFen = lines.reduce((sum, line) => sum + lineTotalFen(line.product, line.quantity), 0);
     const id = this.ids.next().id;
     const orderNo = `MO${Date.now().toString(36).toUpperCase()}${this.ids.next().snowflake.slice(-6)}`;
     const order: OrderRecord = {
@@ -445,10 +577,21 @@ export class MallService {
       title: line.product.title,
       priceFen: line.product.priceFen,
       quantity: line.quantity,
-      subtotalFen: line.product.priceFen * line.quantity,
+      subtotalFen: lineTotalFen(line.product, line.quantity),
+      packUnit: line.packUnit ?? null,
+      packQty: line.packQty ?? null,
+      priceLi: line.product.priceLi ?? null,
     }));
 
-    await this.store.mall.orders.insert(order, items);
+    try {
+      await this.store.mall.orders.insert(order, items);
+    } catch (error) {
+      // 订单落库失败：已扣的库存必须归还，否则库存会凭空消失。
+      for (const line of deducted) {
+        await this.store.mall.products.restoreStock(line.product.id, line.quantity);
+      }
+      throw error;
+    }
     if (fromCart) await this.store.mall.carts.clear(userId);
     return this.toOrderDto(order, items);
   }

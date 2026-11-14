@@ -26,11 +26,11 @@ describe('CORS 白名单', () => {
   });
 
   it('恒定并入壳与本地调试源，trim 且去重，不夹带未授权源', () => {
-    process.env.CORS_ORIGINS = 'https://mim.mixm.top, https://mim.mixm.top';
+    process.env.CORS_ORIGINS = 'https://www.mixm.top, https://www.mixm.top';
     const cfg = loadConfig();
     for (const origin of BUILTIN) expect(cfg.corsOrigins).toContain(origin);
-    expect(cfg.corsOrigins).toContain('https://mim.mixm.top');
-    expect(cfg.corsOrigins.filter((x) => x === 'https://mim.mixm.top')).toHaveLength(1);
+    expect(cfg.corsOrigins).toContain('https://www.mixm.top');
+    expect(cfg.corsOrigins.filter((x) => x === 'https://www.mixm.top')).toHaveLength(1);
     expect(cfg.corsOrigins).not.toContain('https://evil.example');
   });
 
@@ -43,7 +43,7 @@ describe('CORS 白名单', () => {
 
   it('受限白名单下 https://localhost 回 ACAO，未授权源不回 ACAO', async () => {
     app = await buildApp({
-      config: { ...testConfig, corsOrigins: ['https://mim.mixm.top', ...BUILTIN] },
+      config: { ...testConfig, corsOrigins: ['https://www.mixm.top', ...BUILTIN] },
       store: new MemoryStore(),
       logger: false,
     });

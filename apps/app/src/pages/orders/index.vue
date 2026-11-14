@@ -46,13 +46,12 @@
               </view>
             </view>
           </view>
-          <text class="stamp tk-status" :class="`tk-status--${order.status}`">{{ statusText(order.status) }}</text>
+          <view class="status-chip" :class="`status-chip--${order.status}`">
+            <text class="status-chip-text mono">{{ statusText(order.status) }}</text>
+          </view>
         </view>
 
-        <view class="perf">
-          <view class="notch notch--l" />
-          <view class="notch notch--r" />
-        </view>
+        <view class="rule perf-rule" />
 
         <view class="items">
           <view v-for="item in order.items" :key="item.productId + item.title" class="item">
@@ -89,6 +88,7 @@ import { onLoad } from '@dcloudio/uni-app';
 import type { OrderDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
 import { ROUTES } from '../../routes';
+import { goTo } from '../../navigation';
 
 const orders = ref<OrderDto[]>([]);
 const loading = ref(false);
@@ -132,7 +132,7 @@ async function load(): Promise<void> {
 }
 
 function goMall(): void {
-  uni.navigateTo({ url: ROUTES.mall });
+  goTo(ROUTES.mall);
 }
 
 onLoad((options) => {
@@ -159,8 +159,7 @@ onLoad((options) => {
   font-size: $fs-h1;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  line-height: 1.2;
-  letter-spacing: 1rpx;
+  line-height: $lh-tight;
   color: $ink;
 }
 
@@ -197,8 +196,10 @@ onLoad((options) => {
 }
 
 .tk-no {
-  font-size: 26rpx;
+  min-width: 0;
+  font-size: 28rpx;
   letter-spacing: 1rpx;
+  word-break: break-all;
   color: $ink;
 }
 
@@ -215,56 +216,60 @@ onLoad((options) => {
 
 .active-flag {
   margin-left: 12rpx;
-  padding: 2rpx 10rpx;
-  border-radius: 6rpx;
+  padding: 2rpx 12rpx;
+  border-radius: $r-pill;
   background: $brand;
+  display: inline-flex;
+  align-items: center;
 }
 
 .active-flag-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: #ffffff;
+  color: $shell;
 }
 
-.tk-status {
+.status-chip {
   margin-left: $sp-2;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 44rpx;
+  padding: 0 16rpx;
+  border-radius: $r-pill;
 }
 
-.tk-status--pending {
+.status-chip--pending {
+  background: $paper-2;
+}
+
+.status-chip--pending .status-chip-text {
   color: $amber;
 }
 
-.tk-status--paid {
+.status-chip--paid {
+  background: $brand-soft;
+}
+
+.status-chip--paid .status-chip-text {
   color: $brand-deep;
 }
 
-.tk-status--cancelled {
+.status-chip--cancelled {
+  background: $paper-2;
+}
+
+.status-chip--cancelled .status-chip-text {
   color: $ink-4;
 }
 
-.perf {
-  position: relative;
-  height: 1rpx;
-  margin: $sp-3 (-$sp-4);
-  border-top: 1rpx dashed $paper-3;
+.status-chip-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
 }
 
-.notch {
-  position: absolute;
-  top: -13rpx;
-  width: 26rpx;
-  height: 26rpx;
-  border-radius: 50%;
-  background: $paper;
-}
-
-.notch--l {
-  left: -13rpx;
-}
-
-.notch--r {
-  right: -13rpx;
+.perf-rule {
+  margin: $sp-3 0;
 }
 
 .items {
@@ -274,7 +279,12 @@ onLoad((options) => {
 .item {
   display: flex;
   align-items: center;
-  padding: 10rpx 0;
+  padding: 12rpx 0;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.item:last-child {
+  border-bottom: none;
 }
 
 .item-title {
@@ -309,7 +319,7 @@ onLoad((options) => {
   justify-content: space-between;
   margin-top: $sp-2;
   padding-top: $sp-3;
-  border-top: 1rpx solid $paper-2;
+  border-top: 1rpx solid $paper-3;
 }
 
 .receiver {
@@ -342,7 +352,7 @@ onLoad((options) => {
 
 .total-v {
   font-size: 34rpx;
-  font-weight: 700;
+  font-weight: 800;
   color: $ink;
 }
 
@@ -353,21 +363,6 @@ onLoad((options) => {
   font-size: 26rpx;
   line-height: 1.6;
   color: $ink-3;
-}
-
-.active-flag {
-  position: absolute;
-  left: 0;
-  top: 0;
-  background: $brand;
-  padding: 6rpx 16rpx;
-  border-bottom-right-radius: 12rpx;
-}
-
-.active-flag-text {
-  font-size: 26rpx;
-  letter-spacing: 1rpx;
-  color: #ffffff;
 }
 
 /* ---------- 骨架 / 空态 ---------- */

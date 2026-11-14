@@ -3,15 +3,18 @@ import {
   loginByPasswordSchema,
   loginBySmsSchema,
   oauthLoginSchema,
+  OAUTH_PROVIDER_KEYS,
   oneKeySchema,
   refreshTokenSchema,
   registerByEmailSchema,
   registerByPhoneSchema,
   registerByUsernameSchema,
   registerGuestSchema,
+  type OAuthProviderKey,
 } from '@mixmapp/contracts';
 import { z } from 'zod';
 import { parse } from '../lib/validate.js';
+import { AppError } from '../lib/errors.js';
 
 const codeRequestSchema = z.object({
   phone: z.string().regex(/^1[3-9]\d{9}$/),
@@ -68,7 +71,15 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/auth/login/oauth', async (request) => {
     const body = parse(oauthLoginSchema, request.body);
-    return { data: await app.auth.loginByOAuth({ provider: body.provider, code: body.code }) };
+    if (!(OAUTH_PROVIDER_KEYS as readonly string[]).includes(body.provider)) {
+      throw new AppError('BAD_REQUEST', `不支持的登录渠道 ${body.provider}`);
+    }
+    return {
+      data: await app.auth.loginByOAuth({
+        provider: body.provider as OAuthProviderKey,
+        code: body.code,
+      }),
+    };
   });
 
   app.post('/auth/refresh', async (request) => {

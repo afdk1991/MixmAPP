@@ -124,7 +124,7 @@ export class PayService {
     const payment = await this.store.payments.findByOutTradeNo(notify.outTradeNo);
     if (!payment) throw AppError.notFound('订单不存在');
     if (payment.amountFen !== notify.amountFen) {
-      throw new AppError('PAYMENT_INVALID', '回调金额与订单金额不一致');
+      throw AppError.conflict('回调金额与订单金额不一致');
     }
     if (notify.tradeState !== 'SUCCESS') {
       await this.store.payments.update(payment.id, {
@@ -149,7 +149,7 @@ export class PayService {
     const payment = await this.store.payments.findByOutTradeNo(notify.outTradeNo);
     if (!payment) throw AppError.notFound('订单不存在');
     if (payment.amountFen !== notify.amountFen) {
-      throw new AppError('PAYMENT_INVALID', '回调金额与订单金额不一致');
+      throw AppError.conflict('回调金额与订单金额不一致');
     }
     const ok = notify.tradeStatus === 'TRADE_SUCCESS' || notify.tradeStatus === 'TRADE_FINISHED';
     if (!ok) throw new AppError('PAYMENT_INVALID', `支付宝交易状态异常: ${notify.tradeStatus}`);

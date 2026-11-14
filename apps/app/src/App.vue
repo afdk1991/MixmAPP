@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app';
 import { restore } from './stores/session';
+import { hasPrivacyConsent } from './privacy';
+import { ROUTES } from './routes';
 
 onLaunch(() => {
   restore();
@@ -11,6 +13,10 @@ onLaunch(() => {
     model: launch.model,
     at: new Date().toISOString(),
   });
+  // 首启门禁：未同意当前版本隐私政策时，先进同意页；同意后回首页。
+  if (!hasPrivacyConsent()) {
+    uni.reLaunch({ url: `${ROUTES.legalPrivacy}?mode=gate` });
+  }
 });
 </script>
 

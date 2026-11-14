@@ -43,11 +43,12 @@ export async function makeApp(
   } = {},
 ) {
   const store = new MemoryStore();
-  const oauth = {
+  const oauth: Partial<Record<OAuthProviderName, OAuthProvider>> = {
     wechat: options.oauth?.wechat ?? new FakeOAuth('wechat', { openId: 'wx-open-1', unionId: 'un-1', nickname: '微信测试', avatarUrl: null }),
     qq: options.oauth?.qq ?? new FakeOAuth('qq', { openId: 'qq-open-1', unionId: null, nickname: 'QQ测试', avatarUrl: null }),
     github: options.oauth?.github ?? new FakeOAuth('github', { openId: 'gh-1', unionId: 'octocat', nickname: 'Octocat', avatarUrl: 'https://avatars.example.com/u/1' }),
     apple: options.oauth?.apple ?? new FakeOAuth('apple', { openId: 'apple-open-1', unionId: null, nickname: 'Apple 测试', avatarUrl: null }),
+    ...options.oauth,
   };
   const app = await buildApp({
     config: testConfig,

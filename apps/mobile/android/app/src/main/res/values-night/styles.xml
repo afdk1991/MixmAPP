@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        深色模式覆盖：H5 已有真实深色主题（theme.scss 的 prefers-color-scheme 分支），
+        因此夜间改用浅色系统栏图标 + 深色壳层底，与页面纸底色 #121716 对齐。
+        运行时由 MainActivity.applySystemBarAppearance() 依据 uiMode 再确认一次。
+    -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/app_background</item>
+        <item name="android:navigationBarColor">@color/app_background</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

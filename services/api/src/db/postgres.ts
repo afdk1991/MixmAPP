@@ -1,10 +1,13 @@
 import pg from 'pg';
 import type { Queryable } from './gateway.js';
 import type {
+  AccountMergeRecord,
   BindingRecord,
   CartItemRecord,
+  MergeCandidate,
   OrderItemRecord,
   OrderRecord,
+  OAuthStateRecord,
   PaymentRecord,
   ProductRecord,
   PushTokenRecord,
@@ -63,6 +66,18 @@ function mapBinding(row: Row): BindingRecord {
     nickname: (row['nickname'] as string | null) ?? null,
     avatarUrl: (row['avatar_url'] as string | null) ?? null,
     createdAt: toDate(row['created_at']),
+  };
+}
+
+function mapOAuthState(row: Row): OAuthStateRecord {
+  return {
+    state: row['state'] as string,
+    provider: row['provider'] as string,
+    redirect: row['redirect'] as string,
+    redirectUri: row['redirect_uri'] as string,
+    createdAt: toDate(row['created_at']),
+    expiresAt: toDate(row['expires_at']),
+    consumedAt: toDateOrNull(row['consumed_at']),
   };
 }
 
@@ -184,6 +199,9 @@ export class PgStore implements Store {
       );
       return res.rows[0] ? mapUser(res.rows[0] as Row) : null;
     },
+    delete: async (id: string): Promise<void> => {
+      await this.pool.query('delete from users where id = $1', [id]);
+    },
   };
 
   bindings = {
@@ -218,11 +236,58 @@ export class PgStore implements Store {
       const res = await this.pool.query('select * from bindings where user_id = $1', [userId]);
       return res.rows.map((r) => mapBinding(r as Row));
     },
+    findByUnionId: async (unionId: string): Promise<BindingRecord[]> => {
+      const res = await this.pool.query(
+        'select * from bindings where union_id = $1 order by created_at asc',
+        [unionId],
+      );
+      return res.rows.map((r) => mapBinding(r as Row));
+    },
     remove: async (userId: string, provider: BindingRecord['provider']): Promise<void> => {
       await this.pool.query('delete from bindings where user_id = $1 and provider = $2', [
         userId,
         provider,
       ]);
+    },
+    move: async (ids: string[], userId: string): Promise<number> => {
+      if (!ids.length) return 0;
+      const res = await this.pool.query(
+        'update bindings set user_id = $1 where id = any($2::text[]) and user_id <> $1',
+        [userId, ids],
+      );
+      return res.rowCount ?? 0;
+    },
+  };
+
+  oauthStates = {
+    insert: async (record: OAuthStateRecord): Promise<void> => {
+      await this.pool.query(
+        `insert into oauth_states (state, provider, redirect, redirect_uri, created_at, expires_at, consumed_at)
+         values ($1,$2,$3,$4,$5,$6,$7)
+         on conflict (state) do nothing`,
+        [
+          record.state,
+          record.provider,
+          record.redirect,
+          record.redirectUri,
+          record.createdAt,
+          record.expiresAt,
+          record.consumedAt,
+        ],
+      );
+    },
+    // 单条 UPDATE 完成「校验 + 消费」，并发回放只有一个请求能拿到行。
+    claim: async (state: string): Promise<OAuthStateRecord | null> => {
+      const res = await this.pool.query(
+        `update oauth_states set consumed_at = now()
+         where state = $1 and consumed_at is null and expires_at > now()
+         returning *`,
+        [state],
+      );
+      return res.rows[0] ? mapOAuthState(res.rows[0] as Row) : null;
+    },
+    purgeExpired: async (before: Date): Promise<void> => {
+      await this.pool.query('delete from oauth_states where expires_at <= $1', [before]);
     },
   };
 
@@ -254,6 +319,30 @@ export class PgStore implements Store {
         'update refresh_tokens set revoked_at = now(), replaced_by = $2 where token_hash = $1',
         [hash, replacedBy ?? null],
       );
+    },
+    listActiveByUser: async (userId: string): Promise<RefreshTokenRecord[]> => {
+      const res = await this.pool.query(
+        'select * from refresh_tokens where user_id = $1 and revoked_at is null',
+        [userId],
+      );
+      return res.rows.map((row) => {
+        const r = row as Row;
+        return {
+          tokenHash: r['token_hash'] as string,
+          userId: r['user_id'] as string,
+          expiresAt: toDate(r['expires_at']),
+          revokedAt: toDateOrNull(r['revoked_at']),
+          replacedBy: (r['replaced_by'] as string | null) ?? null,
+          createdAt: toDate(r['created_at']),
+        };
+      });
+    },
+    revokeByUser: async (userId: string): Promise<number> => {
+      const res = await this.pool.query(
+        'update refresh_tokens set revoked_at = now() where user_id = $1 and revoked_at is null',
+        [userId],
+      );
+      return res.rowCount ?? 0;
     },
   };
 
@@ -346,6 +435,10 @@ export class PgStore implements Store {
       ]);
       return res.rows[0] ? mapPayment(res.rows[0] as Row) : null;
     },
+    listByUser: async (userId: string): Promise<PaymentRecord[]> => {
+      const res = await this.pool.query('select * from payments where user_id = $1', [userId]);
+      return res.rows.map((row) => mapPayment(row as Row));
+    },
     update: async (id: string, patch: Partial<PaymentRecord>): Promise<PaymentRecord | null> => {
       const sets: string[] = [];
       const values: unknown[] = [];
@@ -377,6 +470,14 @@ export class PgStore implements Store {
       );
       return res.rows[0] ? mapPayment(res.rows[0] as Row) : null;
     },
+    move: async (ids: string[], userId: string): Promise<number> => {
+      if (!ids.length) return 0;
+      const res = await this.pool.query(
+        'update payments set user_id = $1 where id = any($2::text[]) and user_id <> $1',
+        [userId, ids],
+      );
+      return res.rowCount ?? 0;
+    },
   };
 
   pushTokens = {
@@ -402,6 +503,18 @@ export class PgStore implements Store {
           createdAt: toDate(r['created_at']),
         };
       });
+    },
+    move: async (ids: string[], userId: string): Promise<number> => {
+      if (!ids.length) return 0;
+      const res = await this.pool.query(
+        'update push_tokens set user_id = $1 where id = any($2::text[]) and user_id <> $1',
+        [userId, ids],
+      );
+      return res.rowCount ?? 0;
+    },
+    remove: async (ids: string[]): Promise<void> => {
+      if (!ids.length) return;
+      await this.pool.query('delete from push_tokens where id = any($1::text[])', [ids]);
     },
   };
 
@@ -430,17 +543,49 @@ export class PgStore implements Store {
         );
         return mapProduct(res.rows[0] as Row);
       },
+      hasCatalogProducts: async (): Promise<boolean> => {
+        try {
+          const res = await this.pool.query(
+            "select 1 from products where source_key is not null and source_key <> '' limit 1",
+          );
+          return res.rows.length > 0;
+        } catch {
+          // 旧库尚未执行 0006、或 PG 网关暂不可用时保守判为「无真实目录商品」，
+          // 交给内嵌只读源兜底，绝不因探测失败拖垮启动/请求。
+          return false;
+        }
+      },
       list: async (filter: {
         category?: string;
+        cat?: string;
+        dims?: string;
+        lens?: string;
         keyword?: string;
         limit: number;
         offset: number;
       }): Promise<ProductRecord[]> => {
-        const conditions: string[] = [];
+        const conditions: string[] = ['listed is not false'];
         const params: unknown[] = [];
         if (filter.category) {
           params.push(filter.category);
           conditions.push(`category = $${params.length}`);
+        }
+        // 分类树节点：一级/二级按子孙三级类目收敛（商品只挂三级），三级即自身。
+        if (filter.cat) {
+          params.push(filter.cat);
+          const i = params.length;
+          conditions.push(
+            `c3_id in (select id from catalog_categories where id = $${i} or parent_id = $${i}
+                        or parent_id in (select id from catalog_categories where parent_id = $${i}))`,
+          );
+        }
+        if (filter.dims) {
+          params.push(filter.dims);
+          conditions.push(`spec_dims = $${params.length}`);
+        }
+        if (filter.lens) {
+          params.push(filter.lens);
+          conditions.push(`spec_lens = $${params.length}`);
         }
         if (filter.keyword) {
           params.push(`%${filter.keyword}%`);
@@ -461,13 +606,50 @@ export class PgStore implements Store {
       aggregateCategories: async () => {
         const res = await this.pool.query(
           `select category, category_name, count(*)::int as count
-             from products group by category, category_name`,
+             from products where listed is not false group by category, category_name`,
         );
         return res.rows.map((row) => ({
           code: String(row['category']),
           name: (row['category_name'] as string | null) ?? String(row['category']),
           count: Number(row['count']),
         }));
+      },
+      listChildCategories: async (parentId: string | null) => {
+        const res = await this.pool.query(
+          `select id, code, name, level, product_count
+             from catalog_categories
+            where source = 'egluosi' and is_active and product_count > 0
+              and ${parentId ? 'parent_id = $1' : 'level = 1'}
+            order by sort_no asc, code asc`,
+          parentId ? [parentId] : [],
+        );
+        return res.rows.map((row) => ({
+          id: String(row['id']),
+          code: String(row['code']),
+          name: String(row['name']),
+          level: Number(row['level']),
+          count: Number(row['product_count']),
+        }));
+      },
+      listSpecOptions: async (c3Id: string) => {
+        const [dims, lens] = await Promise.all([
+          this.pool.query(
+            `select distinct spec_dims from products
+              where c3_id = $1 and listed is not false and spec_dims is not null
+              order by spec_dims`,
+            [c3Id],
+          ),
+          this.pool.query(
+            `select distinct spec_lens from products
+              where c3_id = $1 and listed is not false and spec_lens is not null
+              order by spec_lens`,
+            [c3Id],
+          ),
+        ]);
+        return {
+          dims: dims.rows.map((row) => String(row['spec_dims'])),
+          lens: lens.rows.map((row) => String(row['spec_lens'])),
+        };
       },
       findById: async (id: string): Promise<ProductRecord | null> => {
         const res = await this.pool.query('select * from products where id = $1 limit 1', [id]);
@@ -590,12 +772,22 @@ export class PgStore implements Store {
       },
       upsert: async (item: CartItemRecord): Promise<CartItemRecord> => {
         const res = await this.pool.query(
-          `insert into carts (id, user_id, product_id, quantity, created_at, updated_at)
-           values ($1,$2,$3,$4,$5,$6)
+          `insert into carts (id, user_id, product_id, quantity, pack_unit, pack_qty, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8)
            on conflict (user_id, product_id)
-           do update set quantity = excluded.quantity, updated_at = excluded.updated_at
+           do update set quantity = excluded.quantity, pack_unit = excluded.pack_unit,
+             pack_qty = excluded.pack_qty, updated_at = excluded.updated_at
            returning *`,
-          [item.id, item.userId, item.productId, item.quantity, item.createdAt, item.updatedAt],
+          [
+            item.id,
+            item.userId,
+            item.productId,
+            item.quantity,
+            item.packUnit ?? null,
+            item.packQty ?? null,
+            item.createdAt,
+            item.updatedAt,
+          ],
         );
         return mapCart(res.rows[0] as Row);
       },
@@ -607,6 +799,28 @@ export class PgStore implements Store {
       },
       clear: async (userId: string): Promise<void> => {
         await this.pool.query('delete from carts where user_id = $1', [userId]);
+      },
+      replaceAll: async (userId: string, items: CartItemRecord[]): Promise<void> => {
+        await this.pool.query('delete from carts where user_id = $1', [userId]);
+        for (const item of items) {
+          await this.pool.query(
+            `insert into carts (id, user_id, product_id, quantity, pack_unit, pack_qty, created_at, updated_at)
+             values ($1,$2,$3,$4,$5,$6,$7,$8)
+             on conflict (user_id, product_id) do update set quantity = excluded.quantity,
+               pack_unit = excluded.pack_unit, pack_qty = excluded.pack_qty,
+               updated_at = excluded.updated_at`,
+            [
+              item.id,
+              userId,
+              item.productId,
+              item.quantity,
+              item.packUnit ?? null,
+              item.packQty ?? null,
+              item.createdAt,
+              item.updatedAt,
+            ],
+          );
+        }
       },
     },
     orders: {
@@ -637,6 +851,9 @@ export class PgStore implements Store {
                   price_fen: item.priceFen,
                   quantity: item.quantity,
                   subtotal_fen: item.subtotalFen,
+                  pack_unit: item.packUnit ?? null,
+                  pack_qty: item.packQty ?? null,
+                  price_li: item.priceLi ?? null,
                 })),
               ),
             ],
@@ -667,9 +884,21 @@ export class PgStore implements Store {
           );
           for (const item of items) {
             await client.query(
-              `insert into order_items (id, order_id, product_id, title, price_fen, quantity, subtotal_fen)
-               values ($1,$2,$3,$4,$5,$6,$7)`,
-              [item.id, item.orderId, item.productId, item.title, item.priceFen, item.quantity, item.subtotalFen],
+              `insert into order_items (id, order_id, product_id, title, price_fen, quantity, subtotal_fen,
+                 pack_unit, pack_qty, price_li)
+               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+              [
+                item.id,
+                item.orderId,
+                item.productId,
+                item.title,
+                item.priceFen,
+                item.quantity,
+                item.subtotalFen,
+                item.packUnit ?? null,
+                item.packQty ?? null,
+                item.priceLi ?? null,
+              ],
             );
           }
           await client.query('commit');
@@ -695,6 +924,14 @@ export class PgStore implements Store {
       itemsByOrder: async (orderId: string): Promise<OrderItemRecord[]> => {
         const res = await this.pool.query('select * from order_items where order_id = $1', [orderId]);
         return res.rows.map((row) => mapOrderItem(row as Row));
+      },
+      move: async (ids: string[], userId: string): Promise<number> => {
+        if (!ids.length) return 0;
+        const res = await this.pool.query(
+          'update orders set user_id = $1 where id = any($2::text[]) and user_id <> $1',
+          [userId, ids],
+        );
+        return res.rowCount ?? 0;
       },
       listExpiredPending: async (before: Date): Promise<OrderRecord[]> => {
         const res = await this.pool.query(
@@ -738,6 +975,97 @@ export class PgStore implements Store {
       release: async (userId: string, key: string): Promise<void> => {
         await this.pool.query('delete from order_requests where user_id = $1 and key = $2', [userId, key]);
       },
+      dropByUser: async (userId: string): Promise<void> => {
+        await this.pool.query('delete from order_requests where user_id = $1', [userId]);
+      },
+    },
+  };
+
+  merges = {
+    insert: async (record: AccountMergeRecord): Promise<AccountMergeRecord> => {
+      const res = await this.pool.query(
+        `insert into account_merges (id, merge_key, primary_user_id, secondary_user_id, reason,
+           status, snapshot, moved, conflict_strategy, error, created_at, completed_at, rolled_back_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
+        [
+          record.id,
+          record.mergeKey,
+          record.primaryUserId,
+          record.secondaryUserId,
+          record.reason,
+          record.status,
+          record.snapshot,
+          record.moved,
+          record.conflictStrategy,
+          record.error,
+          record.createdAt,
+          record.completedAt,
+          record.rolledBackAt,
+        ],
+      );
+      return mapMerge(res.rows[0] as Row);
+    },
+    findByKey: async (mergeKey: string): Promise<AccountMergeRecord | null> => {
+      const res = await this.pool.query('select * from account_merges where merge_key = $1 limit 1', [
+        mergeKey,
+      ]);
+      return res.rows[0] ? mapMerge(res.rows[0] as Row) : null;
+    },
+    findById: async (id: string): Promise<AccountMergeRecord | null> => {
+      const res = await this.pool.query('select * from account_merges where id = $1 limit 1', [id]);
+      return res.rows[0] ? mapMerge(res.rows[0] as Row) : null;
+    },
+    list: async (limit: number): Promise<AccountMergeRecord[]> => {
+      const res = await this.pool.query(
+        'select * from account_merges order by created_at desc limit $1',
+        [limit],
+      );
+      return res.rows.map((row) => mapMerge(row as Row));
+    },
+    update: async (
+      id: string,
+      patch: Partial<AccountMergeRecord>,
+    ): Promise<AccountMergeRecord | null> => {
+      const columns: Record<string, string> = {
+        status: 'status',
+        moved: 'moved',
+        error: 'error',
+        completedAt: 'completed_at',
+        rolledBackAt: 'rolled_back_at',
+      };
+      const sets: string[] = [];
+      const values: unknown[] = [];
+      let i = 1;
+      for (const [key, column] of Object.entries(columns)) {
+        if (!(key in patch)) continue;
+        sets.push(`${column} = $${i}`);
+        values.push(patch[key as keyof AccountMergeRecord]);
+        i += 1;
+      }
+      if (!sets.length) return null;
+      const res = await this.pool.query(
+        `update account_merges set ${sets.join(', ')} where id = $${i} returning *`,
+        [...values, id],
+      );
+      return res.rows[0] ? mapMerge(res.rows[0] as Row) : null;
+    },
+    findCandidates: async (): Promise<MergeCandidate[]> => {
+      const res = await this.pool.query(
+        `select union_id, array_agg(distinct user_id) as user_ids,
+                array_agg(id) as binding_ids
+           from bindings
+          where union_id is not null
+          group by union_id
+         having count(distinct user_id) > 1`,
+      );
+      return res.rows.map((row) => {
+        const r = row as Row;
+        return {
+          unionId: r['union_id'] as string,
+          userIds: (r['user_ids'] as string[]) ?? [],
+          bindingIds: (r['binding_ids'] as string[]) ?? [],
+        };
+      });
     },
   };
 }
@@ -745,6 +1073,31 @@ export class PgStore implements Store {
 /** 唯一约束冲突（PG 23505）：并发抢占时用它区分「别人已经写了」和真失败 */
 function isUniqueViolation(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && (error as { code?: string }).code === '23505');
+}
+
+function mapMerge(row: Row): AccountMergeRecord {
+  return {
+    id: row['id'] as string,
+    mergeKey: row['merge_key'] as string,
+    primaryUserId: row['primary_user_id'] as string,
+    secondaryUserId: row['secondary_user_id'] as string,
+    reason: row['reason'] as AccountMergeRecord['reason'],
+    status: row['status'] as AccountMergeRecord['status'],
+    snapshot: (typeof row['snapshot'] === 'string'
+      ? JSON.parse(row['snapshot'])
+      : row['snapshot']) as AccountMergeRecord['snapshot'],
+    moved: (typeof row['moved'] === 'string' ? JSON.parse(row['moved']) : row['moved'] ?? null) as
+      | AccountMergeRecord['moved']
+      | null,
+    conflictStrategy:
+      (typeof row['conflict_strategy'] === 'string'
+        ? JSON.parse(row['conflict_strategy'])
+        : row['conflict_strategy']) as Record<string, string>,
+    error: (row['error'] as string | null) ?? null,
+    createdAt: toDate(row['created_at']),
+    completedAt: toDateOrNull(row['completed_at']),
+    rolledBackAt: toDateOrNull(row['rolled_back_at']),
+  };
 }
 
 function mapProduct(row: Row): ProductRecord {
@@ -783,6 +1136,21 @@ function mapProduct(row: Row): ProductRecord {
           : String(capturedAt),
     stockSource: (row['stock_source'] as ProductRecord['stockSource']) ?? null,
     importBatch: (row['import_batch'] as string | null) ?? null,
+    attributes: (row['attributes'] as Record<string, string> | null) ?? {},
+    priceLi: row['price_li'] == null ? null : Number(row['price_li']),
+    discountPct: row['discount_pct'] == null ? null : Number(row['discount_pct']),
+    salePriceLi: row['sale_price_li'] == null ? null : Number(row['sale_price_li']),
+    promotions:
+      (row['promotions'] as ProductRecord['promotions'] | null) ?? [],
+    packagingDesc: (row['packaging_desc'] as string | null) ?? null,
+    unitOptions: (row['unit_options'] as ProductRecord['unitOptions'] | null) ?? [],
+    unitConversions: (row['unit_conversions'] as Record<string, number> | null) ?? {},
+    specImage: (row['spec_image'] as string | null) ?? null,
+    sourceItemNo: (row['source_item_no'] as string | null) ?? null,
+    minOrderQty: Number(row['min_order_qty'] ?? 1),
+    qtyStep: Number(row['qty_step'] ?? 1),
+    maxOrderQty: Number(row['max_order_qty'] ?? 1000000),
+    listed: row['listed'] !== false,
   };
 }
 
@@ -792,6 +1160,8 @@ function mapCart(row: Row): CartItemRecord {
     userId: row['user_id'] as string,
     productId: row['product_id'] as string,
     quantity: Number(row['quantity']),
+    packUnit: (row['pack_unit'] as string | null) ?? null,
+    packQty: row['pack_qty'] == null ? null : Number(row['pack_qty']),
     createdAt: toDate(row['created_at']),
     updatedAt: toDate(row['updated_at']),
   };
@@ -822,6 +1192,9 @@ function mapOrderItem(row: Row): OrderItemRecord {
     priceFen: Number(row['price_fen']),
     quantity: Number(row['quantity']),
     subtotalFen: Number(row['subtotal_fen']),
+    packUnit: (row['pack_unit'] as string | null) ?? null,
+    packQty: row['pack_qty'] == null ? null : Number(row['pack_qty']),
+    priceLi: row['price_li'] == null ? null : Number(row['price_li']),
   };
 }
 

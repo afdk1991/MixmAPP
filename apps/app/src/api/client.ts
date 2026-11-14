@@ -1,6 +1,7 @@
 import type {
   AuthResult,
   CartDto,
+  OAuthProviderKey,
   OrderCreateInput,
   OrderDto,
   UserDto,
@@ -235,14 +236,29 @@ export async function apiRequest<T>(
  * 服务端 302 到渠道授权页，回跳后再带 `code` 回到当前页面。
  * 未配置的渠道不要调用，服务端会返回 `PROVIDER_DISABLED`。
  */
-export function oauthStartUrl(
-  provider: 'wechat' | 'qq' | 'github' | 'apple',
-  redirect?: string,
-): string {
+export function oauthStartUrl(provider: OAuthProviderKey, redirect?: string): string {
   const base = API_BASE.replace(/\/+$/, '');
   const back = redirect ?? (typeof window !== 'undefined' ? window.location.href : '');
   return `${base}/auth/oauth/${provider}/start${back ? `?redirect=${encodeURIComponent(back)}` : ''}`;
 }
+
+export type OAuthProviderOption = {
+  key: OAuthProviderKey;
+  label: string;
+  region: 'cn' | 'intl';
+  /** 是否支持 H5 服务端跳转授权；false 表示需要端侧 SDK */
+  h5: boolean;
+  requiresCredentials: boolean;
+};
+
+/** 登录页入口清单：服务端只下发已配置渠道。 */
+export const oauthApi = {
+  providers: () =>
+    apiRequest<{ providers: OAuthProviderOption[]; onekey: { enabled: boolean } }>(
+      '/auth/oauth/providers',
+      { auth: false },
+    ),
+};
 
 export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 'login' | 'bind') =>
     apiRequest<{ ttlSec: number; devCode?: string }>('/auth/sms/code', {
@@ -266,7 +282,7 @@ export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 
     apiRequest<AuthResult>('/auth/login/password', { method: 'POST', data: input, auth: false }),
   loginBySms: (input: { phone: string; code: string }) =>
     apiRequest<AuthResult>('/auth/login/sms', { method: 'POST', data: input, auth: false }),
-  loginByOAuth: (provider: 'wechat' | 'qq' | 'github' | 'apple', code: string) =>
+  loginByOAuth: (provider: OAuthProviderKey, code: string) =>
     apiRequest<AuthResult>('/auth/login/oauth', {
       method: 'POST',
       data: { provider, code },
@@ -285,6 +301,9 @@ export const meApi = {
   /** 给游客账号补设用户名密码，绑定后不再算游客 */
   bindUsername: (username: string, password: string) =>
     apiRequest<UserDto>('/me/bind/username', { method: 'POST', data: { username, password } }),
+  /** 解绑第三方渠道；仅剩一种登录方式时服务端会返回 409 */
+  unbindOAuth: (provider: OAuthProviderKey) =>
+    apiRequest<UserDto>(`/me/bind/oauth/${provider}`, { method: 'DELETE' }),
 };
 
 export const metaApi = {

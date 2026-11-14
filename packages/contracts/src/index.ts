@@ -15,7 +15,44 @@ export const passwordSchema = z
 
 export const smsCodeSchema = z.string().regex(/^\d{6}$/, '验证码为 6 位数字');
 
-export const oauthProviderSchema = z.enum(['wechat', 'qq', 'github', 'apple']);
+/**
+ * 内置的第三方登录渠道（有专用/已实现的适配器）。
+ * 通用 OAuth2/OIDC 渠道由服务端 `config/oauth-providers.json` 注册表驱动，
+ * 标识是普通字符串，不再逐一写进这里，否则每接一家都要改代码。
+ */
+export const OAUTH_PROVIDER_KEYS = [
+  'wechat',
+  'wechat_mp',
+  'qq',
+  'weibo',
+  'alipay',
+  'douyin',
+  'dingtalk',
+  'wecom',
+  'apple',
+  'google',
+  'facebook',
+  'github',
+  'gitee',
+  'mock',
+] as const;
+
+export type OAuthProviderKey = (typeof OAUTH_PROVIDER_KEYS)[number];
+
+/**
+ * 渠道标识：内置渠道是上面的联合类型，通用适配器渠道是注册表里的任意 key。
+ * 具体是否可用由服务端注册表与配置推导，前端不维护渠道白名单。
+ */
+export type OAuthProviderId = OAuthProviderKey | (string & {});
+
+export const oauthProviderSchema = z.enum(OAUTH_PROVIDER_KEYS);
+
+/** 登录/绑定入参：接受注册表里的任意渠道 key，最终由服务端注册表判定可用性。 */
+export const oauthProviderIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z][a-z0-9_]*$/, '渠道标识格式不合法');
 
 /** 用户名：2–20 位（中文/字母/数字/下划线），不能纯数字，不与保留名冲突。 */
 export const RESERVED_USERNAMES = [
@@ -94,7 +131,7 @@ export const loginBySmsSchema = z.object({
 });
 
 export const oauthLoginSchema = z.object({
-  provider: oauthProviderSchema,
+  provider: oauthProviderIdSchema,
   code: z.string().min(1).max(512),
   state: z.string().max(128).optional(),
 });
@@ -234,6 +271,11 @@ export type HealthReport = {
 
 export const productQuerySchema = z.object({
   category: z.string().trim().max(32).optional(),
+  /** 分类树节点 id（c1:002 / c2:002:007 / c3:007）；c2、c3 会按子孙关系收敛商品 */
+  cat: z.string().trim().max(32).optional(),
+  /** 规格筛选：维度数 / 长度，取值只来自源站 ccc_filter 选项（空值表示不过滤） */
+  dims: z.string().trim().max(16).optional(),
+  lens: z.string().trim().max(16).optional(),
   keyword: z.string().trim().max(64).optional(),
   // 页上界放大到可覆盖全量目录（万级以上）；pageSize 上限保持 50，前端首屏/触底翻页不放大。
   page: z.coerce.number().int().min(1).max(100000).default(1),
@@ -295,13 +337,21 @@ export const importCatalogSchema = z.object({
   products: z.array(importProductSchema).max(100000),
 });
 
+/**
+ * 购物车行：quantity 统一为「支数」，packUnit/packQty 记录用户选的购买方式（箱/盒/袋…）
+ * 与包装数，用于回显与对账；换算关系以商品 unitConversions 为准。
+ */
 export const cartAddSchema = z.object({
   productId: z.string().min(1).max(64),
-  quantity: z.number().int().min(1).max(99).default(1),
+  quantity: z.number().int().min(1).max(100000000).default(1),
+  packUnit: z.string().trim().max(8).optional(),
+  packQty: z.number().int().min(1).max(1000000).optional(),
 });
 
 export const cartUpdateSchema = z.object({
-  quantity: z.number().int().min(1).max(99),
+  quantity: z.number().int().min(1).max(100000000),
+  packUnit: z.string().trim().max(8).optional(),
+  packQty: z.number().int().min(1).max(1000000).optional(),
 });
 
 export const orderCreateSchema = z.object({
@@ -311,7 +361,14 @@ export const orderCreateSchema = z.object({
   remark: z.string().trim().max(120).optional(),
   /** 不传则用购物车全部商品下单；传了就是「立即购买」 */
   items: z
-    .array(z.object({ productId: z.string().min(1).max(64), quantity: z.number().int().min(1).max(99) }))
+    .array(
+      z.object({
+        productId: z.string().min(1).max(64),
+        quantity: z.number().int().min(1).max(100000000),
+        packUnit: z.string().trim().max(8).optional(),
+        packQty: z.number().int().min(1).max(1000000).optional(),
+      }),
+    )
     .min(1)
     .max(50)
     .optional(),
@@ -357,6 +414,29 @@ export type ProductDto = {
   /** ISO 时间，价格抓取时刻 */
   priceCapturedAt?: string;
   sourceUrl?: string;
+  /** ===== 详情页结构化字段（2026-11-14 第二轮抓取） ===== */
+  /** 面价，厘/支（源站元/千支）。与 priceFen 并存：priceLi 精确，priceFen 是四舍五入后的兼容值。 */
+  priceLi?: number;
+  /** 折扣百分比，100 = 无折扣 */
+  discountPct?: number;
+  /** 特价，厘/支 */
+  salePriceLi?: number;
+  /** 类目属性（品牌/等级/材质/标准/牙别/表面处理/品名…按类目实际存在形态下发） */
+  attributes?: Record<string, string>;
+  /** 优惠活动：源站按促销展示时的文案与有效期 */
+  promotions?: Array<{ text: string; kind?: string; validFrom?: string; validTo?: string }>;
+  /** 包装换算文案原文，如「1箱=16盒,1盒=2000支」 */
+  packagingDesc?: string;
+  /** 购买方式（箱/盒/袋…），顺序与源站一致 */
+  unitOptions?: Array<{ code: string; name: string }>;
+  /** 单位换算：需求支数 = 包装数 × unitConversions[选中单位] */
+  unitConversions?: Record<string, number>;
+  /** 商品详图（按三级类目共享） */
+  specImage?: string;
+  /** 需求包装数规则：默认值 / 步长 / 上限 */
+  minOrderQty?: number;
+  qtyStep?: number;
+  maxOrderQty?: number;
 };
 
 export type CartLineDto = {
@@ -367,6 +447,13 @@ export type CartLineDto = {
   quantity: number;
   stock: number;
   subtotalFen: number;
+  /** 购买方式与包装数回显（旧数据为 undefined） */
+  packUnit?: string;
+  packQty?: number;
+  /** 精确单价（厘/支），有值时前端用它展示单价、忽略 priceFen 的四舍五入误差 */
+  priceLi?: number;
+  unitName?: string;
+  packLabel?: string;
 };
 
 export type CartDto = {
@@ -381,6 +468,10 @@ export type OrderItemDto = {
   priceFen: number;
   quantity: number;
   subtotalFen: number;
+  /** 购买方式与精确单价（厘/支） */
+  packUnit?: string;
+  packQty?: number;
+  priceLi?: number;
 };
 
 export type OrderDto = {

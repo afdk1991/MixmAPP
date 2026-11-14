@@ -1,0 +1,21 @@
+
+> mixmapp@0.0.0 verify F:\合并项目\MixmAPP
+> node scripts/verify.mjs
+
+
+▶ 规则检查 … 
+> mixmapp@0.0.0 lint F:\合并项目\MixmAPP
+> node scripts/repo-lint.mjs
+
+⚠ docs/22-audit-mim-tools-appearance-content-security-2026-11-14.md 与 docs/22-audit-mim-community-mall-paid-2026-11-14.md 撞号 22 已豁免（Mim 项目审计线（并行会话），复核至 2026-11-21）：两篇均为 Mim 项目（F:\合并项目\Mim）只读审计报告，由另一个并行会话在 2026-11-14 生成且尚未提交；商城线无法确认其会话归属，擅自改名会与在途写入冲突，因此先登记豁免，由 Mim 线自行改号为 28/29。
+✗ 规则检查失败，共 2 处：
+  - ui-review/seed-session.mjs:78 使用了 console.log，请改用 console.info 或删除
+  - ui-review/seed-session.mjs:79 使用了 console.log，请改用 console.info 或删除
+ ELIFECYCLE  Command failed with exit code 1.
+✗ (1.7s)
+
+===== 门禁结果 =====
+✗ 规则检查  1.7s
+存在失败项
+提示：Windows 下若 pnpm 未在 PATH，请先执行 corepack enable pnpm
+ ELIFECYCLE  Command failed with exit code 1.

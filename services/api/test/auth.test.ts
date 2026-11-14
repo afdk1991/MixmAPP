@@ -292,8 +292,9 @@ describe('游客注册', () => {
       payload: { phone, code },
     });
     expect(bind.statusCode).toBe(200);
-    expect(bind.json().data.isGuest).toBe(false);
-    expect(bind.json().data.phone).toBe('139****1111');
+    expect(bind.json().data.user.isGuest).toBe(false);
+    expect(bind.json().data.user.phone).toBe('139****1111');
+    expect(bind.json().data.merged).toBeNull();
   });
 
   it('设备标识过短应 422', async () => {

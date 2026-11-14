@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page page--wide">
     <mx-bar />
     <view class="head">
       <text class="eyebrow">BAG</text>
@@ -10,7 +10,7 @@
     </view>
 
     <view v-if="loading" class="loading">
-      <view v-for="i in 2" :key="i" class="sheet line-sk">
+      <view v-for="i in 2" :key="i" class="line-sk">
         <view class="sk thumb-sk" />
         <view class="sk-col">
           <view class="sk line-w" />
@@ -36,7 +36,7 @@
 
     <block v-else>
       <view class="list">
-        <view v-for="line in cart.items" :key="line.productId" class="sheet line">
+        <view v-for="line in cart.items" :key="line.productId" class="line">
           <view class="cover">
             <view class="cover-scrim" />
             <text class="cover-char">{{ line.title.slice(0, 1) }}</text>
@@ -52,17 +52,18 @@
               <text v-if="isInquiryLine(line)" class="unit unit--inquiry mono">询价 · 联系报价</text>
               <text v-else-if="isOutOfStockLine(line)" class="unit unit--oos mono">缺货 · 询价确认</text>
               <template v-else>
-                <text class="unit mono">¥{{ price(line.priceFen) }} / 件</text>
-                <text class="stock mono">库存 {{ line.stock }}</text>
+                <text class="unit mono">¥{{ lineUnitPrice(line) }} / {{ line.unitName || '件' }}</text>
+                <text v-if="line.packLabel" class="stock mono">{{ line.packLabel }} · {{ line.quantity }}支</text>
+                <text v-else class="stock mono">{{ isBulkStock(line.stock) ? '现货' : `库存 ${line.stock}` }}</text>
               </template>
             </view>
             <view class="line-foot">
               <view v-if="!isBlockedLine(line)" class="stepper">
-                <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity - 1)">
+                <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity - stepOf(line))">
                   <text class="step-text mono">−</text>
                 </view>
-                <text class="count mono">{{ line.quantity }}</text>
-                <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity + 1)">
+                <text class="count mono">{{ line.packQty ?? line.quantity }}</text>
+                <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity + stepOf(line))">
                   <text class="step-text mono">+</text>
                 </view>
               </view>
@@ -79,7 +80,7 @@
         </view>
       </view>
 
-      <view v-if="hasBlocked" class="sheet inquiry-banner">
+      <view v-if="hasBlocked" class="inquiry-banner">
         <text class="inquiry-banner-title">购物车中有 {{ blockedLines.length }} 件暂不可结算商品</text>
         <text class="inquiry-banner-sub">
           <text v-if="hasInquiry">{{ inquiryLines.length }} 件需联系报价；</text>
@@ -88,7 +89,7 @@
         </text>
       </view>
 
-      <view v-if="checkoutVisible" class="sheet checkout">
+      <view v-if="checkoutVisible" class="checkout">
         <text class="eyebrow">CHECKOUT</text>
         <text class="checkout-title">收货信息</text>
         <text class="hint">提交后库存即扣减，可在订单页查看进度。</text>
@@ -152,9 +153,10 @@
 import { computed, nextTick, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { CartDto, CartLineDto } from '@mixmapp/contracts';
-import { INQUIRY_NOTICE, isOutOfStock, OUT_OF_STOCK_NOTICE } from '../../api/mall';
+import { isBulkStock, INQUIRY_NOTICE, isOutOfStock, OUT_OF_STOCK_NOTICE, unitPriceText } from '../../api/mall';
 import { mallApi } from '../../api/client';
 import { ROUTES } from '../../routes';
+import { goTo } from '../../navigation';
 
 /** 购物车行：后端后续可能回传 priceSource，旧数据按价格是否为 0 兜底判定。 */
 type CartLine = CartLineDto & { priceSource?: 'anonymous' | 'login' | 'inquiry' };
@@ -230,6 +232,20 @@ function price(fen: number): string {
   return (fen / 100).toFixed(2);
 }
 
+/** 单价展示：有厘/支精确价时按支展示（避免 8.5 分被四舍五入成 9 分），否则回落到分/件。 */
+function lineUnitPrice(line: CartLine): string {
+  if (line.priceLi != null && line.priceLi > 0) return unitPriceText(line.priceLi);
+  return price(line.priceFen);
+}
+
+/** 步进粒度：按箱/盒加购的行，一次加减一个整包装（quantity / packQty），否则 1 支。 */
+function stepOf(line: CartLine): number {
+  if (line.packQty && line.packQty > 0 && line.quantity % line.packQty === 0) {
+    return line.quantity / line.packQty;
+  }
+  return 1;
+}
+
 async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
@@ -261,7 +277,10 @@ async function changeQty(productId: string, quantity: number): Promise<void> {
     return;
   }
   try {
-    cart.value = normalizeCart(await mallApi.updateCart(productId, quantity));
+    const packQty = line?.packQty ? Math.max(1, Math.round(quantity / stepOf(line))) : undefined;
+    cart.value = normalizeCart(
+      await mallApi.updateCart(productId, quantity, line?.packUnit, packQty),
+    );
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '修改数量失败', icon: 'none' });
   }
@@ -317,7 +336,7 @@ async function submitOrder(): Promise<void> {
 }
 
 function goMall(): void {
-  uni.navigateTo({ url: ROUTES.mall });
+  goTo(ROUTES.mall);
 }
 
 onShow(() => {
@@ -329,7 +348,8 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-3 calc(200rpx + env(safe-area-inset-bottom));
+  /* tabBar 页面：预留固定结算条 + 原生底部标签栏 + 安全区，内容不被遮挡 */
+  padding: 0 $sp-3 calc(320rpx + env(safe-area-inset-bottom));
 }
 
 .head {
@@ -343,8 +363,7 @@ onShow(() => {
   font-size: $fs-h1;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  line-height: 1.2;
-  letter-spacing: 1rpx;
+  line-height: $lh-tight;
   color: $ink;
 }
 
@@ -362,8 +381,8 @@ onShow(() => {
 
 .line {
   display: flex;
-  padding: $sp-3;
-  margin-bottom: $sp-3;
+  padding: $sp-3 0;
+  border-bottom: 1rpx solid $paper-3;
 }
 
 .cover {
@@ -459,7 +478,7 @@ onShow(() => {
 }
 
 .unit--oos {
-  color: #a4761c;
+  color: $amber;
   font-weight: 600;
 }
 
@@ -473,12 +492,15 @@ onShow(() => {
 }
 
 .subtotal-v--oos {
-  color: #a4761c;
+  color: $amber;
 }
 
 .inquiry-banner {
+  margin: $sp-3 0;
   padding: $sp-3;
-  margin-bottom: $sp-3;
+  background: $paper-2;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
 }
 
 .inquiry-banner-title {
@@ -510,11 +532,11 @@ onShow(() => {
 }
 
 .step {
-  width: 80rpx;
-  height: 80rpx;
+  width: 88rpx;
+  height: 88rpx;
   border: 1rpx solid $paper-3;
-  border-radius: 12rpx;
-  background: #f7faf8;
+  border-radius: $r-control;
+  background: $paper-2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -545,7 +567,7 @@ onShow(() => {
 
 .subtotal-v {
   font-size: 30rpx;
-  font-weight: 700;
+  font-weight: 800;
   color: $ink;
 }
 
@@ -556,8 +578,9 @@ onShow(() => {
 
 /* ---------- 结算表单 ---------- */
 .checkout {
-  padding: $sp-4;
+  padding: $sp-4 0 0;
   margin-bottom: $sp-4;
+  border-top: 1rpx solid $paper-3;
   animation: rise 0.35s ease both;
 }
 
@@ -601,10 +624,16 @@ onShow(() => {
 }
 
 .form-btn-text--deep {
-  color: #f4f8f6;
+  /* 压在 .btn--deep 的 $solid 底上：深色下底色变浅，文字切到 $on-solid */
+  color: $on-solid;
 }
 
 /* ---------- 底栏 ---------- */
+/* tabBar 页面：结算条抬到原生标签栏之上，避免被 tabBar 遮挡（全局 .bar 默认 bottom:0） */
+.bar {
+  bottom: calc(120rpx + env(safe-area-inset-bottom));
+}
+
 .bar-total {
   flex: 1;
 }
@@ -620,7 +649,7 @@ onShow(() => {
   display: block;
   margin-top: 4rpx;
   font-size: 40rpx;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.1;
   color: $ink;
 }
@@ -629,7 +658,7 @@ onShow(() => {
   height: 88rpx;
   padding: 0 48rpx;
   border-radius: $r-control;
-  background: $ink;
+  background: $solid;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -650,17 +679,17 @@ onShow(() => {
 }
 
 .bar-btn-text {
-  font-size: 30rpx;  font-weight: 600;
+  font-size: 30rpx;
+  font-weight: 600;
   letter-spacing: 1rpx;
-  color: #f4f8f6;
+  color: $on-solid;
 }
 
 /* ---------- 骨架 ---------- */
 .line-sk {
   display: flex;
-  padding: $sp-3;
-  margin-bottom: $sp-3;
-  border-radius: $r-card;
+  padding: $sp-3 0;
+  border-bottom: 1rpx solid $paper-3;
 }
 
 .thumb-sk {
@@ -700,5 +729,19 @@ onShow(() => {
 .empty-btn {
   margin-top: $sp-5;
   width: 300rpx;
+}
+
+/* ---------- 平板 / 折叠屏展开态：清单双栏，结算条跟随版心 ---------- */
+@media (min-width: 1000px) {
+  .list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: $sp-6;
+    align-items: start;
+  }
+
+  .bar {
+    width: 1000px;
+  }
 }
 </style>

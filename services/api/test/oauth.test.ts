@@ -92,7 +92,7 @@ describe('第三方登录发起 / 回跳', () => {
       oauth: { github: new RedirectOAuth('github', 'https://authorize.example.com/github') },
     });
     app = built.app;
-    const redirect = 'https://afdk1991.github.io/MixmAPP/pages/auth/login';
+    const redirect = 'https://cloud.mixm.top/pages/auth/login';
     const state = await startAndGetState(app, 'github', redirect);
 
     const res = await app.inject({

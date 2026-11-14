@@ -83,7 +83,7 @@ describe('支付宝 RSA2', () => {
     appId: '2021000000000000',
     privateKey: keys.privateKey,
     alipayPublicKey: keys.publicKey,
-    notifyUrl: 'https://api.mixm.app/api/v1/pay/notify/alipay',
+    notifyUrl: 'https://cloud.mixm.top/mixmapp/api/v1/pay/notify/alipay',
   };
 
   it('APP 下单串签名可被验签', () => {

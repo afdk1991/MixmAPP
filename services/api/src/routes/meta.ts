@@ -13,6 +13,7 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
         current: app.cfg.ids.strategy,
       },
       thirdParty: capabilitySnapshot(app.cfg),
+      catalogSource: await app.catalog.status(),
       serverTime: new Date().toISOString(),
     },
   }));
@@ -29,11 +30,13 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
         db = 'down';
       }
     }
+    const catalogSource = await app.catalog.status();
     const checks: Record<string, string> = {
       db,
       dbTarget: app.cfg.dbTarget,
       dbHost: dbHostOf(app.cfg.databaseUrl),
       dbSource: app.cfg.databaseUrlSource,
+      catalogSource: catalogSource.source,
       sms: app.cfg.sms.provider,
       pay:
         capabilitySnapshot(app.cfg)['wechatPay'] === 'on' ||
@@ -49,6 +52,7 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
       version: app.cfg.version,
       uptimeSec: Math.round(process.uptime()),
       checks,
+      catalogSource,
       time: new Date().toISOString(),
     };
     return reply.code(ok ? 200 : 503).send(report);

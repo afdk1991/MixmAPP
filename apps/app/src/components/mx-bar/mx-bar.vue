@@ -129,7 +129,8 @@ function goBack(): void {
   .mx-bar {
     left: 50%;
     right: auto;
-    width: 750px;
+    /* 跟随页面版心：大屏双栏页会把 --shell-w 提到 1000px */
+    width: var(--shell-w, 750px);
     transform: translateX(-50%);
   }
 
@@ -138,7 +139,7 @@ function goBack(): void {
   }
 
   .mx-bar-row {
-    max-width: 750px;
+    max-width: var(--shell-w, 750px);
     margin: 0 auto;
     padding: 0;
   }

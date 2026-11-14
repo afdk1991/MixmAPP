@@ -9,9 +9,21 @@ import { parse } from '../lib/validate.js';
 
 /** 商城路由：商品公开读，购物车与订单需登录。 */
 export async function mallRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/mall/categories', async () => ({
-    data: await app.mall.listCategories(),
-  }));
+  // 无参：一级类目聚合（兼容旧页面）；?parent=c1:002：返回该节点下一层（分类树下钻）。
+  app.get('/mall/categories', async (request) => {
+    const query = request.query as { parent?: string } | undefined;
+    const parent = typeof query?.parent === 'string' && query.parent.trim() ? query.parent.trim() : null;
+    if (!parent) return { data: await app.mall.listCategories() };
+    return { data: await app.mall.listCategoryChildren(parent) };
+  });
+
+  // 某个三级类目下可用的规格筛选项（dims/lens），只返回商品里真实出现的取值。
+  app.get('/mall/specs', async (request) => {
+    const query = request.query as { c3?: string } | undefined;
+    const c3 = typeof query?.c3 === 'string' ? query.c3.trim() : '';
+    if (!c3) return { data: { dims: [], lens: [] } };
+    return { data: await app.mall.listSpecOptions(c3) };
+  });
 
   app.get('/mall/products', async (request) => ({
     data: await app.mall.listProducts(parse(productQuerySchema, request.query ?? {})),
@@ -27,7 +39,15 @@ export async function mallRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/mall/cart', { preHandler: app.requireAuth }, async (request) => {
     const body = parse(cartAddSchema, request.body);
-    return { data: await app.mall.addToCart(request.userId as string, body.productId, body.quantity) };
+    return {
+      data: await app.mall.addToCart(
+        request.userId as string,
+        body.productId,
+        body.quantity,
+        body.packUnit,
+        body.packQty,
+      ),
+    };
   });
 
   app.patch('/mall/cart/:productId', { preHandler: app.requireAuth }, async (request) => {
@@ -37,6 +57,8 @@ export async function mallRoutes(app: FastifyInstance): Promise<void> {
         request.userId as string,
         (request.params as { productId: string }).productId,
         body.quantity,
+        body.packUnit,
+        body.packQty,
       ),
     };
   });

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseIdStrategy, type IdStrategy } from '@mixmapp/ids';
+import { OAUTH_PROVIDER_KEYS, type OAuthProviderKey } from '@mixmapp/contracts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -63,6 +64,18 @@ const bool = (key: string, fallback = false): boolean => {
 
 export type DbTarget = 'cloudbase' | 'server';
 
+/** 单个第三方登录渠道的运行时配置：启用状态、凭证、回调与 scope 全部由配置决定。 */
+export type OAuthProviderConfig = {
+  enabled: boolean;
+  clientId: string;
+  clientSecret: string;
+  /** 留空时按 PUBLIC_BASE_URL 自动拼 /api/v1/auth/oauth/<provider>/callback */
+  redirectUri: string;
+  scope: string;
+  /** 渠道特有参数：企业微信 agentId、支付宝公钥等 */
+  extra: Record<string, string>;
+};
+
 export type Config = {
   env: 'development' | 'test' | 'production';
   appName: string;
@@ -98,6 +111,14 @@ export type Config = {
     aliyun: { accessKeyId: string; accessKeySecret: string; signName: string; templateCode: string };
   };
   oauth: {
+    /** 配置驱动的渠道表；enabled=false 的渠道不会出现在登录页。 */
+    providers: Record<OAuthProviderKey, OAuthProviderConfig>;
+    /** 登录完成后允许跳回的来源白名单；'*' 只用于开发/测试。 */
+    redirectWhitelist: string[];
+    /** state 一次性票据有效期（秒） */
+    stateTtlSec: number;
+    /** 未提供合法 redirect 时的兜底页面 */
+    defaultRedirect: string;
     wechat: { appId: string; appSecret: string };
     qq: { appId: string; appKey: string };
     github: { clientId: string; clientSecret: string };
@@ -172,6 +193,134 @@ function pem(value: string): string {
   return value.replace(/\\n/g, '\n');
 }
 
+/** 读取单个 OAuth 渠道：有 id+secret 且未被显式关闭时才启用。 */
+function makeOAuthProvider(
+  key: OAuthProviderKey,
+  clientId: string,
+  clientSecret: string,
+  defaultScope: string,
+  extra: Record<string, string> = {},
+): OAuthProviderConfig {
+  const prefix = `OAUTH_${key.toUpperCase()}`;
+  const overrideRaw = str(`${prefix}_ENABLED`);
+  const override =
+    overrideRaw === '' ? undefined : overrideRaw === '1' || overrideRaw === 'true' || overrideRaw === 'yes';
+  return {
+    enabled: Boolean(clientId && clientSecret) && override !== false,
+    clientId,
+    clientSecret,
+    redirectUri: str(`${prefix}_REDIRECT_URI`),
+    scope: str(`${prefix}_SCOPE`, defaultScope),
+    extra,
+  };
+}
+
+/** 按环境变量组装渠道表；未配置凭证的渠道保持 enabled=false，登录页不渲染。 */
+function buildOAuthProviders(env: Config['env']): Record<OAuthProviderKey, OAuthProviderConfig> {
+  const providers = {} as Record<OAuthProviderKey, OAuthProviderConfig>;
+  const wechat = makeOAuthProvider(
+    'wechat',
+    str('OAUTH_WECHAT_APP_ID'),
+    str('OAUTH_WECHAT_APP_SECRET'),
+    'snsapi_login',
+    { mode: 'qr' },
+  );
+  const wechatMp = makeOAuthProvider(
+    'wechat_mp',
+    str('OAUTH_WECHAT_APP_ID'),
+    str('OAUTH_WECHAT_APP_SECRET'),
+    'snsapi_userinfo',
+    { mode: 'mp' },
+  );
+  const alipay = makeOAuthProvider(
+    'alipay',
+    str('OAUTH_ALIPAY_APP_ID'),
+    pem(str('OAUTH_ALIPAY_PRIVATE_KEY')),
+    'auth_user',
+    { alipayPublicKey: pem(str('OAUTH_ALIPAY_PUBLIC_KEY')) },
+  );
+  // 支付宝必须能验签回包，缺公钥时视为未配置，避免不安全地信任响应。
+  alipay.enabled = alipay.enabled && Boolean(alipay.extra.alipayPublicKey);
+
+  providers.wechat = wechat;
+  providers.wechat_mp = wechatMp;
+  providers.qq = makeOAuthProvider('qq', str('OAUTH_QQ_APP_ID'), str('OAUTH_QQ_APP_KEY'), 'get_user_info');
+  providers.weibo = makeOAuthProvider(
+    'weibo',
+    str('OAUTH_WEIBO_APP_ID'),
+    str('OAUTH_WEIBO_APP_SECRET'),
+    '',
+  );
+  providers.alipay = alipay;
+  providers.douyin = makeOAuthProvider(
+    'douyin',
+    str('OAUTH_DOUYIN_CLIENT_KEY'),
+    str('OAUTH_DOUYIN_CLIENT_SECRET'),
+    'user_info',
+  );
+  providers.dingtalk = makeOAuthProvider(
+    'dingtalk',
+    str('OAUTH_DINGTALK_CLIENT_ID'),
+    str('OAUTH_DINGTALK_CLIENT_SECRET'),
+    'openid',
+  );
+  providers.wecom = makeOAuthProvider(
+    'wecom',
+    str('OAUTH_WECOM_CORP_ID'),
+    str('OAUTH_WECOM_APP_SECRET'),
+    '',
+    { agentId: str('OAUTH_WECOM_AGENT_ID') },
+  );
+  const appleTeamId = str('OAUTH_APPLE_TEAM_ID');
+  const appleKeyId = str('OAUTH_APPLE_KEY_ID');
+  const applePrivateKey = pem(str('OAUTH_APPLE_PRIVATE_KEY'));
+  // 未直接提供 client_secret 时，用 TeamID/KeyID/私钥在运行时生成 ES256 客户端密钥。
+  const appleSecret =
+    str('OAUTH_APPLE_CLIENT_SECRET') ||
+    (appleTeamId && appleKeyId && applePrivateKey ? 'generated-by-es256' : '');
+  providers.apple = makeOAuthProvider(
+    'apple',
+    str('OAUTH_APPLE_CLIENT_ID'),
+    appleSecret,
+    'name email',
+    { teamId: appleTeamId, keyId: appleKeyId, privateKey: applePrivateKey },
+  );
+  providers.google = makeOAuthProvider(
+    'google',
+    str('OAUTH_GOOGLE_CLIENT_ID'),
+    str('OAUTH_GOOGLE_CLIENT_SECRET'),
+    'openid email profile',
+  );
+  providers.facebook = makeOAuthProvider(
+    'facebook',
+    str('OAUTH_FACEBOOK_CLIENT_ID'),
+    str('OAUTH_FACEBOOK_CLIENT_SECRET'),
+    'public_profile',
+  );
+  providers.github = makeOAuthProvider(
+    'github',
+    str('OAUTH_GITHUB_CLIENT_ID'),
+    str('OAUTH_GITHUB_CLIENT_SECRET'),
+    'read:user',
+  );
+  providers.gitee = makeOAuthProvider(
+    'gitee',
+    str('OAUTH_GITEE_CLIENT_ID'),
+    str('OAUTH_GITEE_CLIENT_SECRET'),
+    'user_info',
+  );
+  // 本地 mock 只在非生产环境显式开启，用于无凭证联调与自动化测试。
+  providers.mock = {
+    enabled: env !== 'production' && bool('OAUTH_MOCK_ENABLED'),
+    clientId: 'mock',
+    clientSecret: 'mock',
+    redirectUri: '',
+    scope: '',
+    extra: {},
+  };
+  return providers;
+}
+
 export function loadConfig(): Config {
   const env = (str('NODE_ENV', 'development') as Config['env']) ?? 'development';
   const jwtSecret = str('JWT_SECRET', env === 'production' ? '' : 'mixmapp-dev-secret-change-me-0123456789');
@@ -195,13 +344,29 @@ export function loadConfig(): Config {
         ? 'DATABASE_URL_LOCAL'
         : 'DATABASE_URL_SERVER'
     : 'DATABASE_URL';
+  const publicBaseUrl = str('PUBLIC_BASE_URL', 'http://localhost:8080');
+  const oauthProviders = buildOAuthProviders(env);
+  const whitelistRaw = str('OAUTH_REDIRECT_WHITELIST')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  // 生产环境默认只允许 API 自身来源，H5/站点来源必须显式加入白名单。
+  const publicOrigin = (() => {
+    try {
+      return new URL(publicBaseUrl).origin;
+    } catch {
+      return '';
+    }
+  })();
+  const oauthRedirectWhitelist =
+    whitelistRaw.length > 0 ? whitelistRaw : env === 'production' ? [publicOrigin].filter(Boolean) : ['*'];
   return {
     env,
     appName: str('APP_NAME', 'MixmAPP'),
     version: str('APP_VERSION', '0.0.0'),
     host: str('HOST', '0.0.0.0'),
     port: num('PORT', 8080),
-    publicBaseUrl: str('PUBLIC_BASE_URL', 'http://localhost:8080'),
+    publicBaseUrl,
     dbTarget,
     databaseUrl,
     databaseUrlSource,
@@ -242,6 +407,11 @@ export function loadConfig(): Config {
       },
     },
     oauth: {
+      providers: oauthProviders,
+      redirectWhitelist: oauthRedirectWhitelist,
+      stateTtlSec: num('OAUTH_STATE_TTL_SEC', 600),
+      defaultRedirect:
+        str('OAUTH_DEFAULT_REDIRECT') || `${publicBaseUrl.replace(/\/+$/, '')}/pages/auth/login`,
       wechat: { appId: str('OAUTH_WECHAT_APP_ID'), appSecret: str('OAUTH_WECHAT_APP_SECRET') },
       qq: { appId: str('OAUTH_QQ_APP_ID'), appKey: str('OAUTH_QQ_APP_KEY') },
       github: {
@@ -341,10 +511,13 @@ export function dbHostOf(url: string): string {
 export function capabilitySnapshot(config: Config): Record<string, string> {
   return {
     sms: config.sms.provider,
-    wechatOauth: config.oauth.wechat.appId ? 'on' : 'off',
-    qqOauth: config.oauth.qq.appId ? 'on' : 'off',
-    githubOauth: config.oauth.github.clientId ? 'on' : 'off',
-    appleOauth: config.oauth.apple.clientId ? 'on' : 'off',
+    wechatOauth: config.oauth.providers.wechat.enabled ? 'on' : 'off',
+    qqOauth: config.oauth.providers.qq.enabled ? 'on' : 'off',
+    githubOauth: config.oauth.providers.github.enabled ? 'on' : 'off',
+    appleOauth: config.oauth.providers.apple.enabled ? 'on' : 'off',
+    oauthProviders: OAUTH_PROVIDER_KEYS.map(
+      (key) => `${key}:${config.oauth.providers[key].enabled ? 'on' : 'off'}`,
+    ).join(','),
     onekey: config.onekey.provider,
     wechatPay: config.pay.wechat.mchId ? 'on' : 'off',
     alipay: config.pay.alipay.appId ? 'on' : 'off',

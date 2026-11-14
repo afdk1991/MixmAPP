@@ -5,6 +5,7 @@ import type { Config } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
 import { MallService } from './modules/mall.js';
+import { CatalogSource } from './modules/catalog-source.js';
 import { PayService } from './modules/pay.js';
 import { createSmsProvider, type SmsProvider } from './adapters/sms.js';
 import { createOAuthProviders, type OAuthProvider, type OAuthProviderName } from './adapters/oauth.js';
@@ -30,7 +31,7 @@ export type AppDeps = {
   /** 有热切换能力时传入；仅内存模式启动时可不传 */
   dbSwitcher?: import('./db/switchable.js').StoreSwitcher;
   sms?: SmsProvider;
-  oauth?: Record<OAuthProviderName, OAuthProvider>;
+  oauth?: Partial<Record<OAuthProviderName, OAuthProvider>>;
   onekey?: OneKeyProvider;
   map?: MapProvider;
   storage?: StorageProvider;
@@ -55,6 +56,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     { parseAs: 'buffer', bodyLimit: 25 * 1024 * 1024 },
     (_request, body, done) => done(null, body),
   );
+  // 支付宝异步通知是 application/x-www-form-urlencoded：通配 * parser 会把它收成 Buffer，
+  // /pay/notify/alipay 取不到 sign / out_trade_no，验签必然失败。这里补一个专用参数表解析。
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string', bodyLimit: 1024 * 1024 },
+    (_request, body, done) => {
+      try {
+        done(null, Object.fromEntries(new URLSearchParams(body as string)));
+      } catch (error) {
+        done(error as Error, undefined);
+      }
+    },
+  );
 
   const origins = deps.config.corsOrigins;
   await app.register(cors, {
@@ -65,9 +79,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.decorate('cfg', deps.config);
   app.decorate('store', deps.store);
+  // 内嵌只读商品目录源：随 API 分发的 catalog.json 快照，DB 无真实目录数据时接管商城公开读。
+  const catalog = new CatalogSource(deps.config, deps.store);
+  app.decorate('catalog', catalog);
   if (deps.dbSwitcher) app.decorate('dbSwitcher', deps.dbSwitcher);
   app.decorate('sms', deps.sms ?? createSmsProvider(deps.config));
-  app.decorate('oauth', deps.oauth ?? createOAuthProviders(deps.config));
+  // 测试可只注入部分渠道，其余仍由配置表补全，避免因新增渠道导致测试桩不完整。
+  app.decorate('oauth', { ...createOAuthProviders(deps.config), ...deps.oauth });
   app.decorate('onekey', deps.onekey ?? createOneKeyProvider(deps.config));
   app.decorate('map', deps.map ?? createMapProvider(deps.config));
   app.decorate('storage', deps.storage ?? createStorageProvider(deps.config));
@@ -85,7 +103,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }),
   );
   app.decorate('pay', new PayService(deps.config, deps.store));
-  app.decorate('mall', new MallService(deps.config, deps.store));
+  app.decorate('mall', new MallService(deps.config, deps.store, catalog));
 
   app.decorate('requireAuth', async (request, reply) => {
     const header = request.headers.authorization;

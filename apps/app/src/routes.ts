@@ -9,6 +9,7 @@
  */
 export const ROUTES = {
   home: '/pages/index/index',
+  legalPrivacy: '/pages/legal/privacy',
   login: '/pages/auth/login',
   register: '/pages/auth/register',
   me: '/pages/me/index',
@@ -18,4 +19,6 @@ export const ROUTES = {
   orders: '/pages/orders/index',
   about: '/pages/settings/about',
   admin: '/pages/admin/index',
+  research: '/pages/research/index',
+  researchDetail: '/pages/research/detail',
 } as const;

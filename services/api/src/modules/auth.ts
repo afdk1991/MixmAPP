@@ -3,9 +3,12 @@ import type { AuthResult, UserDto, TokenPair } from '@mixmapp/contracts';
 import type { Config } from '../config.js';
 import type { Store, UserRecord } from '../db/types.js';
 import type { OAuthProvider, OAuthProviderName, OAuthProfile } from '../adapters/oauth.js';
+import { oauthCallbackUrl } from '../adapters/oauth.js';
 import type { SmsProvider, SmsPurpose } from '../adapters/sms.js';
 import type { OneKeyProvider } from '../adapters/onekey.js';
 import { AppError } from '../lib/errors.js';
+import { AccountMergeService } from './account-merge.js';
+import type { MergeMoved } from '../db/types.js';
 import { hashPassword, randomDigits, randomToken, sha256Hex, verifyPassword } from '../lib/crypto.js';
 import { signAccessToken } from '../lib/jwt.js';
 import { assertUsernameAllowed } from '../lib/username-policy.js';
@@ -24,6 +27,18 @@ export type AuthDeps = {
   ids?: IdFactory;
 };
 
+/** bindPhone 的返回：合并发生时调用方必须换用主账号的新 token。 */
+export type BindPhoneResult = {
+  user: UserDto;
+  tokens: TokenPair;
+  merged: {
+    mergeId: string;
+    replayed: boolean;
+    moved: MergeMoved | null;
+    conflictStrategy: Record<string, string>;
+  } | null;
+};
+
 export class AuthService {
   private readonly config: Config;
   private readonly store: Store;
@@ -31,6 +46,7 @@ export class AuthService {
   private readonly oauth: Record<OAuthProviderName, OAuthProvider>;
   private readonly onekey: OneKeyProvider;
   private readonly ids: IdFactory;
+  private readonly merges: AccountMergeService;
   private readonly smsCounter = new Map<string, { day: string; count: number }>();
 
   constructor(deps: AuthDeps) {
@@ -44,6 +60,7 @@ export class AuthService {
       workerId: deps.config.ids.workerId,
     };
     this.ids = deps.ids ?? new IdFactory(opts);
+    this.merges = new AccountMergeService(this.store, this.ids);
   }
 
   /** 发送短信验证码；开发态回传 devCode 便于联调。 */
@@ -277,78 +294,242 @@ export class AuthService {
     };
   }
 
+  /** 统一换票入口：回调地址与发起授权时完全一致，底层异常不向路由层泄漏。 */
+  private async exchangeProfile(provider: OAuthProviderName, code: string): Promise<OAuthProfile> {
+    const adapter = this.oauth[provider];
+    if (!adapter?.enabled) throw new AppError('PROVIDER_DISABLED', `${provider} 登录未配置`);
+    try {
+      return await adapter.exchange(code, oauthCallbackUrl(this.config, provider));
+    } catch (error) {
+      // 网络不可达 / 证书校验失败等底层错误统一收敛成渠道错误，避免暴露 500。
+      if (error instanceof AppError) throw error;
+      throw new AppError('PROVIDER_ERROR', `${provider} 授权服务不可达，请稍后重试`);
+    }
+  }
+
+  private async requireActiveUser(userId: string): Promise<UserRecord> {
+    const user = await this.store.users.findById(userId);
+    if (!user) throw AppError.notFound('账号不存在');
+    if (user.status !== 'active') throw new AppError('FORBIDDEN', '账号已被冻结');
+    return user;
+  }
+
+  /** 把第三方身份挂到已有账号；并发撞唯一约束时回退为读取已存在的绑定。 */
+  private async attachBinding(
+    userId: string,
+    provider: OAuthProviderName,
+    profile: OAuthProfile,
+  ): Promise<void> {
+    try {
+      await this.store.bindings.insert({
+        id: this.ids.next().id,
+        userId,
+        provider,
+        openId: profile.openId,
+        unionId: profile.unionId,
+        nickname: profile.nickname,
+        avatarUrl: profile.avatarUrl,
+        createdAt: new Date(),
+      });
+    } catch (error) {
+      const code = (error as { code?: string } | null)?.code;
+      if (code === '23505' || /duplicate key|UNIQUE constraint/i.test(String(error))) return;
+      throw error;
+    }
+  }
+
+  /**
+   * 第三方登录归并顺序（每条判定的理由都写在分支上）：
+   * 1. (provider, open_id) 已有绑定 → 就是该账号，最精确，直接登录；
+   * 2. union_id 命中唯一账号 → 同一开放平台下的同一自然人，挂绑定后登录；
+   *    union_id 命中多个账号 → 是历史重复账号，不静默合并，交给用户走手机号合并；
+   * 3. 渠道返回已验证手机号且该手机号已注册 → 按手机号归并（手机号是现实身份）；
+   * 4. 都不命中 → 才新建账号。
+   */
   async loginByOAuth(input: {
     provider: OAuthProviderName;
     code: string;
   }): Promise<AuthResult> {
-    const adapter = this.oauth[input.provider];
-    if (!adapter?.enabled) throw new AppError('PROVIDER_DISABLED', `${input.provider} 登录未配置`);
-    let profile;
-    try {
-      profile = await adapter.exchange(input.code);
-    } catch (error) {
-      // 网络不可达 / 证书校验失败等底层错误统一收敛成渠道错误，避免暴露 500。
-      if (error instanceof AppError) throw error;
-      throw new AppError('PROVIDER_ERROR', `${input.provider} 授权服务不可达，请稍后重试`);
-    }
+    const profile = await this.exchangeProfile(input.provider, input.code);
+
     const binding = await this.store.bindings.findByProvider(input.provider, profile.openId);
     if (binding) {
-      const user = await this.store.users.findById(binding.userId);
-      if (!user) throw AppError.notFound('绑定的账号不存在');
+      const user = await this.requireActiveUser(binding.userId);
       return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: false };
     }
+
+    if (profile.unionId) {
+      const matches = await this.store.bindings.findByUnionId(profile.unionId);
+      const userIds = [...new Set(matches.map((b) => b.userId))];
+      if (userIds.length === 1) {
+        const user = await this.requireActiveUser(userIds[0] as string);
+        await this.attachBinding(user.id, input.provider, profile);
+        return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: false };
+      }
+      if (userIds.length > 1) {
+        throw new AppError('CONFLICT', '同一第三方身份关联了多个账号，请先用手机号登录完成合并', {
+          mergeRequired: true,
+          reason: 'union_id_conflict',
+          userIds,
+        });
+      }
+    }
+
+    if (profile.phone && profile.phoneVerified) {
+      const owner = await this.store.users.findByPhone(profile.phone);
+      if (owner) {
+        const user = await this.requireActiveUser(owner.id);
+        await this.attachBinding(user.id, input.provider, profile);
+        return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: false };
+      }
+    }
+
     const user = await this.createUser({
       nickname: profile.nickname,
       avatarUrl: profile.avatarUrl,
+      ...(profile.phone && profile.phoneVerified ? { phone: profile.phone } : {}),
     });
-    await this.store.bindings.insert({
-      id: this.ids.next().id,
-      userId: user.id,
-      provider: input.provider,
-      openId: profile.openId,
-      unionId: profile.unionId,
-      nickname: profile.nickname,
-      avatarUrl: profile.avatarUrl,
-      createdAt: new Date(),
-    });
+    try {
+      await this.store.bindings.insert({
+        id: this.ids.next().id,
+        userId: user.id,
+        provider: input.provider,
+        openId: profile.openId,
+        unionId: profile.unionId,
+        nickname: profile.nickname,
+        avatarUrl: profile.avatarUrl,
+        createdAt: new Date(),
+      });
+    } catch (error) {
+      // 并发首登会同时走到这里，(provider, open_id) 唯一约束兜底：后到者改为登录已有账号。
+      const code = (error as { code?: string } | null)?.code;
+      if (code === '23505' || /duplicate key|UNIQUE constraint/i.test(String(error))) {
+        const raced = await this.store.bindings.findByProvider(input.provider, profile.openId);
+        if (raced) {
+          const owner = await this.store.users.findById(raced.userId);
+          if (owner) {
+            return {
+              user: await this.toDto(owner),
+              tokens: await this.issueTokens(owner),
+              isNewUser: false,
+            };
+          }
+        }
+        throw AppError.conflict('该第三方账号正在被其他登录请求绑定，请重试');
+      }
+      throw error;
+    }
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }
 
   async linkOAuth(userId: string, provider: OAuthProviderName, code: string): Promise<UserDto> {
-    const adapter = this.oauth[provider];
-    if (!adapter?.enabled) throw new AppError('PROVIDER_DISABLED', `${provider} 登录未配置`);
-    const profile: OAuthProfile = await adapter.exchange(code);
+    const user = await this.store.users.findById(userId);
+    if (!user) throw AppError.notFound();
+    if (user.status !== 'active') throw new AppError('FORBIDDEN', '账号已被冻结');
+    const profile: OAuthProfile = await this.exchangeProfile(provider, code);
     const existing = await this.store.bindings.findByProvider(provider, profile.openId);
     if (existing) {
-      if (existing.userId === userId) {
-        const user = await this.store.users.findById(userId);
-        if (!user) throw AppError.notFound();
-        return this.toDto(user);
-      }
-      throw AppError.conflict('该第三方账号已绑定到其他用户');
+      if (existing.userId === userId) return this.toDto(user);
+      throw new AppError('CONFLICT', '该第三方账号已绑定到其他用户，请登录该账号发起合并', {
+        mergeRequired: true,
+        reason: 'open_id_owned_by_other',
+      });
     }
-    await this.store.bindings.insert({
-      id: this.ids.next().id,
-      userId,
-      provider,
-      openId: profile.openId,
-      unionId: profile.unionId,
-      nickname: profile.nickname,
-      avatarUrl: profile.avatarUrl,
-      createdAt: new Date(),
-    });
-    const user = await this.store.users.update(userId, { guest: false });
+    if (profile.unionId) {
+      const others = (await this.store.bindings.findByUnionId(profile.unionId)).filter(
+        (b) => b.userId !== userId,
+      );
+      if (others.length) {
+        const target = await this.store.users.findById(others[0]?.userId as string);
+        throw new AppError('CONFLICT', '该第三方身份已关联其他账号，请在该账号中发起合并', {
+          mergeRequired: true,
+          reason: 'union_id_owned_by_other',
+          targetAccountNo: target?.accountNo ?? null,
+        });
+      }
+    }
+    try {
+      await this.store.bindings.insert({
+        id: this.ids.next().id,
+        userId,
+        provider,
+        openId: profile.openId,
+        unionId: profile.unionId,
+        nickname: profile.nickname,
+        avatarUrl: profile.avatarUrl,
+        createdAt: new Date(),
+      });
+    } catch (error) {
+      const code = (error as { code?: string } | null)?.code;
+      if (code === '23505' || /duplicate key|UNIQUE constraint/i.test(String(error))) {
+        throw AppError.conflict('该第三方账号已绑定到其他用户');
+      }
+      throw error;
+    }
+    const updated = await this.store.users.update(userId, { guest: false });
+    if (!updated) throw AppError.notFound();
+    return this.toDto(updated);
+  }
+
+  /** 解绑第三方账号：至少保留一种可用于找回账号的登录方式。 */
+  async unlinkOAuth(userId: string, provider: OAuthProviderName): Promise<UserDto> {
+    const user = await this.store.users.findById(userId);
     if (!user) throw AppError.notFound();
+    const bindings = await this.store.bindings.listByUser(userId);
+    if (!bindings.some((item) => item.provider === provider)) {
+      throw AppError.notFound('该渠道尚未绑定');
+    }
+    const hasOtherOAuth = bindings.some(
+      (item) => item.provider !== provider && item.provider !== 'guest',
+    );
+    const hasPassword = Boolean(user.passwordHash) && Boolean(user.email || user.username);
+    const hasPhone = Boolean(user.phone);
+    if (!hasOtherOAuth && !hasPassword && !hasPhone) {
+      throw AppError.conflict('至少保留一种登录方式，请先绑定手机号/邮箱/用户名或其他第三方账号');
+    }
+    await this.store.bindings.remove(userId, provider);
     return this.toDto(user);
   }
 
-  async bindPhone(userId: string, phone: string, code: string): Promise<UserDto> {
-    const owner = await this.store.users.findByPhone(phone);
-    if (owner && owner.id !== userId) throw AppError.conflict('该手机号已被其他账号绑定');
+  /**
+   * 绑定手机号。
+   * 手机号属于其他账号时不报 409，而是先验证短信（二次确认），再合并到「手机号归属账号」。
+   * 主账号 = 手机号拥有者：手机号是已验证的现实身份，比当前游客/渠道账号更强。
+   * 合并后返回主账号资料与新的 token，调用方必须换用新 token（次账号已删除）。
+   */
+  async bindPhone(userId: string, phone: string, code: string): Promise<BindPhoneResult> {
+    const current = await this.store.users.findById(userId);
+    if (!current) throw AppError.notFound();
     await this.consumeSmsCode(phone, 'bind', code);
-    const updated = await this.store.users.update(userId, { phone, guest: false });
-    if (!updated) throw AppError.notFound();
-    return this.toDto(updated);
+
+    const owner = await this.store.users.findByPhone(phone);
+    if (!owner || owner.id === userId) {
+      const updated = await this.store.users.update(userId, { phone, guest: false });
+      if (!updated) throw AppError.notFound();
+      return {
+        user: await this.toDto(updated),
+        tokens: await this.issueTokens(updated),
+        merged: null,
+      };
+    }
+
+    const result = await this.merges.merge({
+      primaryUserId: owner.id,
+      secondaryUserId: userId,
+      reason: 'bind_phone',
+      mergeKey: `bind_phone:${owner.id}:${userId}`,
+      requirePrimaryPhone: phone,
+    });
+    return {
+      user: await this.toDto(result.primary),
+      tokens: await this.issueTokens(result.primary),
+      merged: {
+        mergeId: result.merge.id,
+        replayed: result.replayed,
+        moved: result.merge.moved,
+        conflictStrategy: result.merge.conflictStrategy,
+      },
+    };
   }
 
   async bindEmail(userId: string, email: string, password: string): Promise<UserDto> {
@@ -391,6 +572,30 @@ export class AuthService {
     const user = await this.store.users.findById(userId);
     if (!user) throw AppError.notFound('用户不存在');
     return this.toDto(user);
+  }
+
+  /** 合并审计：最近的合并记录（含快照与迁移明细）。 */
+  async listMerges(limit = 50) {
+    const size = Math.min(Math.max(Number.isFinite(limit) ? Math.floor(limit) : 50, 1), 200);
+    return this.store.merges.list(size);
+  }
+
+  async getMerge(id: string) {
+    const record = await this.store.merges.findById(id);
+    if (!record) throw AppError.notFound('合并记录不存在');
+    return record;
+  }
+
+  /** 历史重复账号真实统计：同一 union_id 落在多个账号上。 */
+  async mergeCandidates() {
+    const candidates = await this.merges.candidates();
+    return { count: candidates.length, candidates };
+  }
+
+  /** 管理员兜底回滚：按合并前快照还原（刷新令牌无法复活）。 */
+  async rollbackMerge(id: string) {
+    const result = await this.merges.rollback(id);
+    return { merge: result.merge, primary: await this.toDto(result.primary) };
   }
 
   async toDto(user: UserRecord): Promise<UserDto> {

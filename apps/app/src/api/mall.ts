@@ -95,6 +95,18 @@ export function isOutOfStock(
 export const OUT_OF_STOCK_NOTICE =
   '该商品源站显示缺货，或库存需登录后确认，请联系询价后再下单。';
 
+/**
+ * 库存展示阈值：严格大于该值即视为「大库存」，列表 / 详情 / 购物车只显示
+ * 「现货」「在售」，不暴露具体数字（避免 9999999 这类占位值误导用户）。
+ * 三处展示统一引用这里，不要在页面里各写一份。
+ */
+export const STOCK_DISPLAY_THRESHOLD = 10000;
+
+/** 库存是否超过展示阈值（超过则只显示状态词，不显示数字）。 */
+export function isBulkStock(stock: number | null | undefined): boolean {
+  return stock != null && stock > STOCK_DISPLAY_THRESHOLD;
+}
+
 /** 分值 → 展示金额（元，两位小数）。 */
 export function priceText(fen: number | null | undefined): string {
   if (fen == null || Number.isNaN(fen)) return '0.00';

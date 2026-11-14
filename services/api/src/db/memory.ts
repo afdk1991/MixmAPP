@@ -1,8 +1,11 @@
 import type {
+  AccountMergeRecord,
   BindingRecord,
   CartItemRecord,
+  MergeCandidate,
   OrderItemRecord,
   OrderRecord,
+  OAuthStateRecord,
   PaymentRecord,
   ProductRecord,
   PushTokenRecord,
@@ -20,6 +23,7 @@ export class MemoryStore implements Store {
 
   private userList: UserRecord[] = [];
   private bindingList: BindingRecord[] = [];
+  private oauthStateList: OAuthStateRecord[] = [];
   private tokenList: RefreshTokenRecord[] = [];
   private smsList: SmsCodeRecord[] = [];
   private paymentList: PaymentRecord[] = [];
@@ -29,6 +33,7 @@ export class MemoryStore implements Store {
   private orderList: OrderRecord[] = [];
   private orderItemList: OrderItemRecord[] = [];
   private orderRequestMap = new Map<string, { orderNo: string | null }>();
+  private mergeList: AccountMergeRecord[] = [];
 
   async ping(): Promise<boolean> {
     return true;
@@ -37,6 +42,7 @@ export class MemoryStore implements Store {
   async close(): Promise<void> {
     this.userList = [];
     this.bindingList = [];
+    this.oauthStateList = [];
     this.tokenList = [];
     this.smsList = [];
     this.paymentList = [];
@@ -45,6 +51,8 @@ export class MemoryStore implements Store {
     this.cartList = [];
     this.orderList = [];
     this.orderItemList = [];
+    this.orderRequestMap.clear();
+    this.mergeList = [];
   }
 
   users = {
@@ -83,10 +91,19 @@ export class MemoryStore implements Store {
       this.userList[idx] = next;
       return clone(next);
     },
+    delete: async (id: string): Promise<void> => {
+      this.userList = this.userList.filter((u) => u.id !== id);
+    },
   };
 
   bindings = {
     insert: async (binding: BindingRecord): Promise<BindingRecord> => {
+      const duplicate = this.bindingList.find(
+        (b) => b.provider === binding.provider && b.openId === binding.openId,
+      );
+      if (duplicate) {
+        throw Object.assign(new Error('duplicate key: bindings provider open_id'), { code: '23505' });
+      }
       this.bindingList.push(clone(binding));
       return clone(binding);
     },
@@ -97,12 +114,45 @@ export class MemoryStore implements Store {
       const found = this.bindingList.find((b) => b.provider === provider && b.openId === openId);
       return found ? clone(found) : null;
     },
+    findByUnionId: async (unionId: string): Promise<BindingRecord[]> =>
+      this.bindingList.filter((b) => b.unionId === unionId).map(clone),
     listByUser: async (userId: string): Promise<BindingRecord[]> => {
       return this.bindingList.filter((b) => b.userId === userId).map(clone);
     },
     remove: async (userId: string, provider: BindingRecord['provider']): Promise<void> => {
       this.bindingList = this.bindingList.filter(
         (b) => !(b.userId === userId && b.provider === provider),
+      );
+    },
+    move: async (ids: string[], userId: string): Promise<number> => {
+      const wanted = new Set(ids);
+      let moved = 0;
+      for (const binding of this.bindingList) {
+        if (!wanted.has(binding.id)) continue;
+        if (binding.userId !== userId) {
+          binding.userId = userId;
+          moved += 1;
+        }
+      }
+      return moved;
+    },
+  };
+
+  oauthStates = {
+    insert: async (record: OAuthStateRecord): Promise<void> => {
+      this.oauthStateList.push(clone(record));
+    },
+    claim: async (state: string): Promise<OAuthStateRecord | null> => {
+      const found = this.oauthStateList.find((item) => item.state === state);
+      if (!found) return null;
+      if (found.consumedAt) return null;
+      if (found.expiresAt.getTime() <= Date.now()) return null;
+      found.consumedAt = new Date();
+      return clone(found);
+    },
+    purgeExpired: async (before: Date): Promise<void> => {
+      this.oauthStateList = this.oauthStateList.filter(
+        (item) => item.expiresAt.getTime() > before.getTime(),
       );
     },
   };
@@ -121,6 +171,17 @@ export class MemoryStore implements Store {
         found.revokedAt = new Date();
         found.replacedBy = replacedBy ?? null;
       }
+    },
+    listActiveByUser: async (userId: string): Promise<RefreshTokenRecord[]> =>
+      this.tokenList.filter((t) => t.userId === userId && !t.revokedAt).map(clone),
+    revokeByUser: async (userId: string): Promise<number> => {
+      let count = 0;
+      for (const token of this.tokenList) {
+        if (token.userId !== userId || token.revokedAt) continue;
+        token.revokedAt = new Date();
+        count += 1;
+      }
+      return count;
     },
   };
 
@@ -152,11 +213,23 @@ export class MemoryStore implements Store {
       const found = this.paymentList.find((p) => p.outTradeNo === outTradeNo);
       return found ? clone(found) : null;
     },
+    listByUser: async (userId: string): Promise<PaymentRecord[]> =>
+      this.paymentList.filter((p) => p.userId === userId).map(clone),
     update: async (id: string, patch: Partial<PaymentRecord>): Promise<PaymentRecord | null> => {
       const idx = this.paymentList.findIndex((p) => p.id === id);
       if (idx < 0) return null;
       this.paymentList[idx] = { ...this.paymentList[idx], ...patch } as PaymentRecord;
       return clone(this.paymentList[idx]);
+    },
+    move: async (ids: string[], userId: string): Promise<number> => {
+      const wanted = new Set(ids);
+      let moved = 0;
+      for (const payment of this.paymentList) {
+        if (!wanted.has(payment.id) || payment.userId === userId) continue;
+        payment.userId = userId;
+        moved += 1;
+      }
+      return moved;
     },
   };
 
@@ -170,6 +243,20 @@ export class MemoryStore implements Store {
     },
     listByUser: async (userId: string): Promise<PushTokenRecord[]> =>
       this.pushList.filter((p) => p.userId === userId).map(clone),
+    move: async (ids: string[], userId: string): Promise<number> => {
+      const wanted = new Set(ids);
+      let moved = 0;
+      for (const token of this.pushList) {
+        if (!wanted.has(token.id) || token.userId === userId) continue;
+        token.userId = userId;
+        moved += 1;
+      }
+      return moved;
+    },
+    remove: async (ids: string[]): Promise<void> => {
+      const wanted = new Set(ids);
+      this.pushList = this.pushList.filter((token) => !wanted.has(token.id));
+    },
   };
 
   mall = {
@@ -178,9 +265,22 @@ export class MemoryStore implements Store {
         this.productList.push(clone(product));
         return clone(product);
       },
-      list: async (filter: { category?: string; keyword?: string; limit: number; offset: number }): Promise<ProductRecord[]> => {
+      hasCatalogProducts: async (): Promise<boolean> =>
+        this.productList.some((p) => Boolean(p.sourceKey)),
+      list: async (filter: {
+        category?: string;
+        cat?: string;
+        dims?: string;
+        lens?: string;
+        keyword?: string;
+        limit: number;
+        offset: number;
+      }): Promise<ProductRecord[]> => {
+        // 内存实现没有分类树与规格数据：树节点/规格筛选下无商品可返回，保持与 PG 口径一致。
+        if (filter.cat || filter.dims || filter.lens) return [];
         const keyword = filter.keyword?.toLowerCase();
         return this.productList
+          .filter((p) => p.listed !== false)
           .filter((p) => (filter.category ? p.category === filter.category : true))
           .filter((p) =>
             keyword ? p.title.toLowerCase().includes(keyword) || p.subtitle.toLowerCase().includes(keyword) : true,
@@ -192,12 +292,32 @@ export class MemoryStore implements Store {
       aggregateCategories: async () => {
         const byCode = new Map<string, { code: string; name: string; count: number }>();
         for (const p of this.productList) {
+          if (p.listed === false) continue;
           const existing = byCode.get(p.category);
           if (existing) existing.count += 1;
           else byCode.set(p.category, { code: p.category, name: p.categoryName ?? p.category, count: 1 });
         }
         return [...byCode.values()];
       },
+      listChildCategories: async (parentId: string | null) => {
+        if (parentId) return [];
+        const byCode = new Map<string, { id: string; code: string; name: string; level: number; count: number }>();
+        for (const p of this.productList) {
+          if (p.listed === false) continue;
+          const existing = byCode.get(p.category);
+          if (existing) existing.count += 1;
+          else
+            byCode.set(p.category, {
+              id: `c1:${p.category}`,
+              code: p.category,
+              name: p.categoryName ?? p.category,
+              level: 1,
+              count: 1,
+            });
+        }
+        return [...byCode.values()];
+      },
+      listSpecOptions: async () => ({ dims: [], lens: [] }),
       findById: async (id: string): Promise<ProductRecord | null> => {
         const found = this.productList.find((p) => p.id === id);
         return found ? clone(found) : null;
@@ -288,6 +408,10 @@ export class MemoryStore implements Store {
       clear: async (userId: string): Promise<void> => {
         this.cartList = this.cartList.filter((c) => c.userId !== userId);
       },
+      replaceAll: async (userId: string, items: CartItemRecord[]): Promise<void> => {
+        this.cartList = this.cartList.filter((c) => c.userId !== userId);
+        for (const item of items) this.cartList.push(clone({ ...item, userId }));
+      },
     },
     orders: {
       insert: async (order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord> => {
@@ -306,6 +430,16 @@ export class MemoryStore implements Store {
           .map(clone),
       itemsByOrder: async (orderId: string): Promise<OrderItemRecord[]> =>
         this.orderItemList.filter((i) => i.orderId === orderId).map(clone),
+      move: async (ids: string[], userId: string): Promise<number> => {
+        const wanted = new Set(ids);
+        let moved = 0;
+        for (const order of this.orderList) {
+          if (!wanted.has(order.id) || order.userId === userId) continue;
+          order.userId = userId;
+          moved += 1;
+        }
+        return moved;
+      },
       listExpiredPending: async (before: Date): Promise<OrderRecord[]> =>
         this.orderList.filter((o) => o.status === 'pending' && o.createdAt.getTime() < before.getTime()).map(clone),
       transitionStatus: async (
@@ -332,6 +466,62 @@ export class MemoryStore implements Store {
       release: async (userId: string, key: string) => {
         this.orderRequestMap.delete(`${userId}:${key}`);
       },
+      dropByUser: async (userId: string) => {
+        const prefix = `${userId}:`;
+        for (const key of [...this.orderRequestMap.keys()]) {
+          if (key.startsWith(prefix)) this.orderRequestMap.delete(key);
+        }
+      },
+    },
+  };
+
+  merges = {
+    insert: async (record: AccountMergeRecord): Promise<AccountMergeRecord> => {
+      if (this.mergeList.some((m) => m.mergeKey === record.mergeKey)) {
+        throw Object.assign(new Error('duplicate key: account_merges merge_key'), { code: '23505' });
+      }
+      this.mergeList.push(clone(record));
+      return clone(record);
+    },
+    findByKey: async (mergeKey: string): Promise<AccountMergeRecord | null> => {
+      const found = this.mergeList.find((m) => m.mergeKey === mergeKey);
+      return found ? clone(found) : null;
+    },
+    findById: async (id: string): Promise<AccountMergeRecord | null> => {
+      const found = this.mergeList.find((m) => m.id === id);
+      return found ? clone(found) : null;
+    },
+    list: async (limit: number): Promise<AccountMergeRecord[]> =>
+      this.mergeList
+        .slice()
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit)
+        .map(clone),
+    update: async (
+      id: string,
+      patch: Partial<AccountMergeRecord>,
+    ): Promise<AccountMergeRecord | null> => {
+      const idx = this.mergeList.findIndex((m) => m.id === id);
+      if (idx < 0) return null;
+      this.mergeList[idx] = { ...this.mergeList[idx], ...patch } as AccountMergeRecord;
+      return clone(this.mergeList[idx]);
+    },
+    findCandidates: async (): Promise<MergeCandidate[]> => {
+      const byUnion = new Map<string, BindingRecord[]>();
+      for (const binding of this.bindingList) {
+        if (!binding.unionId) continue;
+        const list = byUnion.get(binding.unionId) ?? [];
+        list.push(binding);
+        byUnion.set(binding.unionId, list);
+      }
+      const candidates: MergeCandidate[] = [];
+      for (const [unionId, list] of byUnion) {
+        const userIds = [...new Set(list.map((b) => b.userId))];
+        if (userIds.length > 1) {
+          candidates.push({ unionId, userIds, bindingIds: list.map((b) => b.id) });
+        }
+      }
+      return candidates;
     },
   };
 }

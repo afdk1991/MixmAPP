@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Android 15（targetSdk 35）会强制 edge-to-edge，导致 WebView 顶到状态栏下；
-         这里显式退出该强制，让原生壳的网页从状态栏下方开始，全局品牌栏不会被时间/电量压住。 -->
+    <!-- Android 15（targetSdk 35）会强制 edge-to-edge。本应用已改为真正的 edge-to-edge，
+         这里关闭历史上的 opt-out，避免两套策略互相打架。
+         系统栏透明、图标明暗统一由 MainActivity.setupEdgeToEdge() 在运行时接管。 -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#F2F5F3</item>
-        <item name="android:navigationBarColor">#F2F5F3</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">false</item>
     </style>
 </resources>

@@ -1,138 +1,241 @@
-﻿<template>
+<template>
   <view class="halo">
-    <view class="page home">
-      <!-- ---------- 星际联邦通行证 Hero ---------- -->
+    <view class="page page--wide home">
+      <!-- ---------- 档案封面（深场） ---------- -->
       <view class="hero">
-        <view class="hero-mesh" />
-        <view class="hero-stars" />
-        <view class="hero-orbit" />
-        <view class="hero-glow hero-glow--a" />
-        <view class="hero-glow hero-glow--b" />
-        <text class="hero-watermark mono">STELLAR</text>
-
         <view class="hero-inner">
-          <view class="bar-top">
-            <mx-logo size="lg" tone="light" sub="MULTI-END IDENTITY" />
-            <view class="ver-chip">
-              <text class="ver-text mono">{{ version }}</text>
-            </view>
+          <text class="hero-eyebrow mono">MULTI-END IDENTITY</text>
+          <view class="hero-title-wrap">
+            <text class="hero-title">一张通行证</text>
+            <text class="hero-title hero-title--accent">通行所有星域</text>
           </view>
+          <text class="hero-lede">Web・Android・iOS・鸿蒙 —— 注册即签发星际联邦通行证，并分配唯一的 MixmAPP 公民编号</text>
 
-          <view class="pass-row">
-            <view class="pass-chip">
-              <view class="pass-dot" :class="{ 'pass-dot--off': !online }" />
-              <text class="pass-chip-text mono">PASS · 星际联邦通行证</text>
-            </view>
-            <text class="pass-no mono">NO. AUTO</text>
-          </view>
+          <mx-logo class="hero-logo" size="lg" tone="light" sub="MIXMAPP APP" />
 
-          <view class="headline">
-            <text class="hl-line">一张通行证</text>
-            <text class="hl-line hl-accent">通行所有星域</text>
-          </view>
-          <text class="lede">Web・Android・iOS・鸿蒙 —— 注册即签发星际联邦通行证，并分配唯一的 MixmAPP 星际联邦通行证公民编号</text>
-
-          <view class="stats">
-            <view class="stat">
-              <text class="stat-k mono">终端</text>
-              <text class="stat-v mono">6 ENDS</text>
+          <view class="hero-meta">
+            <view class="meta-item">
+              <text class="meta-k mono">版本</text>
+              <text class="meta-v mono">{{ version }}</text>
             </view>
-            <view class="stat-sep" />
-            <view class="stat">
-              <text class="stat-k mono">编号</text>
-              <text class="stat-v mono">AUTO</text>
+            <view class="meta-sep" />
+            <view class="meta-item">
+              <text class="meta-k mono">环境</text>
+              <text class="meta-v mono">{{ env }}</text>
             </view>
-            <view class="stat-sep" />
-            <view class="stat">
-              <text class="stat-k mono">链路</text>
-              <view class="stat-status">
-                <view class="status-dot" :class="{ 'status-dot--down': !online }" />
-                <text class="stat-v mono">{{ online ? 'ONLINE' : 'OFFLINE' }}</text>
+            <view class="meta-sep" />
+            <view class="meta-item">
+              <text class="meta-k mono">链路</text>
+              <view class="meta-status">
+                <view class="status-dot" :class="{ 'status-dot--off': !online }" />
+                <text class="meta-v mono">{{ online ? 'ONLINE' : 'OFFLINE' }}</text>
               </view>
             </view>
           </view>
 
-          <view class="barcode" />
-          <view class="hero-holo" />
-          <view class="hero-foot">
-            <text class="foot mono">{{ statusText }}</text>
-            <text class="foot mono">↓ SCROLL</text>
+          <view v-if="error" class="hero-error">
+            <view class="hero-error-mark mono">!</view>
+            <view class="hero-error-main">
+              <text class="hero-error-title">API 暂不可用</text>
+              <text class="hero-error-text mono">{{ error }}</text>
+            </view>
+            <view class="hero-retry" hover-class="is-press" @tap="loadMeta">
+              <text class="hero-retry-text mono">重试</text>
+            </view>
           </view>
         </view>
       </view>
 
-      <!-- ---------- 主体 ---------- -->
+      <!-- ---------- 索引条目（纸面） ---------- -->
       <view class="body">
         <view class="cta" hover-class="is-press" @tap="go(primaryUrl)">
-          <view class="cta-glow" />
-          <view class="cta-text">
-            <text class="cta-kicker mono">{{ signedIn ? 'SIGNED IN' : 'GET STARTED' }}</text>
-            <text class="cta-title">{{ signedIn ? '查看联邦通行证' : '登录 / 领取星际联邦通行证' }}</text>
-            <text class="cta-sub">{{ signedIn ? '编号 · 绑定方式 · 账号资料' : '登录 · 注册 · 30 秒签发' }}</text>
+          <text class="cta-kicker mono">{{ signedIn ? 'SIGNED IN' : 'GET STARTED' }}</text>
+          <view class="cta-main">
+            <view class="cta-text">
+              <text class="cta-title">{{ signedIn ? '查看联邦通行证' : '登录 / 领取星际联邦通行证' }}</text>
+              <text class="cta-sub">{{ signedIn ? '编号 · 绑定方式 · 账号资料' : '登录 · 注册 · 30 秒签发' }}</text>
+            </view>
+            <text class="cta-arrow mono">→</text>
           </view>
-          <view class="cta-arrow">
-            <text class="cta-arrow-text">→</text>
+        </view>
+
+        <!-- ---------- 精选目录：真实商城数据，含空/错/骨架/破图兜底 ---------- -->
+        <view class="section pick">
+          <view class="sec-head">
+            <view class="sec-head-l">
+              <text class="eyebrow">CATALOG</text>
+              <text class="sec-title">精选目录</text>
+            </view>
+            <text class="sec-count mono">实时数据 · {{ tabCategories.length }} 类</text>
+          </view>
+          <view class="rule" />
+
+          <scroll-view v-if="tabCategories.length" :scroll-x="true" class="pick-chips" :show-scrollbar="false">
+            <view
+              class="pick-chip"
+              :class="{ 'pick-chip--active': activeCategory === '' }"
+              hover-class="is-press"
+              @tap="switchCategory('')"
+            >
+              <text class="pick-chip-label">全部</text>
+            </view>
+            <view
+              v-for="cat in tabCategories"
+              :key="cat.code"
+              class="pick-chip"
+              :class="{ 'pick-chip--active': activeCategory === cat.code }"
+              hover-class="is-press"
+              @tap="switchCategory(cat.code)"
+            >
+              <text class="pick-chip-label">{{ cat.name }}</text>
+              <text v-if="cat.count > 0" class="pick-chip-count mono">{{ cat.count }}</text>
+            </view>
+          </scroll-view>
+
+          <view v-if="mallLoading" class="pick-grid">
+            <view v-for="i in 2" :key="i" class="pick-card">
+              <view class="sk pick-sk-cover" />
+              <view class="pick-info">
+                <view class="sk pick-sk-line" />
+                <view class="sk pick-sk-line pick-sk-line--short" />
+                <view class="sk pick-sk-price" />
+              </view>
+            </view>
+          </view>
+
+          <view v-else-if="mallError" class="pick-state">
+            <view class="pick-state-mark mono">!</view>
+            <text class="pick-state-title">精选目录暂未加载</text>
+            <text class="pick-state-sub">{{ mallError }}</text>
+            <view class="pick-retry" hover-class="is-press" @tap="loadMall">
+              <text class="pick-retry-text mono">重试</text>
+            </view>
+          </view>
+
+          <view v-else-if="products.length === 0" class="pick-state">
+            <view class="pick-state-mark">空</view>
+            <text class="pick-state-title">暂时没有可展示的商品</text>
+            <text class="pick-state-sub">目录数据同步中，可前往商城浏览完整五金目录。</text>
+          </view>
+
+          <view v-else class="pick-grid">
+            <view
+              v-for="product in products"
+              :key="product.id"
+              class="pick-card"
+              hover-class="is-press"
+              @tap="openDetail(product)"
+            >
+              <view class="pick-cover">
+                <image
+                  v-if="coverOf(product) && !isBroken(product.id)"
+                  class="pick-cover-img"
+                  :src="coverOf(product)"
+                  mode="aspectFill"
+                  lazy-load
+                  @error="markBroken(product.id)"
+                />
+                <view v-else class="pick-cover-ph">
+                  <text class="pick-cover-char">{{ product.title.slice(0, 1) }}</text>
+                </view>
+                <text v-if="product.brand" class="pick-cover-tag mono">{{ product.brand }}</text>
+                <view
+                  v-if="isInquiryProduct(product)"
+                  class="pick-add pick-add--inquiry"
+                  hover-class="is-press"
+                  @tap.stop="addToCart(product)"
+                >
+                  <text class="pick-add-text mono">询</text>
+                </view>
+                <view
+                  v-else-if="!isOutOfStock(product)"
+                  class="pick-add"
+                  hover-class="is-press"
+                  @tap.stop="addToCart(product)"
+                >
+                  <text class="pick-add-text mono">+</text>
+                </view>
+              </view>
+              <view class="pick-info">
+                <text class="pick-name">{{ product.title }}</text>
+                <text v-if="cardMeta(product)" class="pick-sub">{{ cardMeta(product) }}</text>
+                <text v-if="cardSpec(product)" class="pick-spec mono">{{ cardSpec(product) }}</text>
+                <text v-if="packLabel(product)" class="pick-pack mono">{{ packLabel(product) }}</text>
+                <view class="pick-foot">
+                  <view v-if="isInquiryProduct(product)" class="pick-price">
+                    <text class="pick-inquiry">询价</text>
+                    <text class="pick-inquiry-sub">联系报价</text>
+                  </view>
+                  <view v-else class="pick-price">
+                    <text class="pick-cur mono">¥</text>
+                    <text class="pick-amount mono">{{ priceText(product.priceFen) }}</text>
+                    <text v-if="priceUnitLabel(product)" class="pick-unit mono">{{ priceUnitLabel(product) }}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view class="pick-more" hover-class="is-press" @tap="go(ROUTES.mall)">
+            <text class="pick-more-text">进入商城浏览完整目录</text>
+            <text class="pick-more-arrow mono">→</text>
           </view>
         </view>
 
         <view class="section">
           <view class="sec-head">
-            <view class="sec-l">
-              <text class="sec-n mono">01</text>
+            <view class="sec-head-l">
+              <text class="eyebrow">ENTRIES</text>
               <text class="sec-title">通行入口</text>
             </view>
-            <text class="sec-meta mono">03 ENTRIES</text>
+            <text class="sec-count mono">目录 · {{ entries.length }} 类</text>
           </view>
-
-          <view class="grid">
+          <view class="rule" />
+          <view class="index-list">
             <view
               v-for="entry in entries"
               :key="entry.key"
-              class="tile"
+              class="index-row"
               hover-class="is-press"
               @tap="go(entry.url)"
             >
-              <view class="tile-top">
-                <text class="tile-code mono">{{ entry.key }}</text>
-                <text class="tile-tag mono">{{ entry.tag }}</text>
+              <text class="index-code mono">{{ entry.key }}</text>
+              <view class="index-main">
+                <text class="index-title">{{ entry.title }}</text>
+                <text class="index-desc">{{ entry.desc }}</text>
               </view>
-              <text class="tile-title">{{ entry.title }}</text>
-              <text class="tile-desc">{{ entry.desc }}</text>
-              <view class="tile-bot">
-                <text class="tile-arrow mono">→</text>
-              </view>
+              <text class="index-tag mono">{{ entry.tag }}</text>
+              <text class="index-arrow mono">→</text>
             </view>
           </view>
         </view>
 
         <view class="section">
           <view class="sec-head">
-            <view class="sec-l">
-              <text class="sec-n mono">02</text>
+            <view class="sec-head-l">
+              <text class="eyebrow">COVERAGE</text>
               <text class="sec-title">已接通的端</text>
             </view>
-            <text class="sec-meta mono">COVERAGE</text>
+            <text class="sec-count mono">终端 · {{ platforms.length }} 端</text>
           </view>
-
-          <view class="cover">
-            <view v-for="p in platforms" :key="p.code" class="cover-item">
-              <view class="cover-glyph">
-                <text class="cover-glyph-text mono">{{ p.short }}</text>
+          <view class="rule" />
+          <view class="index-list">
+            <view v-for="p in platforms" :key="p.code" class="index-row">
+              <text class="index-code mono">{{ p.short }}</text>
+              <view class="index-main">
+                <text class="index-title">{{ p.name }}</text>
+                <text class="index-desc mono">{{ p.code }}</text>
               </view>
-              <view class="cover-main">
-                <text class="cover-name">{{ p.name }}</text>
-                <text class="cover-code mono">{{ p.code }}</text>
-              </view>
-              <view class="cover-dot" />
+              <view class="index-dot" />
             </view>
           </view>
-          <text class="cover-note">同一套 Vue3 代码，按平台产出不同产物；账号、发号器与权限完全共用。</text>
+          <text class="section-note">同一套 Vue3 代码，按平台产出不同产物；账号、发号器与权限完全共用。</text>
         </view>
 
         <view class="footer">
           <view class="foot-rule" />
           <text class="foot-line mono">BUILD · TEST · SHIP · OPS</text>
-          <text class="foot-line foot-line--dim mono">MIXMAPP · 正式发布</text>
+          <text class="foot-line foot-line--dim mono">{{ releaseLabel }}</text>
         </view>
       </view>
     </view>
@@ -140,17 +243,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
-import { metaApi } from '../../api/client';
+import { computed, reactive, ref } from 'vue';
+import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
+import { metaApi, mallApi, mediaUrl, ApiError } from '../../api/client';
 import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
+import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
+import type { MallCategoryDto, MallProductDto } from '../../api/mall';
+import {
+  breadcrumbLabel,
+  INQUIRY_NOTICE,
+  isInquiryProduct,
+  isOutOfStock,
+  OUT_OF_STOCK_NOTICE,
+  packLabel,
+  priceText,
+  priceUnitLabel,
+  specEntries,
+} from '../../api/mall';
+
+/** 版本文案由构建期生成的 APP_VERSION 驱动，标注正式发布，不写死版本号。 */
+const releaseLabel = computed(() => `MIXMAPP · ${APP_VERSION} · 正式发布`);
 
 const version = ref(APP_VERSION);
-const online = ref(false);
 const env = ref('unknown');
+const online = ref(false);
+const error = ref('');
 
 const platforms = [
   { code: 'WEB', short: 'WEB', name: 'H5 / PWA' },
@@ -164,138 +284,171 @@ const platforms = [
 const entries = [
   { key: '01', tag: 'MALL', title: '商城', desc: '商品 · 购物车 · 订单', url: ROUTES.mall },
   { key: '02', tag: 'PASS', title: '星际联邦通行证', desc: '登录 · 注册 · 公民编号', url: ROUTES.me },
+  { key: '04', tag: 'RESEARCH', title: '深度研究', desc: 'AI 多轮检索 · 结构化报告', url: ROUTES.research },
   { key: '03', tag: 'INFO', title: '关于', desc: '能力矩阵与版本', url: ROUTES.about },
 ];
 
 const signedIn = computed(() => Boolean(session.user));
 const primaryUrl = computed(() => ROUTES.me);
 
-const statusText = computed(() =>
-  online.value ? `联邦网络在线 · ${env.value} 环境` : '联邦网络离线 · 未连上 API',
+/* ---------- 精选目录：真实商城数据（mallApi 契约，不加 mock） ---------- */
+const PAGE_SIZE = 6;
+
+const categories = ref<MallCategoryDto[]>([]);
+const activeCategory = ref('');
+const products = ref<MallProductDto[]>([]);
+const mallLoading = ref(false);
+const mallError = ref('');
+/** 图片 404 兜底：记录加载失败的 productId，命中后改用文字占位，避免破图。 */
+const brokenImages = reactive(new Set<string>());
+
+/**
+ * 分类完全由后端 `/mall/categories` 驱动（catalog 侧只返回 6 个真实一级类目）。
+ * 不再用硬编码分类黑名单，仅过滤空 code / 空 name 的脏数据，避免无名 tab。
+ */
+const tabCategories = computed(() =>
+  categories.value
+    .filter((item) => item && item.code && item.name)
+    .map((item) => ({ code: item.code, name: item.name, count: item.count ?? 0 })),
 );
 
-function go(url: string): void {
-  uni.navigateTo({ url });
+async function loadCategories(): Promise<void> {
+  try {
+    const list = await mallApi.listCategories();
+    categories.value = Array.isArray(list) ? list : [];
+  } catch {
+    categories.value = [];
+  }
 }
 
-onLoad(async () => {
+async function loadProducts(): Promise<void> {
+  mallLoading.value = true;
+  mallError.value = '';
+  try {
+    const list = await mallApi.listProducts({
+      category: activeCategory.value || undefined,
+      page: 1,
+      pageSize: PAGE_SIZE,
+    });
+    products.value = Array.isArray(list) ? list : [];
+  } catch (e) {
+    mallError.value = e instanceof Error ? e.message : '商品加载失败';
+    products.value = [];
+  } finally {
+    mallLoading.value = false;
+  }
+}
+
+function loadMall(): Promise<unknown> {
+  return Promise.allSettled([loadCategories(), loadProducts()]);
+}
+
+function switchCategory(code: string): void {
+  activeCategory.value = code;
+  void loadProducts();
+}
+
+function coverOf(product: MallProductDto): string {
+  const first = Array.isArray(product.images) ? product.images[0] : undefined;
+  return mediaUrl(first);
+}
+
+function isBroken(id: string): boolean {
+  return brokenImages.has(id);
+}
+
+function markBroken(id: string): void {
+  brokenImages.add(id);
+}
+
+/** 卡片副行：优先分类面包屑，退回 subtitle。 */
+function cardMeta(product: MallProductDto): string {
+  return breadcrumbLabel(product.categoryPath) || product.subtitle || '';
+}
+
+/** 规格摘要：取前两条有效规格，拼成一行短文案。 */
+function cardSpec(product: MallProductDto): string {
+  return specEntries(product.specs)
+    .slice(0, 2)
+    .map(([key, value]) => `${key} ${value}`)
+    .join(' · ');
+}
+
+function openDetail(product: MallProductDto): void {
+  goTo(`${ROUTES.mallDetail}?id=${encodeURIComponent(product.id)}`);
+}
+
+async function addToCart(product: MallProductDto): Promise<void> {
+  if (isInquiryProduct(product)) {
+    uni.showToast({ title: INQUIRY_NOTICE, icon: 'none' });
+    return;
+  }
+  if (isOutOfStock(product)) {
+    uni.showToast({ title: OUT_OF_STOCK_NOTICE, icon: 'none' });
+    return;
+  }
+  try {
+    await mallApi.addToCart(product.id, 1);
+    uni.showToast({ title: '已加入购物车', icon: 'success' });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '加入购物车失败';
+    if (message.includes('登录')) {
+      goTo(ROUTES.login);
+      return;
+    }
+    uni.showToast({ title: message, icon: 'none' });
+  }
+}
+
+function go(url: string): void {
+  goTo(url);
+}
+
+async function loadMeta(): Promise<void> {
+  error.value = '';
   try {
     const meta = await metaApi.get();
-    version.value = meta.version;
+    // 版本以构建期 APP_VERSION（正式发布）为准，不被服务端 meta.version 覆盖成旧版串。
     env.value = meta.env;
     online.value = true;
-  } catch {
+  } catch (e) {
     online.value = false;
+    error.value = e instanceof ApiError ? `${e.message}（${e.status}）` : '无法连接 API';
   }
+}
+
+onLoad(() => {
+  void loadMeta();
+  void loadMall();
+});
+
+/** 原生下拉刷新：同时刷新运行环境与精选目录，两者都落定后收起指示器 */
+onPullDownRefresh(() => {
+  void Promise.allSettled([loadMeta(), loadMall()]).then(() => uni.stopPullDownRefresh());
 });
 </script>
 
 <style scoped lang="scss">
-/* ---------- 全幅底衬：宽屏时让 750 版心成为一张“证件卡”，而不是被灰带夹住 ---------- */
 .halo {
   min-height: 100vh;
-  background:
-    radial-gradient(90% 60% at 50% -10%, rgba(15, 157, 143, 0.14), rgba(15, 157, 143, 0) 62%),
-    linear-gradient(180deg, #f4f4f1 0%, #eaebe6 100%);
+  background: $paper;
 }
 
 .home {
-  padding-bottom: 64rpx;
+  /* tabBar 页面：为原生底部标签栏留安全距离，避免页脚被遮挡 */
+  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
 }
 
-/* ---------- Hero ---------- */
+/* ---------- 档案封面（深场） ---------- */
 .hero {
   position: relative;
   overflow: hidden;
-  padding: calc(56rpx + var(--status-bar-height, 0px)) $sp-5 60rpx;
+  padding: calc(56rpx + var(--status-bar-height, 0px)) $sp-4 $sp-5;
   background:
     radial-gradient(90% 120% at 6% 0%, rgba(15, 157, 143, 0.34), rgba(15, 157, 143, 0) 56%),
     radial-gradient(70% 90% at 100% 8%, rgba(100, 228, 255, 0.1), rgba(100, 228, 255, 0) 60%),
-    radial-gradient(60% 60% at 82% 100%, rgba(244, 244, 241, 0.06), rgba(244, 244, 241, 0) 72%),
     linear-gradient(162deg, #0b0f0e 0%, #11201d 52%, #17322c 100%);
-  border-bottom-left-radius: $r-shell;
-  border-bottom-right-radius: $r-shell;
-}
-
-.hero-mesh {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image:
-    linear-gradient(rgba(244, 244, 241, 0.06) 1rpx, transparent 1rpx),
-    linear-gradient(90deg, rgba(244, 244, 241, 0.06) 1rpx, transparent 1rpx);
-  background-size: 64rpx 64rpx;
-  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.25) 78%, transparent 100%);
-  mask-image: radial-gradient(120% 90% at 50% 0%, #000 30%, rgba(0, 0, 0, 0.25) 78%, transparent 100%);
-  pointer-events: none;
-}
-
-.hero-stars {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image:
-    radial-gradient(2rpx 2rpx at 12% 18%, rgba(255, 255, 255, 0.9), transparent 60%),
-    radial-gradient(2rpx 2rpx at 32% 8%, rgba(160, 219, 255, 0.8), transparent 60%),
-    radial-gradient(2rpx 2rpx at 68% 14%, rgba(255, 240, 200, 0.9), transparent 60%),
-    radial-gradient(2rpx 2rpx at 88% 30%, rgba(255, 255, 255, 0.7), transparent 60%),
-    radial-gradient(2rpx 2rpx at 22% 48%, rgba(255, 255, 255, 0.55), transparent 60%),
-    radial-gradient(2rpx 2rpx at 54% 36%, rgba(180, 225, 255, 0.7), transparent 60%),
-    radial-gradient(2rpx 2rpx at 76% 58%, rgba(255, 255, 255, 0.55), transparent 60%),
-    radial-gradient(2rpx 2rpx at 44% 76%, rgba(255, 235, 190, 0.6), transparent 60%);
-  opacity: 0.8;
-  animation: twinkle 7s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.hero-orbit {
-  position: absolute;
-  top: 200rpx;
-  right: -200rpx;
-  width: 560rpx;
-  height: 560rpx;
-  border: 1rpx solid rgba(112, 190, 255, 0.16);
-  border-radius: 50%;
-  transform: rotate(-18deg);
-  pointer-events: none;
-}
-
-.hero-glow {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  filter: blur(24rpx);
-}
-
-.hero-glow--a {
-  top: -160rpx;
-  right: -120rpx;
-  width: 460rpx;
-  height: 460rpx;
-  background: radial-gradient(circle, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 68%);
-}
-
-.hero-glow--b {
-  bottom: -220rpx;
-  left: -140rpx;
-  width: 520rpx;
-  height: 520rpx;
-  background: radial-gradient(circle, rgba(100, 228, 255, 0.12), rgba(100, 228, 255, 0) 70%);
-}
-
-.hero-watermark {
-  position: absolute;
-  right: -6rpx;
-  top: 300rpx;
-  font-size: 68rpx;
-  line-height: 1;
-  letter-spacing: 8rpx;
-  color: rgba(170, 214, 255, 0.05);
-  pointer-events: none;
+  border-bottom: 1rpx solid $on-deep-line;
 }
 
 .hero-inner {
@@ -303,184 +456,79 @@ onLoad(async () => {
   z-index: 2;
 }
 
-.bar-top {
-  display: flex;
-  align-items: center;
-}
-
-.emblem {
-  width: 88rpx;
-  height: 88rpx;
-  flex-shrink: 0;
-  border-radius: 24rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background:
-    radial-gradient(120% 120% at 30% 0%, rgba(255, 239, 201, 0.32), rgba(255, 239, 201, 0) 56%),
-    linear-gradient(150deg, rgba(15, 157, 143, 0.3), rgba(11, 15, 14, 0.8));
-  border: 1rpx solid rgba(15, 157, 143, 0.55);
-  box-shadow:
-    inset 0 1rpx 0 rgba(255, 255, 255, 0.32),
-    0 16rpx 32rpx -20rpx rgba(0, 0, 0, 0.7),
-    0 0 24rpx -6rpx rgba(15, 157, 143, 0.35);
-}
-
-.emblem-text {
-  font-size: 30rpx;
-  font-weight: 700;
-  letter-spacing: 2rpx;
-  color: #8fe9dd;
-}
-
-.brand {
-  flex: 1;
-  margin-left: 20rpx;
-  display: flex;
-  flex-direction: column;
-}
-
-.brand-name {
-  font-family: $font-body;
-  font-size: 40rpx;
-  font-weight: 700;
-  letter-spacing: 0.5rpx;
-  color: #f4fbf8;
-}
-
-.brand-sub {
-  margin-top: 6rpx;
-  font-size: 26rpx;
-  letter-spacing: 2.4rpx;
-  color: rgba(255, 226, 171, 0.62);
-}
-
-.ver-chip {
-  padding: 10rpx 18rpx;
-  border-radius: $r-pill;
-  background: rgba(242, 245, 243, 0.07);
-  border: 1rpx solid rgba(242, 245, 243, 0.18);
-}
-
-.ver-text {
-  font-size: 26rpx;
-  letter-spacing: 1rpx;
-  color: rgba(226, 245, 238, 0.72);
-}
-
-.pass-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 44rpx;
-}
-
-.pass-chip {
-  display: flex;
-  align-items: center;
-  height: 44rpx;
-  padding: 0 18rpx;
-  border-radius: $r-pill;
-  background: rgba(11, 18, 16, 0.72);
-  border: 1rpx solid rgba(15, 157, 143, 0.38);
-}
-
-.pass-dot {
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: 50%;
-  margin-right: 12rpx;
-  background: #8fe9dd;
-  box-shadow: 0 0 0 6rpx rgba(100, 228, 255, 0.16);
-  animation: pulse 2.4s ease-in-out infinite;
-}
-
-.pass-dot--off {
-  background: #e0a963;
-  box-shadow: 0 0 0 6rpx rgba(232, 178, 103, 0.16);
-  animation: none;
-}
-
-.pass-chip-text {
-  font-size: 26rpx;
-  letter-spacing: 2rpx;
-  color: rgba(255, 232, 187, 0.94);
-}
-
-.pass-no {
-  font-size: 26rpx;
-  letter-spacing: 2rpx;
-  color: rgba(226, 245, 238, 0.38);
-}
-
-.headline {
-  margin-top: 34rpx;
-}
-
-.hl-line {
+.hero-eyebrow {
   display: block;
-  font-family: $font-body;
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  text-transform: uppercase;
+  color: $on-deep-2;
+}
+
+.hero-title-wrap {
+  margin-top: $sp-3;
+}
+
+.hero-title {
+  display: block;
+  font-family: $font-display;
   font-size: $fs-display;
-  font-weight: 700;
+  font-weight: 800;
   line-height: $lh-tight;
   letter-spacing: $ls-tight;
-  color: #f7fcfa;
+  color: $on-deep;
 }
 
-.hl-accent {
-  margin-top: 8rpx;
-  background-image: linear-gradient(96deg, #f4f4f1 0%, #8fe9dd 34%, #0f9d8f 96%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: #8fe9dd;
+.hero-title--accent {
+  color: $brand-on-deep;
 }
 
-.lede {
+.hero-lede {
   display: block;
-  margin-top: 26rpx;
-  padding-right: 40rpx;
+  margin-top: $sp-3;
+  padding-right: $sp-5;
   font-size: $fs-meta;
-  line-height: 1.72;
-  color: rgba(207, 225, 252, 0.7);
+  line-height: $lh-body;
+  color: $on-deep-2;
 }
 
-.stats {
+.hero-logo {
+  margin-top: $sp-5;
+}
+
+.hero-meta {
   display: flex;
   align-items: stretch;
-  margin-top: 40rpx;
-  padding: 22rpx 8rpx;
-  border-radius: 28rpx;
-  background: rgba(11, 18, 16, 0.56);
-  border: 1rpx solid rgba(140, 190, 255, 0.14);
+  margin-top: $sp-5;
+  padding-top: $sp-4;
+  border-top: 1rpx solid $on-deep-line;
 }
 
-.stat {
+.meta-item {
   flex: 1;
-  padding: 0 22rpx;
   display: flex;
   flex-direction: column;
 }
 
-.stat-sep {
+.meta-sep {
   width: 1rpx;
-  background: rgba(244, 244, 241, 0.12);
+  margin: 0 $sp-2;
+  background: $on-deep-line;
 }
 
-.stat-k {
-  font-size: 26rpx;
-  letter-spacing: 3rpx;
-  color: rgba(184, 211, 255, 0.48);
+.meta-k {
+  font-size: $fs-micro;
+  letter-spacing: 2rpx;
+  color: $on-deep-3;
 }
 
-.stat-v {
+.meta-v {
   margin-top: 10rpx;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   letter-spacing: 1rpx;
-  color: rgba(239, 247, 255, 0.94);
+  color: $on-deep-2;
 }
 
-.stat-status {
+.meta-status {
   display: flex;
   align-items: center;
   margin-top: 10rpx;
@@ -491,326 +539,251 @@ onLoad(async () => {
   height: 12rpx;
   border-radius: 50%;
   margin-right: 12rpx;
-  background: #8fe9dd;
-  box-shadow: 0 0 0 6rpx rgba(100, 228, 255, 0.15);
-  animation: pulse 2.4s ease-in-out infinite;
+  background: $brand-on-deep;
 }
 
-.status-dot--down {
-  background: #e0a963;
-  box-shadow: 0 0 0 6rpx rgba(232, 178, 103, 0.15);
-  animation: none;
+.status-dot--off {
+  background: $amber-on-deep;
 }
 
-.barcode {
-  margin-top: 34rpx;
-  height: 34rpx;
-  border-radius: 4rpx;
-  background-image: repeating-linear-gradient(
-    90deg,
-    rgba(205, 229, 255, 0.34) 0,
-    rgba(205, 229, 255, 0.34) 3rpx,
-    rgba(205, 229, 255, 0) 3rpx,
-    rgba(205, 229, 255, 0) 5rpx,
-    rgba(205, 229, 255, 0.5) 5rpx,
-    rgba(205, 229, 255, 0.5) 7rpx,
-    rgba(205, 229, 255, 0) 7rpx,
-    rgba(205, 229, 255, 0) 12rpx,
-    rgba(205, 229, 255, 0.24) 12rpx,
-    rgba(205, 229, 255, 0.24) 14rpx,
-    rgba(205, 229, 255, 0) 14rpx,
-    rgba(205, 229, 255, 0) 19rpx
-  );
-  opacity: 0.5;
-  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 96%);
-  mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 96%);
+.hero-error {
+  display: flex;
+  align-items: flex-start;
+  margin-top: $sp-4;
+  padding: $sp-3;
+  border: 1rpx solid $on-deep-line;
+  border-radius: $r-control;
+  background: rgba(11, 18, 16, 0.56);
 }
 
-.hero-holo {
-  height: 2rpx;
-  margin-top: 18rpx;
-  background: linear-gradient(90deg, rgba(124, 230, 255, 0) 0%, rgba(124, 230, 255, 0.72) 28%, rgba(255, 214, 138, 0.74) 68%, rgba(255, 214, 138, 0) 100%);
-  opacity: 0.8;
-}
-
-.hero-foot {
+.hero-error-mark {
+  width: 44rpx;
+  height: 44rpx;
+  flex-shrink: 0;
+  border: 1rpx solid $on-deep-line;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 18rpx;
-}
-
-.foot {
+  justify-content: center;
   font-size: 26rpx;
-  letter-spacing: 1rpx;
-  color: rgba(226, 245, 238, 0.42);
+  color: $amber-on-deep;
 }
 
-/* ---------- 主体 ---------- */
+.hero-error-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: $sp-3;
+}
+
+.hero-error-title {
+  display: block;
+  font-size: $fs-meta;
+  font-weight: 800;
+  color: $on-deep;
+}
+
+.hero-error-text {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $fs-micro;
+  line-height: $lh-body;
+  color: $on-deep-2;
+  word-break: break-all;
+}
+
+.hero-retry {
+  flex-shrink: 0;
+  height: 64rpx;
+  margin-left: $sp-3;
+  padding: 0 $sp-3;
+  border: 1rpx solid $on-deep-line;
+  border-radius: $r-control;
+  display: flex;
+  align-items: center;
+}
+
+.hero-retry-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $on-deep-2;
+}
+
+/* ---------- 正文：索引条目 ---------- */
 .body {
-  padding: 44rpx $sp-4 0;
+  padding: $sp-6 $sp-3 0;
 }
 
 .cta {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  padding: 36rpx 34rpx;
-  border-radius: $r-card;
-  background:
-    radial-gradient(120% 140% at 100% 0%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 58%),
-    linear-gradient(140deg, #0b0f0e 0%, #152622 100%);
-  box-shadow: 0 30rpx 60rpx -34rpx rgba(11, 15, 14, 0.5);
-  animation: rise 0.5s ease both;
-}
-
-.cta-glow {
-  position: absolute;
-  right: -60rpx;
-  bottom: -80rpx;
-  width: 260rpx;
-  height: 260rpx;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(120, 210, 255, 0.24), rgba(120, 210, 255, 0) 70%);
-  pointer-events: none;
-}
-
-.cta-text {
-  position: relative;
-  z-index: 2;
-  flex: 1;
-  padding-right: 24rpx;
+  padding: $sp-4;
+  border-radius: $r-control;
+  background: $paper-2;
 }
 
 .cta-kicker {
   display: block;
-  font-size: 26rpx;
-  letter-spacing: 3rpx;
-  color: rgba(120, 240, 214, 0.82);
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  text-transform: uppercase;
+  color: $brand-deep;
+}
+
+.cta-main {
+  display: flex;
+  align-items: center;
+  margin-top: 12rpx;
+}
+
+.cta-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .cta-title {
   display: block;
-  margin-top: 12rpx;
-  font-family: $font-body;
-  font-size: 44rpx;
-  font-weight: 700;
-  line-height: 1.28;
-  letter-spacing: -0.5rpx;
-  color: #f7fcfa;
+  font-family: $font-display;
+  font-size: $fs-h3;
+  font-weight: 800;
+  line-height: $lh-snug;
+  letter-spacing: $ls-tight;
+  color: $ink;
 }
 
 .cta-sub {
   display: block;
-  margin-top: 12rpx;
+  margin-top: 8rpx;
   font-size: $fs-meta;
-  letter-spacing: 0.5rpx;
-  color: rgba(219, 240, 233, 0.6);
+  color: $ink-3;
 }
 
 .cta-arrow {
-  position: relative;
-  z-index: 2;
-  width: 92rpx;
-  height: 92rpx;
   flex-shrink: 0;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f7fcfa;
-}
-
-.cta-arrow-text {
-  font-size: 40rpx;
-  line-height: 1;
-  color: #0d1917;
+  margin-left: $sp-3;
+  font-size: 30rpx;
+  color: $ink-4;
 }
 
 .section {
-  margin-top: 52rpx;
+  margin-top: $sp-6;
 }
 
 .sec-head {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 22rpx;
+  margin-bottom: $sp-2;
 }
 
-.sec-l {
+.sec-head-l {
   display: flex;
-  align-items: baseline;
-}
-
-.sec-n {
-  margin-right: 16rpx;
-  font-size: 26rpx;
-  letter-spacing: 1rpx;
-  color: $brand-deep;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .sec-title {
-  font-family: $font-body;
-  font-size: 40rpx;
-  font-weight: 700;
-  letter-spacing: -0.5rpx;
+  margin-top: 10rpx;
+  font-family: $font-display;
+  font-size: $fs-h2;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
-.sec-meta {
-  font-size: 26rpx;
-  letter-spacing: 2rpx;
-  color: $ink-4;
-}
-
-.grid {
-  display: flex;
-  flex-wrap: wrap;
-  margin: 0 -8rpx;
-}
-
-.tile {
-  width: calc(50% - 16rpx);
-  margin: 8rpx;
-  padding: 26rpx 26rpx 20rpx;
-  box-sizing: border-box;
-  border-radius: 26rpx;
-  background: $shell;
-  border: 1rpx solid $paper-3;
-  box-shadow: 0 2rpx 4rpx rgba(13, 25, 23, 0.03), 0 18rpx 36rpx -26rpx rgba(13, 25, 23, 0.22);
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
-}
-
-.tile-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tile-code {
-  font-size: 26rpx;
+.sec-count {
+  flex-shrink: 0;
+  margin-left: $sp-3;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-4;
 }
 
-.tile-tag {
-  padding: 4rpx 12rpx;
-  border-radius: $r-pill;
-  background: $brand-soft;
-  font-size: 26rpx;
-  letter-spacing: 1.5rpx;
-  color: $brand-deep;
+.index-list {
+  margin-top: $sp-2;
 }
 
-.tile-title {
+.index-row {
+  display: flex;
+  align-items: center;
+  padding: $sp-3 0;
+  border-bottom: 1rpx solid $paper-2;
+}
+
+.index-row:last-child {
+  border-bottom: none;
+}
+
+.index-code {
+  width: 64rpx;
+  flex-shrink: 0;
+  font-size: $fs-meta;
+  letter-spacing: 1rpx;
+  color: $ink-4;
+}
+
+.index-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: $sp-2;
+}
+
+.index-title {
   display: block;
-  margin-top: 22rpx;
-  font-family: $font-body;
-  font-size: 40rpx;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: $fs-body;
+  font-weight: 600;
+  line-height: 1.4;
   color: $ink;
 }
 
-.tile-desc {
+.index-desc {
   display: block;
-  margin-top: 8rpx;
-  font-size: 26rpx;
+  margin-top: 4rpx;
+  font-size: $fs-micro;
   line-height: 1.5;
   color: $ink-3;
 }
 
-.tile-bot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  margin-top: 18rpx;
-}
-
-.tile-arrow {
-  font-size: 26rpx;
-  color: $ink-4;
-}
-
-.cover {
-  display: flex;
-  flex-wrap: wrap;
-  margin: 0 -8rpx;
-}
-
-.cover-item {
-  width: calc(50% - 16rpx);
-  margin: 8rpx;
-  padding: 22rpx 24rpx;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  border-radius: 24rpx;
-  background: $shell;
-  border: 1rpx solid $paper-3;
-}
-
-.cover-glyph {
-  width: 64rpx;
-  height: 64rpx;
+.index-tag {
   flex-shrink: 0;
-  border-radius: 18rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(150deg, #0d1917, #14453c);
-}
-
-.cover-glyph-text {
-  font-size: 26rpx;
-  letter-spacing: 1rpx;
-  color: #d8fff3;
-}
-
-.cover-main {
-  flex: 1;
-  margin-left: 18rpx;
-  display: flex;
-  flex-direction: column;
-}
-
-.cover-name {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: $ink;
-}
-
-.cover-code {
-  margin-top: 4rpx;
-  font-size: 26rpx;
+  margin-left: $sp-3;
+  padding: 4rpx 12rpx;
+  border-radius: $r-control;
+  background: $brand-soft;
+  font-size: $fs-micro;
   letter-spacing: 1.5rpx;
+  color: $brand-deep;
+}
+
+.index-arrow {
+  flex-shrink: 0;
+  margin-left: 14rpx;
+  font-size: $fs-meta;
   color: $ink-4;
 }
 
-.cover-dot {
+.index-dot {
+  flex-shrink: 0;
+  margin-left: $sp-3;
   width: 8rpx;
   height: 8rpx;
   border-radius: 50%;
   background: $brand;
-  flex-shrink: 0;
 }
 
-.cover-note {
+.section-note {
   display: block;
-  margin-top: 20rpx;
+  margin-top: $sp-3;
   padding: 0 8rpx;
-  font-size: 26rpx;
-  line-height: 1.7;
+  font-size: $fs-meta;
+  line-height: $lh-body;
   color: $ink-3;
 }
 
+/* ---------- 页脚 ---------- */
 .footer {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 64rpx 0 0;
+  padding-top: $sp-8;
 }
 
 .foot-rule {
@@ -821,7 +794,7 @@ onLoad(async () => {
 }
 
 .foot-line {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $ink-4;
 }
@@ -831,59 +804,341 @@ onLoad(async () => {
   opacity: 0.72;
 }
 
-/* ---------- 窄屏：收紧字号，保证 375px 也不挤 ---------- */
-@media (max-width: 390px) {
-  .hl-line {
-    font-size: 84rpx;
-  }
+/* ---------- 精选目录 ---------- */
+.pick-chips {
+  margin-top: $sp-3;
+  white-space: nowrap;
+}
 
-  .hero {
-    padding-left: $sp-4;
-    padding-right: $sp-4;
+.pick-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 60rpx;
+  padding: 0 22rpx;
+  margin-right: 14rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  background: $shell;
+}
+
+.pick-chip--active {
+  background: $brand-soft;
+  border-color: transparent;
+}
+
+.pick-chip-label {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.pick-chip--active .pick-chip-label {
+  color: $brand-deep;
+  font-weight: 600;
+}
+
+.pick-chip-count {
+  margin-left: 8rpx;
+  font-size: $fs-micro;
+  color: $ink-4;
+}
+
+.pick-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: $sp-3;
+}
+
+.pick-card {
+  width: 48.6%;
+  margin-bottom: $sp-3;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+  overflow: hidden;
+}
+
+.pick-cover {
+  position: relative;
+  width: 100%;
+  height: 240rpx;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $paper-2;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.pick-cover-img {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.pick-cover-ph {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pick-cover-char {
+  font-family: $font-display;
+  font-size: 84rpx;
+  font-weight: 800;
+  color: $ink-4;
+}
+
+.pick-cover-tag {
+  position: absolute;
+  left: 16rpx;
+  top: 16rpx;
+  z-index: 2;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: 6rpx;
+  padding: 4rpx 10rpx;
+}
+
+.pick-add {
+  position: absolute;
+  right: 14rpx;
+  bottom: 14rpx;
+  z-index: 3;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pick-add--inquiry {
+  background: $brand-soft;
+}
+
+.pick-add-text {
+  font-size: 32rpx;
+  line-height: 1;
+  color: $ink;
+}
+
+.pick-info {
+  padding: $sp-3;
+  display: flex;
+  flex-direction: column;
+  min-height: 196rpx;
+}
+
+.pick-name {
+  font-family: $font-display;
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 1.4;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pick-sub,
+.pick-spec,
+.pick-pack {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $fs-micro;
+  color: $ink-3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pick-spec,
+.pick-pack {
+  margin-top: 4rpx;
+  color: $ink-4;
+}
+
+.pick-foot {
+  margin-top: auto;
+  padding-top: $sp-2;
+}
+
+.pick-price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.pick-cur {
+  font-size: 24rpx;
+  color: $ink-2;
+  margin-right: 2rpx;
+}
+
+.pick-amount {
+  font-family: $font-mono;
+  font-size: 38rpx;
+  font-weight: 800;
+  color: $ink;
+}
+
+.pick-unit {
+  margin-left: 6rpx;
+  font-size: $fs-micro;
+  color: $ink-3;
+}
+
+.pick-inquiry {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: $brand-deep;
+}
+
+.pick-inquiry-sub {
+  margin-left: 10rpx;
+  font-size: $fs-micro;
+  color: $ink-3;
+}
+
+.pick-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: $sp-6 0 $sp-4;
+}
+
+.pick-state-mark {
+  width: 72rpx;
+  height: 72rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: $ink-4;
+}
+
+.pick-state-title {
+  margin-top: $sp-3;
+  font-size: $fs-body;
+  font-weight: 700;
+  color: $ink;
+}
+
+.pick-state-sub {
+  margin-top: 8rpx;
+  font-size: $fs-meta;
+  color: $ink-3;
+  text-align: center;
+  line-height: $lh-body;
+}
+
+.pick-retry {
+  margin-top: $sp-3;
+  height: 64rpx;
+  padding: 0 $sp-4;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  display: flex;
+  align-items: center;
+}
+
+.pick-retry-text {
+  font-size: $fs-micro;
+  color: $ink-2;
+}
+
+.pick-sk-cover {
+  height: 240rpx;
+  border-radius: 0;
+}
+
+.pick-sk-line {
+  height: 26rpx;
+  margin-top: 14rpx;
+  width: 82%;
+}
+
+.pick-sk-line--short {
+  width: 54%;
+}
+
+.pick-sk-price {
+  height: 30rpx;
+  margin-top: 18rpx;
+  width: 40%;
+}
+
+.pick-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $sp-2;
+  padding: $sp-3 4rpx;
+  border-top: 1rpx solid $paper-2;
+}
+
+.pick-more-text {
+  font-size: $fs-meta;
+  color: $brand-deep;
+  font-weight: 600;
+}
+
+.pick-more-arrow {
+  font-size: $fs-meta;
+  color: $ink-4;
+}
+
+/* ---------- 窄屏：收紧展示大标，保证 375px 不挤 ---------- */
+@media (max-width: 390px) {
+  .hero-title {
+    font-size: 84rpx;
   }
 
   .body {
     padding-left: 22rpx;
     padding-right: 22rpx;
   }
-
-  .stat {
-    padding: 0 16rpx;
-  }
 }
 
-/* 窄屏水印会压到标题，直接收掉 */
-@media (max-width: 767px) {
-  .hero-watermark {
-    display: none;
-  }
-}
-
-/* ---------- 宽屏：把版心当作一张证件卡浮在深压背景上 ---------- */
-@media (min-width: 768px) {
-  .page.home {
-    margin-top: 48px;
-    margin-bottom: 48px;
-    border-radius: 28px;
-    overflow: hidden;
-    box-shadow: 0 60rpx 140rpx -70rpx rgba(13, 25, 23, 0.45), 0 2rpx 0 rgba(255, 255, 255, 0.6) inset;
-  }
-
+/* ---------- 平板 / 折叠屏展开态：左目录 + 右索引双栏 ---------- */
+@media (min-width: 1000px) {
   .body {
-    padding: 48rpx 48rpx 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    column-gap: $sp-6;
+    align-items: start;
   }
 
-  .tile-title {
-    font-size: 34rpx;
+  /* 左栏：快捷入口 + 精选目录；右栏：能力入口 + 覆盖范围 */
+  .body > :nth-of-type(n + 3) {
+    grid-column: 2;
   }
-}
-@keyframes twinkle {
-  0%,
-  100% {
-    opacity: 0.55;
+
+  .body > .footer {
+    grid-column: 1 / -1;
   }
-  50% {
-    opacity: 0.95;
+
+  .pick-card {
+    width: 48.6%;
   }
 }
 </style>

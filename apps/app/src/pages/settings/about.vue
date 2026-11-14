@@ -1,12 +1,16 @@
 <template>
   <view class="page">
     <mx-bar />
+
     <view class="brand">
-      <text class="brand-watermark mono">MixmAPP</text>
       <mx-logo size="lg" tone="light" sub="MULTI-END IDENTITY" />
-      <text class="brand-ver mono">v{{ version }} · {{ env }}</text>
+      <view class="brand-meta">
+        <text class="brand-ver mono">V{{ APP_VERSION }} · 正式发布</text>
+        <text class="brand-env mono">ENV · {{ env }}</text>
+      </view>
       <text class="brand-lede">uni-app 单码多端 · 自动发号 · 全链路自动化</text>
       <view class="brand-tags">
+        <text class="tag tag--dark">正式发布</text>
         <text class="tag tag--dark">内置发号</text>
         <text class="tag tag--dark">多端构建</text>
         <text class="tag tag--dark">一键回滚</text>
@@ -14,8 +18,33 @@
     </view>
 
     <view class="sheet block">
+      <text class="eyebrow">PALETTE</text>
+      <text class="block-title">色板</text>
+      <view class="rule" />
+      <view class="swatches">
+        <view v-for="s in swatches" :key="s.name" class="swatch">
+          <view class="swatch-chip" :class="`sw--${s.name}`" />
+          <text class="swatch-name mono">{{ s.name }}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="sheet block">
+      <text class="eyebrow">TYPE SCALE</text>
+      <text class="block-title">字阶</text>
+      <view class="rule" />
+      <view class="type-list">
+        <view v-for="t in typeScale" :key="t.name" class="type-row">
+          <text class="type-name mono">{{ t.name }}</text>
+          <text class="type-sample" :class="`type--${t.name}`">索引卡档案册</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="sheet block">
       <text class="eyebrow">CAPABILITIES</text>
       <text class="block-title">服务端能力</text>
+      <view class="rule" />
       <text v-if="!meta" class="hint">{{ error || '正在读取 /api/v1/meta …' }}</text>
       <view v-else class="cap-list">
         <view v-for="(value, key) in meta.thirdParty" :key="key" class="cap">
@@ -32,6 +61,7 @@
     <view class="sheet block">
       <text class="eyebrow">RUNTIME</text>
       <text class="block-title">运行环境</text>
+      <view class="rule" />
       <view class="row"><text class="k">当前平台</text><text class="v">{{ platform }}</text></view>
       <view class="row"><text class="k">API 基址</text><text class="v v--mono mono">{{ apiBase }}</text></view>
       <view class="row row--last"><text class="k">上次启动</text><text class="v mono">{{ lastLaunch }}</text></view>
@@ -40,6 +70,7 @@
     <view class="sheet block">
       <text class="eyebrow">ADMIN</text>
       <text class="block-title">管理后台</text>
+      <view class="rule" />
       <text class="hint">查看数据库落点、在云 PG 与服务器 PG 之间热切换，并手动触发超时订单扫描。</text>
       <button class="admin-btn" @click="openAdmin">进入管理后台</button>
     </view>
@@ -47,6 +78,7 @@
     <view class="sheet block">
       <text class="eyebrow">DELIVERY</text>
       <text class="block-title">交付链路</text>
+      <view class="rule" />
       <view class="flow">
         <view v-for="(step, i) in flow" :key="step.no" class="flow-item">
           <view class="flow-no-wrap">
@@ -58,7 +90,7 @@
       </view>
     </view>
 
-    <text class="foot mono">© 2026 MIXMAPP · INTERNAL BUILD</text>
+    <text class="foot mono">© 2026 MIXMAPP · OFFICIAL RELEASE</text>
   </view>
 </template>
 
@@ -71,7 +103,6 @@ import { ROUTES } from '../../routes';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
 const appName = ref('MixmAPP');
-const version = ref(APP_VERSION);
 const env = ref('unknown');
 const meta = ref<{
   appName: string;
@@ -85,6 +116,26 @@ const error = ref('');
 const platform = ref('');
 const apiBase = ref(API_BASE);
 const lastLaunch = ref('—');
+
+/** 设计档案色板：仅用令牌渲染，不在界面上写色值文字。 */
+const swatches = [
+  { name: 'paper' },
+  { name: 'paper-2' },
+  { name: 'paper-3' },
+  { name: 'shell' },
+  { name: 'ink' },
+  { name: 'ink-2' },
+  { name: 'ink-3' },
+  { name: 'ink-4' },
+  { name: 'brand' },
+  { name: 'brand-deep' },
+  { name: 'brand-soft' },
+  { name: 'signal' },
+  { name: 'amber' },
+];
+
+/** 字阶档位：display / h1 / h2 / body / meta 各一行。 */
+const typeScale = [{ name: 'display' }, { name: 'h1' }, { name: 'h2' }, { name: 'body' }, { name: 'meta' }];
 
 const flow = [
   { no: '01', text: '提交代码' },
@@ -106,7 +157,7 @@ onLoad(async () => {
   try {
     meta.value = await metaApi.get();
     appName.value = meta.value.appName || 'MixmAPP';
-    version.value = meta.value.version;
+    // 版本只认构建期 APP_VERSION（正式发布），不读服务端 meta.version，避免显示旧版串。
     env.value = meta.value.env;
   } catch (e) {
     error.value = e instanceof ApiError ? `无法连接 API：${e.message}` : '无法连接 API';
@@ -132,55 +183,31 @@ onLoad(async () => {
   border-radius: $r-shell;
 }
 
-.brand-watermark {
-  position: absolute;
-  right: -8rpx;
-  bottom: -18rpx;
-  font-size: 84rpx;
-  line-height: 1;
-  letter-spacing: 3rpx;
-  color: rgba(244, 244, 241, 0.06);
-}
-
-.brand-mark {
-  width: 96rpx;
-  height: 96rpx;
-  border: 1rpx solid rgba(244, 244, 241, 0.24);
-  border-radius: 22rpx;
+.brand-meta {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 34rpx;
-  font-weight: 700;
-  letter-spacing: 3rpx;
-  color: #f4f8f6;
-}
-
-.brand-name {
-  display: block;
+  gap: $sp-3;
   margin-top: $sp-4;
-  font-family: $font-display;
-  font-size: 48rpx;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  letter-spacing: 2rpx;
-  color: #f6faf8;
 }
 
 .brand-ver {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: rgba(244, 244, 241, 0.62);
+  color: $on-deep;
+}
+
+.brand-env {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $on-deep-3;
 }
 
 .brand-lede {
   display: block;
   margin-top: $sp-3;
-  font-size: 30rpx;
-  line-height: 1.7;
-  color: rgba(244, 244, 241, 0.66);
+  font-size: $fs-meta;
+  line-height: $lh-body;
+  color: $on-deep-2;
 }
 
 .brand-tags {
@@ -209,8 +236,113 @@ onLoad(async () => {
   color: $ink;
 }
 
+.block .rule {
+  margin-top: $sp-3;
+}
+
 .block .hint {
   margin-top: 12rpx;
+}
+
+/* ---------- 色板 ---------- */
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: $sp-3;
+}
+
+.swatch {
+  width: 25%;
+  margin-bottom: $sp-3;
+}
+
+.swatch-chip {
+  width: 100%;
+  height: 64rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+}
+
+.swatch-name {
+  display: block;
+  margin-top: 8rpx;
+  font-size: $fs-micro;
+  letter-spacing: 0.5rpx;
+  color: $ink-3;
+}
+
+.sw--paper { background: $paper; }
+.sw--paper-2 { background: $paper-2; }
+.sw--paper-3 { background: $paper-3; }
+.sw--shell { background: $shell; }
+.sw--ink { background: $ink; }
+.sw--ink-2 { background: $ink-2; }
+.sw--ink-3 { background: $ink-3; }
+.sw--ink-4 { background: $ink-4; }
+.sw--brand { background: $brand; }
+.sw--brand-deep { background: $brand-deep; }
+.sw--brand-soft { background: $brand-soft; }
+.sw--signal { background: $signal; }
+.sw--amber { background: $amber; }
+
+/* ---------- 字阶 ---------- */
+.type-list {
+  margin-top: $sp-3;
+}
+
+.type-row {
+  display: flex;
+  align-items: baseline;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid $paper-2;
+}
+
+.type-row:last-child {
+  border-bottom: none;
+}
+
+.type-name {
+  flex-shrink: 0;
+  width: 120rpx;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.type-sample {
+  flex: 1;
+  color: $ink;
+}
+
+.type--display {
+  font-family: $font-display;
+  font-size: $fs-display;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
+}
+
+.type--h1 {
+  font-family: $font-display;
+  font-size: $fs-h1;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
+}
+
+.type--h2 {
+  font-family: $font-display;
+  font-size: $fs-h2;
+  font-weight: 800;
+  letter-spacing: $ls-tight;
+}
+
+.type--body {
+  font-size: $fs-body;
+  line-height: $lh-body;
+}
+
+.type--meta {
+  font-size: $fs-meta;
+  line-height: $lh-body;
 }
 
 /* ---------- 能力 ---------- */
@@ -250,13 +382,13 @@ onLoad(async () => {
 }
 
 .cap-key {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-2;
 }
 
 .cap-val {
   margin-left: $sp-2;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 0.5rpx;
   color: $brand-deep;
   flex-shrink: 0;
@@ -271,7 +403,7 @@ onLoad(async () => {
   margin-top: $sp-3;
   padding-top: $sp-3;
   border-top: 1rpx solid $paper-2;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.6;
   color: $ink-3;
 }
@@ -293,13 +425,13 @@ onLoad(async () => {
 .k {
   flex-shrink: 0;
   margin-right: $sp-3;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
 .v {
   flex: 1;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.5;
   color: $ink;
   text-align: right;
@@ -307,7 +439,6 @@ onLoad(async () => {
 }
 
 .v--mono {
-  font-size: 26rpx;
   color: $ink-3;
 }
 
@@ -316,8 +447,8 @@ onLoad(async () => {
   padding: 22rpx 0;
   border-radius: $r-card;
   background: $brand;
-  font-size: 26rpx;
-  color: #f6faf8;
+  font-size: $fs-micro;
+  color: $shell;
 }
 
 /* ---------- 交付链路 ---------- */
@@ -339,7 +470,7 @@ onLoad(async () => {
 }
 
 .flow-no {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $brand-deep;
   line-height: 1.4;
@@ -355,7 +486,7 @@ onLoad(async () => {
 .flow-text {
   flex: 1;
   padding: 0 0 32rpx 12rpx;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   line-height: 1.4;
   color: $ink-2;
 }
@@ -364,7 +495,7 @@ onLoad(async () => {
   display: block;
   margin-top: $sp-6;
   text-align: center;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $ink-4;
 }

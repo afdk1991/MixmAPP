@@ -6,4 +6,20 @@
     <string name="custom_url_scheme">top.mixm.app</string>
     <string name="press_back_again_to_exit">再按一次退出</string>
     <string name="no_browser_for_link">没有可用的浏览器打开此链接</string>
+
+    <!-- 网络状态感知 -->
+    <string name="network_lost">网络已断开，部分内容可能无法加载</string>
+    <string name="network_restored">网络已恢复</string>
+    <string name="network_restored_retry">网络已恢复，正在重新加载</string>
+    <string name="network_settings_unavailable">无法打开网络设置</string>
+
+    <!-- 轻量版本检查：只提示，不强制升级、不下载 APK -->
+    <string name="update_available">发现新版本 %1$s，可前往官网更新</string>
+
+    <!-- WebView 渲染进程崩溃兜底 -->
+    <string name="renderer_recovering">页面内核已重启，正在恢复</string>
+    <string name="renderer_failed">页面内核反复崩溃，请重新打开应用</string>
+
+    <!-- 首启隐私同意页：未同意前返回键不生效 -->
+    <string name="privacy_consent_required">请先阅读并同意隐私政策</string>
 </resources>
