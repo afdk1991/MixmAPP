@@ -66,6 +66,18 @@ function yuanText(fen: number): string {
   return (fen / 100).toFixed(2);
 }
 
+/**
+ * 对外商品 DTO 剥离上游溯源字段（sourceUrl / priceSource / priceCapturedAt）：
+ * 这三项只供内部采集链路与管理面核对，公开读接口不再下发。
+ */
+function stripUpstreamFields(dto: ProductDto): ProductDto {
+  const publicDto: ProductDto = { ...dto };
+  delete publicDto.sourceUrl;
+  delete publicDto.priceSource;
+  delete publicDto.priceCapturedAt;
+  return publicDto;
+}
+
 export type ImportReport = {
   batch: string;
   source?: string;
@@ -190,10 +202,15 @@ export class MallService {
     return masked;
   }
 
-  /** 按查看者登录态套用门禁：登录正常下发；匿名只对源站目录商品屏蔽。 */
-  private applyViewerGate(dto: ProductDto, loggedIn: boolean): ProductDto {
+  /**
+   * 按查看者登录态套用门禁：登录正常下发；匿名只对源站目录商品屏蔽。
+   * `sourceCatalog` 由调用方按内部记录（含已被剥离的溯源字段）预先判定，
+   * 避免对外 DTO 剥离 sourceUrl/priceSource 后判定失效。
+   */
+  private applyViewerGate(dto: ProductDto, loggedIn: boolean, sourceCatalog?: boolean): ProductDto {
     if (loggedIn) return dto;
-    if (!this.isSourceCatalogProduct(dto)) return dto;
+    const isSource = sourceCatalog ?? this.isSourceCatalogProduct(dto);
+    if (!isSource) return dto;
     return this.maskForAnonymous(dto);
   }
 
@@ -218,9 +235,6 @@ export class MallService {
       ...(product.specs && Object.keys(product.specs).length ? { specs: product.specs } : {}),
       ...(product.unit ? { unit: product.unit } : {}),
       ...(product.packQty != null ? { packQty: product.packQty } : {}),
-      ...(product.priceSource ? { priceSource: product.priceSource } : {}),
-      ...(product.priceCapturedAt ? { priceCapturedAt: product.priceCapturedAt } : {}),
-      ...(product.sourceUrl ? { sourceUrl: product.sourceUrl } : {}),
       ...(product.priceLi != null ? { priceLi: product.priceLi } : {}),
       ...(product.discountPct != null ? { discountPct: product.discountPct } : {}),
       ...(product.salePriceLi != null ? { salePriceLi: product.salePriceLi } : {}),
@@ -245,8 +259,11 @@ export class MallService {
       ...(stockConfidence ? { stockConfidence } : {}),
       inStock: this.isInStock(product),
     };
-    // 源站登录门禁：匿名视角屏蔽折后价 / 库存 / 库存状态
-    return this.applyViewerGate(dto, loggedIn);
+    // 源站登录门禁：匿名视角屏蔽折后价 / 库存 / 库存状态；
+    // 再用内部记录判定源站商品（对外 DTO 已不含溯源字段），最后剥离溯源字段下发。
+    return stripUpstreamFields(
+      this.applyViewerGate(dto, loggedIn, this.isSourceCatalogProduct(product)),
+    );
   }
 
   private toOrderItemDto(item: OrderItemRecord): OrderItemDto {
@@ -298,7 +315,7 @@ export class MallService {
   async listProducts(query: ProductQueryInput, loggedIn: boolean): Promise<ProductDto[]> {
     if (await this.useCatalog()) {
       const rows = this.catalog!.listProducts(query);
-      return rows.map((row) => this.applyViewerGate(row, loggedIn));
+      return rows.map((row) => stripUpstreamFields(this.applyViewerGate(row, loggedIn)));
     }
     const rows = await this.store.mall.products.list({
       ...(query.category ? { category: query.category } : {}),
@@ -320,7 +337,7 @@ export class MallService {
   async getProduct(productId: string, loggedIn: boolean): Promise<ProductDto> {
     if (await this.useCatalog()) {
       const fromCatalog = this.catalog!.getProduct(productId);
-      if (fromCatalog) return this.applyViewerGate(fromCatalog, loggedIn);
+      if (fromCatalog) return stripUpstreamFields(this.applyViewerGate(fromCatalog, loggedIn));
       // 目录源未命中时回退数据库，兼容仍指向库内旧商品的详情链接。
     }
     const product = await this.store.mall.products.findById(productId);

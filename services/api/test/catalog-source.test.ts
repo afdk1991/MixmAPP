@@ -60,21 +60,23 @@ describe('内嵌只读目录源（fixture 夹具）', () => {
     for (const p of data) {
       expect(typeof p.id).toBe('string');
       expect(p.id).toMatch(/^p_[0-9a-f]{24}$/);
-      expect(p.sourceUrl).toMatch(/^https:\/\//);
+      // 上游溯源字段只留在内部记录/管理面，公开读接口不再下发
+      expect(p.sourceUrl).toBeUndefined();
+      expect(p.priceSource).toBeUndefined();
+      expect(p.priceCapturedAt).toBeUndefined();
       expect(Array.isArray(p.categoryPath)).toBe(true);
       expect(p.categoryName).toBeTruthy();
       expect(typeof p.specs).toBe('object');
       expect(p.unit).toBeTruthy();
-      expect(p.priceSource).toBeTruthy();
-      expect(p.priceCapturedAt).toBeTruthy();
       // 目录库存需登录源站才可见，快照一律按 0（缺货）下发
       expect(p.stock).toBe(0);
       expect(p.createdAt).toBe('2026-11-14T04:00:00.000Z');
     }
-    const inquiry = data.filter((p) => p.priceSource === 'inquiry');
+    // 询价语义改由价格判定：0 元即询价
+    const inquiry = data.filter((p) => p.priceFen === 0);
     expect(inquiry).toHaveLength(2);
     for (const p of inquiry) expect(p.priceFen).toBe(0);
-    expect(data.find((p) => p.priceSource === 'anonymous')?.priceFen).toBe(68);
+    expect(data.find((p) => p.priceFen === 68)?.priceFen).toBe(68);
 
     const cats = await app.inject({ method: 'GET', url: '/api/v1/mall/categories' });
     const catData = cats.json().data as Array<{ code: string; name: string; count: number }>;
@@ -223,10 +225,10 @@ describe('内嵌目录源（真实 15,037 条 catalog.json）', () => {
       const products = first.json().data as AnyProduct[];
       expect(products).toHaveLength(3);
       const p = products[0]!;
-      expect(p.sourceUrl).toMatch(/^https:\/\//);
+      expect(p.sourceUrl).toBeUndefined();
       expect(p.brand).toBeTruthy();
       expect(p.specs).toBeTruthy();
-      expect(p.priceSource).toBeTruthy();
+      expect(p.priceSource).toBeUndefined();
       const withImg = products.find((x) => Array.isArray(x.images) && x.images.length > 0);
       if (withImg) expect(withImg.images[0]).toMatch(/^\/media\/products\/[0-9a-f]+\.(jpg|jpeg|png|webp|gif)$/);
 
