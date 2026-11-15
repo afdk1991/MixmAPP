@@ -1602,8 +1602,10 @@ export class PgStore implements Store {
         `select (select count(*)::int from mall_favorite_folders) as folders,
                 (select count(*)::int from mall_favorite_items) as items`,
       );
+      // 购物车实体表名是 carts（不是 cart_items）。写错表名在生产会直接抛 42P01，
+      // 让整个概览接口 500，所以这里与 infra/sql 里的建表语句保持逐字一致。
       const cartRes = await this.pool.query(
-        'select count(*)::int as items, count(distinct user_id)::int as users from cart_items',
+        'select count(*)::int as items, count(distinct user_id)::int as users from carts',
       );
       // 六态固定补齐，库里没有的状态也返回 0，前端不用做缺省判断。
       const byStatus: AdminCounts['orders']['byStatus'] = {
@@ -1772,7 +1774,8 @@ export class PgStore implements Store {
         this.pool.query('select count(*)::int as c from mall_favorite_items where user_id = $1', [
           userId,
         ]),
-        this.pool.query('select count(*)::int as c from cart_items where user_id = $1', [userId]),
+        // 同上：购物车表是 carts。
+        this.pool.query('select count(*)::int as c from carts where user_id = $1', [userId]),
       ]);
       const countOf = (res: { rows: Row[] }): number =>
         Number((res.rows[0] as Row | undefined)?.['c'] ?? 0);
