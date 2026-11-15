@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { onLaunch } from '@dcloudio/uni-app';
+import { onLaunch, onPageNotFound } from '@dcloudio/uni-app';
 import { restore } from './stores/session';
 import { PRIVACY_GATE_MODE, resolvePrivacyConsent } from './privacy';
 import { ROUTES } from './routes';
+
+// 正式产物里管理面（pages/admin/index）不注册，直接访问该地址会命中「路由不存在」。
+// 统一回首页，避免用户停在一张白屏上；开发态注册了该页面，不受影响。
+onPageNotFound(() => {
+  uni.reLaunch({ url: ROUTES.home });
+});
 
 onLaunch(async () => {
   restore();

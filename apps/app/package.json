@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev:h5": "uni",
-    "build:h5": "uni build",
+    "build:h5": "node scripts/build.mjs h5",
     "dev:mp-weixin": "uni -p mp-weixin",
-    "build:mp-weixin": "uni build -p mp-weixin",
+    "build:mp-weixin": "node scripts/build.mjs mp-weixin",
     "dev:app": "uni -p app",
-    "build:app": "uni build -p app",
-    "build:harmony": "uni build -p app-harmony",
+    "build:app": "node scripts/build.mjs app",
+    "build:harmony": "node scripts/build.mjs app-harmony",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
