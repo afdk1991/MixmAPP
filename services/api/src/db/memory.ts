@@ -2,6 +2,13 @@ import { buildSearchIndexRow, buildSearchTokens, matchesSearchTokens } from '../
 import type {
   AccountMergeRecord,
   AddressRecord,
+  AdminAuditRecord,
+  AdminCounts,
+  AdminFavoriteFolderRow,
+  AdminOrderFilter,
+  AdminProductFilter,
+  AdminUserFilter,
+  AdminUserSummary,
   BindingRecord,
   CartItemRecord,
   FavoriteFolderRecord,
@@ -54,6 +61,8 @@ export class MemoryStore implements Store {
   private favoriteFolderList: FavoriteFolderRecord[] = [];
   private favoriteItemList: FavoriteItemRecord[] = [];
   private mergeList: AccountMergeRecord[] = [];
+  /** 后台写操作审计（0020）：内存模式下只存在于进程生命周期内 */
+  private auditList: AdminAuditRecord[] = [];
 
   async ping(): Promise<boolean> {
     return true;
@@ -81,6 +90,7 @@ export class MemoryStore implements Store {
     this.favoriteFolderList = [];
     this.favoriteItemList = [];
     this.mergeList = [];
+    this.auditList = [];
   }
 
   users = {
@@ -742,6 +752,176 @@ export class MemoryStore implements Store {
         }
       }
       return candidates;
+    },
+  };
+
+  /**
+   * 后台运营台数据面（内存实现）。
+   * 与 PgStore 同口径：关键字大小写不敏感、按创建时间倒序、total 为筛选后总数。
+   */
+  admin = {
+    counts: async (): Promise<AdminCounts> => {
+      // 用户侧把 listed=false 视为下架；这里把「未显式下架」都算作在架。
+      const listedCount = this.productList.filter((p) => p.listed !== false).length;
+      const byStatus: AdminCounts['orders']['byStatus'] = {
+        pending: 0,
+        paid: 0,
+        picking: 0,
+        shipped: 0,
+        completed: 0,
+        cancelled: 0,
+      };
+      for (const order of this.orderList) byStatus[order.status] += 1;
+      return {
+        products: {
+          total: this.productList.length,
+          listed: listedCount,
+          unlisted: this.productList.length - listedCount,
+          // 目录商品以 sourceKey（sku:/url: 稳定键）判定
+          catalog: this.productList.filter((p) => Boolean(p.sourceKey)).length,
+        },
+        users: {
+          total: this.userList.length,
+          active: this.userList.filter((u) => u.status === 'active').length,
+          guests: this.userList.filter((u) => u.guest).length,
+          frozen: this.userList.filter((u) => u.status === 'frozen').length,
+        },
+        orders: { total: this.orderList.length, byStatus },
+        favorites: {
+          folders: this.favoriteFolderList.length,
+          items: this.favoriteItemList.length,
+        },
+        carts: {
+          items: this.cartList.length,
+          users: new Set(this.cartList.map((c) => c.userId)).size,
+        },
+      };
+    },
+    listProducts: async (
+      filter: AdminProductFilter,
+    ): Promise<{ rows: ProductRecord[]; total: number }> => {
+      const keyword = (filter.keyword ?? '').trim().toLowerCase();
+      const matched = this.productList.filter((p) => {
+        // listed 未传即不过滤；传了则按「是否在架」精确命中
+        if (filter.listed !== undefined && (p.listed !== false) !== filter.listed) return false;
+        if (filter.category && p.category !== filter.category) return false;
+        if (!keyword) return true;
+        return [p.title, p.sourceItemNo, p.brand, p.sourceId, p.id].some((value) =>
+          String(value ?? '')
+            .toLowerCase()
+            .includes(keyword),
+        );
+      });
+      const sorted = matched
+        .slice()
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return {
+        rows: sorted.slice(filter.offset, filter.offset + filter.limit).map(clone),
+        total: sorted.length,
+      };
+    },
+    setProductsListed: async (ids: string[], listed: boolean): Promise<number> => {
+      const wanted = new Set(ids);
+      let changed = 0;
+      for (const product of this.productList) {
+        if (!wanted.has(product.id)) continue;
+        // 已经是目标状态的商品不重复计数，避免审计记录虚增
+        if ((product.listed !== false) === listed) continue;
+        product.listed = listed;
+        changed += 1;
+      }
+      return changed;
+    },
+    listOrders: async (
+      filter: AdminOrderFilter,
+    ): Promise<{ rows: OrderRecord[]; total: number }> => {
+      const keyword = (filter.keyword ?? '').trim().toLowerCase();
+      const matched = this.orderList.filter((order) => {
+        if (filter.status && order.status !== filter.status) return false;
+        if (!keyword) return true;
+        return [order.orderNo, order.receiverName, order.receiverPhone, order.userId, order.id].some(
+          (value) =>
+            String(value ?? '')
+              .toLowerCase()
+              .includes(keyword),
+        );
+      });
+      const sorted = matched
+        .slice()
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return {
+        rows: sorted.slice(filter.offset, filter.offset + filter.limit).map(clone),
+        total: sorted.length,
+      };
+    },
+    getOrder: async (orderId: string): Promise<OrderRecord | null> => {
+      const found = this.orderList.find((order) => order.id === orderId);
+      return found ? clone(found) : null;
+    },
+    listUsers: async (
+      filter: AdminUserFilter,
+    ): Promise<{ rows: UserRecord[]; total: number }> => {
+      const keyword = (filter.keyword ?? '').trim().toLowerCase();
+      const matched = this.userList.filter((user) => {
+        if (!keyword) return true;
+        return [user.accountNo, user.nickname, user.username, user.phone, user.email, user.id].some(
+          (value) =>
+            String(value ?? '')
+              .toLowerCase()
+              .includes(keyword),
+        );
+      });
+      const sorted = matched
+        .slice()
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return {
+        rows: sorted.slice(filter.offset, filter.offset + filter.limit).map(clone),
+        total: sorted.length,
+      };
+    },
+    userSummary: async (userId: string): Promise<AdminUserSummary | null> => {
+      const user = this.userList.find((u) => u.id === userId);
+      if (!user) return null;
+      return {
+        bindings: this.bindingList.filter((b) => b.userId === userId).map(clone),
+        orders: this.orderList.filter((o) => o.userId === userId).length,
+        favoriteFolders: this.favoriteFolderList.filter((f) => f.userId === userId).length,
+        favoriteItems: this.favoriteItemList.filter((i) => i.userId === userId).length,
+        cartItems: this.cartList.filter((c) => c.userId === userId).length,
+      };
+    },
+    listFavoriteFolders: async (filter: {
+      limit: number;
+      offset: number;
+    }): Promise<{ rows: AdminFavoriteFolderRow[]; total: number }> => {
+      const sorted = this.favoriteFolderList
+        .slice()
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const rows = sorted.slice(filter.offset, filter.offset + filter.limit).map((folder) => {
+        const owner = this.userList.find((u) => u.id === folder.userId) ?? null;
+        return {
+          ...clone(folder),
+          itemCount: this.favoriteItemList.filter((i) => i.folderId === folder.id).length,
+          userNickname: owner?.nickname ?? null,
+          userAccountNo: owner?.accountNo ?? null,
+        };
+      });
+      return { rows, total: sorted.length };
+    },
+    listManjianTiers: async (): Promise<ManjianTierRecord[]> =>
+      MEMORY_MANJIAN_TIERS.slice()
+        .sort((a, b) => a.sortNo - b.sortNo)
+        .map(clone),
+    audit: {
+      append: async (entry: AdminAuditRecord): Promise<void> => {
+        this.auditList.push(clone(entry));
+      },
+      list: async (limit: number, offset = 0): Promise<AdminAuditRecord[]> =>
+        this.auditList
+          .slice()
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(offset, offset + limit)
+          .map(clone),
     },
   };
 }

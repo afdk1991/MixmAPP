@@ -11,6 +11,7 @@ import { PayService } from './modules/pay.js';
 import { createSmsProvider, type SmsProvider } from './adapters/sms.js';
 import { createOAuthProviders, type OAuthProvider, type OAuthProviderName } from './adapters/oauth.js';
 import { ProviderRegistry, gatedProvider } from './modules/provider-registry.js';
+import { AdminConsoleService } from './modules/admin-console.js';
 import { createOneKeyProvider, type OneKeyProvider } from './adapters/onekey.js';
 import { createMapProvider, type MapProvider } from './adapters/map.js';
 import { createStorageProvider, type StorageProvider } from './adapters/storage.js';
@@ -24,6 +25,7 @@ import { mallRoutes } from './routes/mall.js';
 import { homeRoutes } from './routes/home.js';
 import { addressRoutes } from './routes/address.js';
 import { adminRoutes } from './routes/admin.js';
+import { adminConsoleRoutes } from './routes/admin-console.js';
 import { mediaRoutes } from './routes/media.js';
 import { meRoutes } from './routes/me.js';
 import { integrationRoutes } from './routes/integrations.js';
@@ -135,6 +137,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate('pay', new PayService(deps.config, deps.store));
   app.decorate('address', new AddressService(deps.config, deps.store));
   app.decorate('mall', new MallService(deps.config, deps.store, catalog));
+  // 后台运营台：只读复用 mall 的运营位/推荐分类，其余全部走 Store.admin。
+  app.decorate('adminConsole', new AdminConsoleService(deps.config, deps.store, app.mall));
 
   app.decorate('requireAuth', async (request, reply) => {
     const header = request.headers.authorization;
@@ -229,6 +233,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await addressRoutes(scope);
       await integrationRoutes(scope);
       await adminRoutes(scope);
+      // 后台运营台独立子路由：与 /admin/* 同为 404 门禁，但认证走短期会话 Cookie。
+      await adminConsoleRoutes(scope);
     },
     { prefix: '/api/v1' },
   );

@@ -8,6 +8,13 @@ import {
 } from '../lib/search.js';
 import type {
   AccountMergeRecord,
+  AdminAuditRecord,
+  AdminCounts,
+  AdminFavoriteFolderRow,
+  AdminOrderFilter,
+  AdminProductFilter,
+  AdminUserFilter,
+  AdminUserSummary,
   BindingRecord,
   CartItemRecord,
   CatalogSyncRunRecord,
@@ -1565,6 +1572,285 @@ export class PgStore implements Store {
       });
     },
   };
+
+  /**
+   * 后台运营台数据面（PostgreSQL 实现）。
+   * 与 MemoryStore 同口径：关键字大小写不敏感（ilike）、按创建时间倒序、total 为筛选后总数。
+   * 额外约束：这里的查询只读取，不改动用户侧读路径；唯一的写操作是商品上下架。
+   */
+  admin = {
+    counts: async (): Promise<AdminCounts> => {
+      // 商品、用户、订单、收藏、购物车各一条聚合查询，避免逐表多次往返。
+      const productRes = await this.pool.query(
+        `select count(*)::int as total,
+                count(*) filter (where listed is not false)::int as listed,
+                count(*) filter (where listed is false)::int as unlisted,
+                count(*) filter (where coalesce(source_key, '') <> '')::int as catalog
+           from products`,
+      );
+      const userRes = await this.pool.query(
+        `select count(*)::int as total,
+                count(*) filter (where status = 'active')::int as active,
+                count(*) filter (where guest)::int as guests,
+                count(*) filter (where status = 'frozen')::int as frozen
+           from users`,
+      );
+      const orderRes = await this.pool.query(
+        'select status, count(*)::int as c from orders group by status',
+      );
+      const favoriteRes = await this.pool.query(
+        `select (select count(*)::int from mall_favorite_folders) as folders,
+                (select count(*)::int from mall_favorite_items) as items`,
+      );
+      const cartRes = await this.pool.query(
+        'select count(*)::int as items, count(distinct user_id)::int as users from cart_items',
+      );
+      // 六态固定补齐，库里没有的状态也返回 0，前端不用做缺省判断。
+      const byStatus: AdminCounts['orders']['byStatus'] = {
+        pending: 0,
+        paid: 0,
+        picking: 0,
+        shipped: 0,
+        completed: 0,
+        cancelled: 0,
+      };
+      for (const row of orderRes.rows) {
+        byStatus[row['status'] as keyof typeof byStatus] = Number(row['c'] ?? 0);
+      }
+      const p = (productRes.rows[0] ?? {}) as Row;
+      const u = (userRes.rows[0] ?? {}) as Row;
+      const f = (favoriteRes.rows[0] ?? {}) as Row;
+      const c = (cartRes.rows[0] ?? {}) as Row;
+      return {
+        products: {
+          total: Number(p['total'] ?? 0),
+          listed: Number(p['listed'] ?? 0),
+          unlisted: Number(p['unlisted'] ?? 0),
+          catalog: Number(p['catalog'] ?? 0),
+        },
+        users: {
+          total: Number(u['total'] ?? 0),
+          active: Number(u['active'] ?? 0),
+          guests: Number(u['guests'] ?? 0),
+          frozen: Number(u['frozen'] ?? 0),
+        },
+        orders: {
+          total: Object.values(byStatus).reduce((sum, n) => sum + n, 0),
+          byStatus,
+        },
+        favorites: { folders: Number(f['folders'] ?? 0), items: Number(f['items'] ?? 0) },
+        carts: { items: Number(c['items'] ?? 0), users: Number(c['users'] ?? 0) },
+      };
+    },
+    listProducts: async (
+      filter: AdminProductFilter,
+    ): Promise<{ rows: ProductRecord[]; total: number }> => {
+      const params: unknown[] = [];
+      const where: string[] = [];
+      // listed 未传即不过滤；用户侧把 listed=false 视为下架，这里保持一致口径。
+      if (filter.listed !== undefined) {
+        where.push(filter.listed ? 'listed is not false' : 'listed is false');
+      }
+      if (filter.category) {
+        params.push(filter.category);
+        where.push(`category = $${params.length}`);
+      }
+      const keyword = (filter.keyword ?? '').trim();
+      if (keyword) {
+        params.push(`%${escapeLikePattern(keyword)}%`);
+        const p = `$${params.length}`;
+        where.push(
+          `(title ilike ${p} or coalesce(source_item_no, '') ilike ${p} ` +
+            `or coalesce(brand, '') ilike ${p} or coalesce(source_id, '') ilike ${p} or id ilike ${p})`,
+        );
+      }
+      const whereSql = where.length ? `where ${where.join(' and ')}` : '';
+      const totalRes = await this.pool.query(
+        `select count(*)::int as total from products ${whereSql}`,
+        params,
+      );
+      const limitIdx = params.length + 1;
+      const offsetIdx = params.length + 2;
+      const res = await this.pool.query(
+        `select * from products ${whereSql} order by created_at desc, id limit $${limitIdx} offset $${offsetIdx}`,
+        [...params, filter.limit, filter.offset],
+      );
+      return {
+        rows: res.rows.map((row) => mapProduct(row as Row)),
+        total: Number((totalRes.rows[0] as Row | undefined)?.['total'] ?? 0),
+      };
+    },
+    setProductsListed: async (ids: string[], listed: boolean): Promise<number> => {
+      if (!ids.length) return 0;
+      // `is distinct from` 保证只更新状态确实变化的行，返回行数即实际变更条数。
+      const res = await this.pool.query(
+        `update products set listed = $1
+          where id = any($2::text[]) and (listed is distinct from $1)
+          returning id`,
+        [listed, ids],
+      );
+      return res.rows.length;
+    },
+    listOrders: async (
+      filter: AdminOrderFilter,
+    ): Promise<{ rows: OrderRecord[]; total: number }> => {
+      const params: unknown[] = [];
+      const where: string[] = [];
+      if (filter.status) {
+        params.push(filter.status);
+        where.push(`status = $${params.length}`);
+      }
+      const keyword = (filter.keyword ?? '').trim();
+      if (keyword) {
+        params.push(`%${escapeLikePattern(keyword)}%`);
+        const p = `$${params.length}`;
+        where.push(
+          `(order_no ilike ${p} or receiver_name ilike ${p} or receiver_phone ilike ${p} ` +
+            `or user_id ilike ${p} or id ilike ${p})`,
+        );
+      }
+      const whereSql = where.length ? `where ${where.join(' and ')}` : '';
+      const totalRes = await this.pool.query(
+        `select count(*)::int as total from orders ${whereSql}`,
+        params,
+      );
+      const limitIdx = params.length + 1;
+      const offsetIdx = params.length + 2;
+      const res = await this.pool.query(
+        `select * from orders ${whereSql} order by created_at desc, id limit $${limitIdx} offset $${offsetIdx}`,
+        [...params, filter.limit, filter.offset],
+      );
+      return {
+        rows: res.rows.map((row) => mapOrder(row as Row)),
+        total: Number((totalRes.rows[0] as Row | undefined)?.['total'] ?? 0),
+      };
+    },
+    getOrder: async (orderId: string): Promise<OrderRecord | null> => {
+      const res = await this.pool.query('select * from orders where id = $1 limit 1', [orderId]);
+      return res.rows[0] ? mapOrder(res.rows[0] as Row) : null;
+    },
+    listUsers: async (
+      filter: AdminUserFilter,
+    ): Promise<{ rows: UserRecord[]; total: number }> => {
+      const params: unknown[] = [];
+      const where: string[] = [];
+      const keyword = (filter.keyword ?? '').trim();
+      if (keyword) {
+        params.push(`%${escapeLikePattern(keyword)}%`);
+        const p = `$${params.length}`;
+        where.push(
+          `(account_no ilike ${p} or nickname ilike ${p} or coalesce(username, '') ilike ${p} ` +
+            `or coalesce(phone, '') ilike ${p} or coalesce(email, '') ilike ${p} or id ilike ${p})`,
+        );
+      }
+      const whereSql = where.length ? `where ${where.join(' and ')}` : '';
+      const totalRes = await this.pool.query(
+        `select count(*)::int as total from users ${whereSql}`,
+        params,
+      );
+      const limitIdx = params.length + 1;
+      const offsetIdx = params.length + 2;
+      const res = await this.pool.query(
+        `select * from users ${whereSql} order by created_at desc, id limit $${limitIdx} offset $${offsetIdx}`,
+        [...params, filter.limit, filter.offset],
+      );
+      return {
+        rows: res.rows.map((row) => mapUser(row as Row)),
+        total: Number((totalRes.rows[0] as Row | undefined)?.['total'] ?? 0),
+      };
+    },
+    userSummary: async (userId: string): Promise<AdminUserSummary | null> => {
+      const exists = await this.pool.query('select id from users where id = $1 limit 1', [userId]);
+      if (!exists.rows[0]) return null;
+      // 五条聚合可以并行，缩短详情页首屏时间。
+      const [bindingRes, orderRes, folderRes, itemRes, cartRes] = await Promise.all([
+        this.pool.query('select * from bindings where user_id = $1 order by created_at asc', [userId]),
+        this.pool.query('select count(*)::int as c from orders where user_id = $1', [userId]),
+        this.pool.query('select count(*)::int as c from mall_favorite_folders where user_id = $1', [
+          userId,
+        ]),
+        this.pool.query('select count(*)::int as c from mall_favorite_items where user_id = $1', [
+          userId,
+        ]),
+        this.pool.query('select count(*)::int as c from cart_items where user_id = $1', [userId]),
+      ]);
+      const countOf = (res: { rows: Row[] }): number =>
+        Number((res.rows[0] as Row | undefined)?.['c'] ?? 0);
+      return {
+        bindings: bindingRes.rows.map((row) => mapBinding(row as Row)),
+        orders: countOf(orderRes),
+        favoriteFolders: countOf(folderRes),
+        favoriteItems: countOf(itemRes),
+        cartItems: countOf(cartRes),
+      };
+    },
+    listFavoriteFolders: async (filter: {
+      limit: number;
+      offset: number;
+    }): Promise<{ rows: AdminFavoriteFolderRow[]; total: number }> => {
+      const totalRes = await this.pool.query(
+        'select count(*)::int as total from mall_favorite_folders',
+      );
+      const res = await this.pool.query(
+        `select f.*, u.nickname as user_nickname, u.account_no as user_account_no,
+                (select count(*)::int from mall_favorite_items i where i.folder_id = f.id) as item_count
+           from mall_favorite_folders f
+           left join users u on u.id = f.user_id
+          order by f.created_at desc, f.id
+          limit $1 offset $2`,
+        [filter.limit, filter.offset],
+      );
+      return {
+        rows: res.rows.map((row) => {
+          const r = row as Row;
+          return {
+            ...mapFavoriteFolder(r),
+            itemCount: Number(r['item_count'] ?? 0),
+            userNickname: (r['user_nickname'] as string | null) ?? null,
+            userAccountNo: (r['user_account_no'] as string | null) ?? null,
+          };
+        }),
+        total: Number((totalRes.rows[0] as Row | undefined)?.['total'] ?? 0),
+      };
+    },
+    listManjianTiers: async (): Promise<ManjianTierRecord[]> => {
+      const res = await this.pool.query('select * from mall_manjian_tiers order by sort_no asc, id');
+      return res.rows.map((row) => mapManjianTier(row as Row));
+    },
+    audit: {
+      append: async (entry: AdminAuditRecord): Promise<void> => {
+        // before/after 以 jsonb 落库；node-postgres 会把对象序列化成 JSON 文本。
+        await this.pool.query(
+          `insert into admin_audit_logs
+             (id, action, target_type, target_id, summary, before, after, actor, ip,
+              user_agent, request_id, batch_id, created_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [
+            entry.id,
+            entry.action,
+            entry.targetType,
+            entry.targetId,
+            entry.summary,
+            entry.before ?? null,
+            entry.after ?? null,
+            entry.actor,
+            entry.ip,
+            entry.userAgent,
+            entry.requestId,
+            entry.batchId,
+            entry.createdAt,
+          ],
+        );
+      },
+      list: async (limit: number, offset = 0): Promise<AdminAuditRecord[]> => {
+        const res = await this.pool.query(
+          'select * from admin_audit_logs order by created_at desc, id limit $1 offset $2',
+          [limit, offset],
+        );
+        return res.rows.map((row) => mapAdminAudit(row as Row));
+      },
+    },
+  };
 }
 
 /** 唯一约束冲突（PG 23505）：并发抢占时用它区分「别人已经写了」和真失败 */
@@ -1767,6 +2053,25 @@ function mapManjianTier(row: Row): ManjianTierRecord {
     label: String(row['label'] ?? ''),
     enabled: row['enabled'] === true,
     sortNo: row['sort_no'] == null ? 0 : Number(row['sort_no']),
+  };
+}
+
+/** 后台审计记录映射（0020）：before/after 为 jsonb，驱动已反序列化为对象。 */
+function mapAdminAudit(row: Row): AdminAuditRecord {
+  return {
+    id: String(row['id']),
+    action: String(row['action'] ?? ''),
+    targetType: row['target_type'] as AdminAuditRecord['targetType'],
+    targetId: String(row['target_id'] ?? ''),
+    summary: String(row['summary'] ?? ''),
+    before: row['before'] ?? null,
+    after: row['after'] ?? null,
+    actor: String(row['actor'] ?? 'admin'),
+    ip: String(row['ip'] ?? ''),
+    userAgent: String(row['user_agent'] ?? ''),
+    requestId: String(row['request_id'] ?? ''),
+    batchId: (row['batch_id'] as string | null) ?? null,
+    createdAt: toDate(row['created_at']),
   };
 }
 

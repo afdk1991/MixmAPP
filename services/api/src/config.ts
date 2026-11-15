@@ -100,6 +100,12 @@ export type Config = {
   pgGateway: { url: string; apiKey: string; schema: string };
   /** 管理接口令牌；未设置时 /admin/* 一律 404，不暴露管理面。 */
   adminToken: string;
+  /**
+   * 后台运营台会话有效期（秒）。
+   * ADMIN_TOKEN 只用于换取短期 HttpOnly 会话，不落前端；默认 2 小时，
+   * 可按 ADMIN_SESSION_TTL_SEC 覆盖。会话存在 API 进程内存，重启即失效。
+   */
+  adminSessionTtlSec: number;
   /** 仅当显式设置 ALLOW_MEMORY_STORE=1 时才允许无 DATABASE_URL 启动，默认拒绝。 */
   allowMemoryStore: boolean;
   jwt: { secret: string; accessTtlSec: number; refreshTtlDays: number };
@@ -420,6 +426,7 @@ export function loadConfig(): Config {
       schema: str('CLOUDBASE_PG_SCHEMA') || 'mixmapp',
     },
     adminToken: str('ADMIN_TOKEN'),
+    adminSessionTtlSec: num('ADMIN_SESSION_TTL_SEC', 7200),
     allowMemoryStore: bool('ALLOW_MEMORY_STORE'),
     jwt: {
       secret: jwtSecret,

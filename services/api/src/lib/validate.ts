@@ -29,6 +29,7 @@ declare module 'fastify' {
     pay: import('../modules/pay.js').PayService;
     address: import('../modules/address.js').AddressService;
     mall: import('../modules/mall.js').MallService;
+    adminConsole: import('../modules/admin-console.js').AdminConsoleService;
     catalog: import('../modules/catalog-source.js').CatalogSource;
     map: import('../adapters/map.js').MapProvider;
     storage: import('../adapters/storage.js').StorageProvider;

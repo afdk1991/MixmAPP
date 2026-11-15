@@ -592,4 +592,111 @@ export type Store = {
     /** 真实重复账号统计：同一 union_id 落在多个用户上 */
     findCandidates(): Promise<MergeCandidate[]>;
   };
+  /**
+   * 后台运营台（/admin/console）数据面。
+   * 全部是新增方法，不改动既有用户侧读路径；MemoryStore 与 PgStore 双实现，
+   * 保证本地内存库与生产库行为一致。写操作只提供「上下架」一种商品写能力，
+   * 订单侧复用既有六态原语（transitionStatus / markStatusAt / cancel）。
+   */
+  admin: {
+    /** 概览计数：商品/用户/订单/收藏/购物车 */
+    counts(): Promise<AdminCounts>;
+    /** 商品检索（包含已下架商品，用户侧 list 会过滤掉它们） */
+    listProducts(filter: AdminProductFilter): Promise<{ rows: ProductRecord[]; total: number }>;
+    /** 批量上下架：只更新确实需要变化的行，返回实际变更条数 */
+    setProductsListed(ids: string[], listed: boolean): Promise<number>;
+    /** 订单检索与分页 */
+    listOrders(filter: AdminOrderFilter): Promise<{ rows: OrderRecord[]; total: number }>;
+    /** 按主键取单个订单（后台订单详情用；用户侧无此入口） */
+    getOrder(orderId: string): Promise<OrderRecord | null>;
+    /** 用户检索与分页 */
+    listUsers(filter: AdminUserFilter): Promise<{ rows: UserRecord[]; total: number }>;
+    /** 用户详情附加汇总；用户不存在返回 null */
+    userSummary(userId: string): Promise<AdminUserSummary | null>;
+    /** 全站收藏夹（含条目数、归属用户昵称/账号），运营只读 */
+    listFavoriteFolders(
+      filter: { limit: number; offset: number },
+    ): Promise<{ rows: AdminFavoriteFolderRow[]; total: number }>;
+    /** 满减档位（含停用档位，运营需要看到全貌） */
+    listManjianTiers(): Promise<ManjianTierRecord[]>;
+    /** 写操作审计：append 落库，list 按时间倒序取最近若干条 */
+    audit: {
+      append(entry: AdminAuditRecord): Promise<void>;
+      list(limit: number, offset?: number): Promise<AdminAuditRecord[]>;
+    };
+  };
+};
+
+// ===== 后台运营台类型（additive；不参与用户侧任何逻辑） =====
+
+/** 概览计数。订单按六态展开，未出现的状态补 0。 */
+export type AdminCounts = {
+  products: { total: number; listed: number; unlisted: number; catalog: number };
+  users: { total: number; active: number; guests: number; frozen: number };
+  orders: { total: number; byStatus: Record<OrderRecord['status'], number> };
+  favorites: { folders: number; items: number };
+  carts: { items: number; users: number };
+};
+
+/** 商品筛选：keyword 匹配标题/货号/品牌/来源 id/主键；listed 为空表示不筛选。 */
+export type AdminProductFilter = {
+  keyword?: string;
+  category?: string;
+  listed?: boolean;
+  limit: number;
+  offset: number;
+};
+
+/** 订单筛选：status 精确命中；keyword 匹配订单号/收货人/手机号/用户 id。 */
+export type AdminOrderFilter = {
+  status?: OrderRecord['status'];
+  keyword?: string;
+  limit: number;
+  offset: number;
+};
+
+/** 用户筛选：keyword 匹配账号编号/昵称/用户名/手机号/邮箱。 */
+export type AdminUserFilter = {
+  keyword?: string;
+  limit: number;
+  offset: number;
+};
+
+/** 用户详情附加汇总：绑定渠道、订单数、收藏与购物车规模。 */
+export type AdminUserSummary = {
+  bindings: BindingRecord[];
+  orders: number;
+  favoriteFolders: number;
+  favoriteItems: number;
+  cartItems: number;
+};
+
+/** 全站收藏夹行：在收藏夹本体上补条目数与归属用户展示字段。 */
+export type AdminFavoriteFolderRow = FavoriteFolderRecord & {
+  itemCount: number;
+  userNickname: string | null;
+  userAccountNo: string | null;
+};
+
+/**
+ * 后台写操作审计记录：谁（actor/ip/ua/requestId）、何时（createdAt）、
+ * 对什么（targetType/targetId）、改前改后（before/after）。
+ * 批量操作共用一个 batchId，便于按批次回溯。
+ */
+export type AdminAuditRecord = {
+  id: string;
+  /** 动作标识，如 product.list / product.unlist / order.transition / order.cancel */
+  action: string;
+  targetType: 'product' | 'order';
+  targetId: string;
+  /** 人可读摘要，后台列表直接展示 */
+  summary: string;
+  before: unknown;
+  after: unknown;
+  actor: string;
+  ip: string;
+  userAgent: string;
+  requestId: string;
+  batchId: string | null;
+  createdAt: Date;
 };
