@@ -4,211 +4,317 @@
       <!-- 桌面端顶部导航（移动端不渲染，仍走底部 tabBar） -->
       <mx-bar desktop-only hide-back />
 
-      <!-- ---------- 档案封面（深场） ---------- -->
+      <!-- ---------- 封面：左侧主标，右侧通行证卡（品牌 / 版本 / 链路 / 登录入口同一处） ---------- -->
       <view class="hero">
-        <view class="hero-inner">
-          <text class="hero-eyebrow mono">SINGLE SIGN-ON · 多端通行同一账号</text>
-          <view class="hero-title-wrap">
-            <text class="hero-title">一张通行证</text>
-            <text class="hero-title hero-title--accent">通行所有星域</text>
+        <view class="hero-grid">
+          <view class="hero-copy">
+            <text class="hero-eyebrow mono">SINGLE SIGN-ON · 多端通行同一账号</text>
+            <view class="hero-title-wrap">
+              <text class="hero-title">一张通行证</text>
+              <text class="hero-title hero-title--accent">通行所有星域</text>
+            </view>
+            <text class="hero-lede">Web・Android・iOS・鸿蒙 —— 注册即签发星际联邦通行证，并分配唯一的 MixmAPP 公民编号</text>
           </view>
-          <text class="hero-lede">Web・Android・iOS・鸿蒙 —— 注册即签发星际联邦通行证，并分配唯一的 MixmAPP 公民编号</text>
 
-          <mx-logo class="hero-logo" size="lg" tone="light" sub="MIXMAPP ACCOUNT" />
+          <view class="hero-card">
+            <mx-logo class="hero-logo" size="lg" tone="light" sub="MIXMAPP ACCOUNT" />
 
-          <view class="hero-meta">
-            <view class="meta-item">
-              <text class="meta-k mono">版本</text>
-              <text class="meta-v mono">{{ version }}</text>
-            </view>
-            <view class="meta-sep" />
-            <view class="meta-item">
-              <text class="meta-k mono">环境</text>
-              <text class="meta-v mono">{{ env }}</text>
-            </view>
-            <view class="meta-sep" />
-            <view class="meta-item">
-              <text class="meta-k mono">链路</text>
-              <view class="meta-status">
-                <view class="status-dot" :class="{ 'status-dot--off': !online }" />
-                <text class="meta-v mono">{{ online ? 'ONLINE' : 'OFFLINE' }}</text>
+            <view class="hero-facts">
+              <view class="fact">
+                <text class="fact-k mono">版本</text>
+                <view class="fact-line" />
+                <text class="fact-v mono">{{ version }}</text>
+              </view>
+              <view class="fact">
+                <text class="fact-k mono">环境</text>
+                <view class="fact-line" />
+                <text class="fact-v mono">{{ env }}</text>
+              </view>
+              <view class="fact">
+                <text class="fact-k mono">链路</text>
+                <view class="fact-line" />
+                <view class="fact-status">
+                  <view class="status-dot" :class="{ 'status-dot--off': !online }" />
+                  <text class="fact-v mono">{{ online ? 'ONLINE' : 'OFFLINE' }}</text>
+                </view>
               </view>
             </view>
-          </view>
 
-          <view v-if="error" class="hero-error">
-            <view class="hero-error-mark mono">!</view>
-            <view class="hero-error-main">
-              <text class="hero-error-title">API 暂不可用</text>
-              <text class="hero-error-text mono">{{ error }}</text>
+            <view v-if="error" class="hero-error">
+              <view class="hero-error-mark mono">!</view>
+              <view class="hero-error-main">
+                <text class="hero-error-title">API 暂不可用</text>
+                <text class="hero-error-text mono">{{ error }}</text>
+              </view>
+              <view class="hero-retry" hover-class="is-press" @tap="loadMeta">
+                <text class="hero-retry-text mono">重试</text>
+              </view>
             </view>
-            <view class="hero-retry" hover-class="is-press" @tap="loadMeta">
-              <text class="hero-retry-text mono">重试</text>
+
+            <!-- 通行证主入口：与「通行入口 02」同一去向，全页只在这里给强调样式 -->
+            <view class="hero-cta" hover-class="is-press" @tap="go(primaryUrl)">
+              <view class="hero-cta-top">
+                <text class="hero-cta-kicker mono">{{ signedIn ? 'SIGNED IN' : 'GET STARTED' }}</text>
+                <text class="hero-cta-arrow mono">→</text>
+              </view>
+              <text class="hero-cta-title">{{ signedIn ? '查看联邦通行证' : '登录 / 领取星际联邦通行证' }}</text>
+              <text class="hero-cta-sub">{{ signedIn ? '编号 · 绑定方式 · 账号资料' : '登录 · 注册 · 30 秒签发' }}</text>
             </view>
           </view>
         </view>
       </view>
 
-      <!-- ---------- 索引条目（纸面） ---------- -->
+      <!-- ---------- 纸面：01 检索 / 02 入口 / 03 多端 ---------- -->
       <view class="body">
-        <view class="cta" hover-class="is-press" @tap="go(primaryUrl)">
-          <text class="cta-kicker mono">{{ signedIn ? 'SIGNED IN' : 'GET STARTED' }}</text>
-          <view class="cta-main">
-            <view class="cta-text">
-              <text class="cta-title">{{ signedIn ? '查看联邦通行证' : '登录 / 领取星际联邦通行证' }}</text>
-              <text class="cta-sub">{{ signedIn ? '编号 · 绑定方式 · 账号资料' : '登录 · 注册 · 30 秒签发' }}</text>
-            </view>
-            <text class="cta-arrow mono">→</text>
-          </view>
-        </view>
 
-        <!-- ---------- 精选目录：真实商城数据，含空/错/骨架/破图兜底 ---------- -->
-        <view class="section pick">
+        <!-- 01 检索与目录：搜索在上、一级分类居中、商品网格在下；分类节点与商城抽屉同源 -->
+        <view class="section">
           <view class="sec-head">
             <view class="sec-head-l">
-              <text class="eyebrow">CATALOG</text>
-              <text class="sec-title">精选目录</text>
+              <view class="sec-kicker">
+                <text class="sec-no mono">01</text>
+                <text class="sec-cap mono">SEARCH &amp; CATALOG</text>
+              </view>
+              <text class="sec-title">检索与目录</text>
             </view>
             <text class="sec-count mono">实时数据 · {{ tabCategories.length }} 类</text>
           </view>
           <view class="rule" />
 
-          <scroll-view v-if="tabCategories.length" :scroll-x="true" class="pick-chips" :show-scrollbar="false">
+          <!-- 搜索：输入即检，口径与后端 lib/search 同一套（AND 分词 / 项目号 12·6 位 / 规格等价 / 全半角归一） -->
+          <view class="search">
+            <view class="search-mark">
+              <view class="search-lens" />
+              <view class="search-handle" />
+            </view>
+            <input
+              :value="searchKeyword"
+              class="search-input"
+              placeholder="搜商品 / 规格 / 项目号"
+              placeholder-class="field-ph"
+              confirm-type="search"
+              @input="onSearchInput"
+              @confirm="submitSearch"
+            />
+            <view v-if="searchKeyword" class="search-clear" hover-class="is-press" @tap="clearSearch">
+              <text class="search-clear-x mono">×</text>
+            </view>
+            <view class="search-go" hover-class="is-press" @tap="submitSearch">
+              <text class="search-go-text">搜索</text>
+            </view>
+          </view>
+
+          <!-- 空态：不弹浮层，直接把「能怎么搜」写在输入框下方 -->
+          <view class="search-hint">
+            <text class="search-hint-i mono">空格分词 · AND 与顺序无关</text>
+            <text class="search-hint-i mono">项目号 12 位全码 / 6 位段码</text>
+            <text class="search-hint-i mono">M6-1.0x8 ≡ M6x8 ≡ 6x8</text>
+            <text class="search-hint-i mono">不分大小写 · 全半角等同</text>
+          </view>
+          <view v-if="searchNotice" class="search-notice">
+            <text class="search-notice-text">{{ searchNotice }}</text>
+          </view>
+
+          <!-- 一级 6 类：code 直接取商城「商品分类」抽屉第一层节点 id，不另建一套分类 -->
+          <view class="cat-head">
+            <text class="cat-head-label mono">LEVEL 1 · 一级分类</text>
+            <text class="cat-head-note">点选在首页预览 · 进商城可继续二三级下钻</text>
+          </view>
+          <view v-if="tabCategories.length" class="cat-grid">
             <view
-              class="pick-chip"
-              :class="{ 'pick-chip--active': activeCategory === '' }"
+              class="cat-card"
+              :class="{ 'cat-card--active': !activeCategory && !searchActive }"
               hover-class="is-press"
-              @tap="switchCategory('')"
+              @tap="selectCategory('')"
             >
-              <text class="pick-chip-label">全部</text>
+              <text class="cat-no mono">00</text>
+              <text class="cat-name">全部商品</text>
+              <text class="cat-count mono">{{ totalCountText }} 件</text>
             </view>
             <view
-              v-for="cat in tabCategories"
+              v-for="(cat, index) in tabCategories"
               :key="cat.code"
-              class="pick-chip"
-              :class="{ 'pick-chip--active': activeCategory === cat.code }"
+              class="cat-card"
+              :class="{ 'cat-card--active': activeCategory === cat.code && !searchActive }"
               hover-class="is-press"
-              @tap="switchCategory(cat.code)"
+              @tap="selectCategory(cat.code)"
             >
-              <text class="pick-chip-label">{{ cat.name }}</text>
-              <text v-if="cat.count > 0" class="pick-chip-count mono">{{ cat.count }}</text>
+              <text class="cat-no mono">{{ String(index + 1).padStart(2, '0') }}</text>
+              <text class="cat-name">{{ cat.name }}</text>
+              <text class="cat-count mono">{{ cat.count }} 件</text>
             </view>
-          </scroll-view>
+          </view>
+          <view v-else class="cat-empty">
+            <text class="cat-empty-text">分类暂未取到，可直接进商城浏览。</text>
+            <view class="cat-empty-link" hover-class="is-press" @tap="go(ROUTES.mall)">
+              <text class="cat-empty-link-text mono">商城 →</text>
+            </view>
+          </view>
 
-          <view v-if="mallLoading" class="pick-grid">
-            <view v-for="i in 2" :key="i" class="pick-card">
-              <view class="sk pick-sk-cover" />
-              <view class="pick-info">
-                <view class="sk pick-sk-line" />
-                <view class="sk pick-sk-line pick-sk-line--short" />
-                <view class="sk pick-sk-price" />
+          <!-- 目录区：精选 / 分类预览 / 搜索结果共用同一套商品卡与四态 -->
+          <view class="catalog">
+            <view class="catalog-head">
+              <text class="catalog-title">{{ catalogTitle }}</text>
+              <text class="catalog-meta mono">{{ catalogMeta }}</text>
+            </view>
+
+            <view v-if="mallLoading" class="pick-grid">
+              <view v-for="i in 2" :key="i" class="pick-card">
+                <view class="sk pick-sk-cover" />
+                <view class="pick-info">
+                  <view class="sk pick-sk-line" />
+                  <view class="sk pick-sk-line pick-sk-line--short" />
+                  <view class="sk pick-sk-price" />
+                </view>
               </view>
             </view>
-          </view>
 
-          <view v-else-if="mallError" class="pick-state">
-            <view class="pick-state-mark mono">!</view>
-            <text class="pick-state-title">精选目录暂未加载</text>
-            <text class="pick-state-sub">{{ mallError }}</text>
-            <view class="pick-retry" hover-class="is-press" @tap="loadMall">
-              <text class="pick-retry-text mono">重试</text>
+            <view v-else-if="mallError" class="pick-state">
+              <view class="pick-state-mark mono">!</view>
+              <text class="pick-state-title">目录暂未加载</text>
+              <text class="pick-state-sub">{{ mallError }}</text>
+              <view class="pick-retry" hover-class="is-press" @tap="loadMall">
+                <text class="pick-retry-text mono">重试</text>
+              </view>
             </view>
-          </view>
 
-          <view v-else-if="products.length === 0" class="pick-state">
-            <view class="pick-state-mark">空</view>
-            <text class="pick-state-title">暂时没有可展示的商品</text>
-            <text class="pick-state-sub">目录数据同步中，可前往商城浏览完整五金目录。</text>
-          </view>
+            <!-- 无结果：给出三条可执行改法，并把条件带进商城继续筛 -->
+            <view v-else-if="products.length === 0 && searchActive" class="pick-state">
+              <view class="pick-state-mark">空</view>
+              <text class="pick-state-title">没有匹配「{{ searchKeyword.trim() }}」的商品</text>
+              <text class="pick-state-sub">改一处再试：</text>
+              <view class="search-tips">
+                <view class="search-tip">
+                  <text class="search-tip-k mono">01</text>
+                  <text class="search-tip-v">规格可省螺纹距：M6-1.0x8 → M6x8 → 6x8</text>
+                </view>
+                <view class="search-tip">
+                  <text class="search-tip-k mono">02</text>
+                  <text class="search-tip-v">项目号用 12 位全码，或前 6 位段码</text>
+                </view>
+                <view class="search-tip">
+                  <text class="search-tip-k mono">03</text>
+                  <text class="search-tip-v">多个条件用空格分开，如「内六角 12.9」</text>
+                </view>
+              </view>
+              <view class="search-actions">
+                <view class="pick-retry" hover-class="is-press" @tap="openSearchInMall">
+                  <text class="pick-retry-text mono">在商城中筛选</text>
+                </view>
+                <view class="pick-retry pick-retry--ghost" hover-class="is-press" @tap="clearSearch">
+                  <text class="pick-retry-text mono">清空搜索</text>
+                </view>
+              </view>
+            </view>
 
-          <view v-else class="pick-grid">
+            <view v-else-if="products.length === 0" class="pick-state">
+              <view class="pick-state-mark">空</view>
+              <text class="pick-state-title">暂时没有可展示的商品</text>
+              <text class="pick-state-sub">目录数据同步中，可前往商城浏览完整五金目录。</text>
+            </view>
+
+            <view v-else class="pick-grid">
+              <view
+                v-for="product in products"
+                :key="product.id"
+                class="pick-card"
+                hover-class="is-press"
+                @tap="openDetail(product)"
+              >
+                <view class="pick-cover">
+                  <image
+                    v-if="coverOf(product) && !isBroken(product.id)"
+                    class="pick-cover-img"
+                    :src="coverOf(product)"
+                    mode="aspectFill"
+                    lazy-load
+                    @error="markBroken(product.id)"
+                  />
+                  <view v-else class="pick-cover-ph" :style="tintOf(product)">
+                    <text class="pick-cover-char" :class="{ 'pick-cover-char--on-tint': !!coverTint(product) }">{{ product.title.slice(0, 1) }}</text>
+                  </view>
+                  <text v-if="product.brand" class="pick-cover-tag mono">{{ product.brand }}</text>
+                  <view
+                    v-if="isInquiryProduct(product)"
+                    class="pick-add pick-add--inquiry"
+                    hover-class="is-press"
+                    @tap.stop="addToCart(product)"
+                  >
+                    <text class="pick-add-text mono">询</text>
+                  </view>
+                  <view
+                    v-else-if="!isOutOfStock(product)"
+                    class="pick-add"
+                    hover-class="is-press"
+                    @tap.stop="addToCart(product)"
+                  >
+                    <text class="pick-add-text mono">+</text>
+                  </view>
+                </view>
+                <view class="pick-info">
+                  <text class="pick-name">{{ product.title }}</text>
+                  <text v-if="cardMeta(product)" class="pick-sub">{{ cardMeta(product) }}</text>
+                  <text v-if="cardSpec(product)" class="pick-spec mono">{{ cardSpec(product) }}</text>
+                  <text v-if="packLabel(product)" class="pick-pack mono">{{ packLabel(product) }}</text>
+                  <view class="pick-foot">
+                    <view v-if="isInquiryProduct(product)" class="pick-price">
+                      <text class="pick-inquiry">询价</text>
+                      <text class="pick-inquiry-sub">联系报价</text>
+                    </view>
+                    <view v-else class="pick-price">
+                      <text class="pick-cur mono">¥</text>
+                      <text class="pick-amount mono">{{ listPriceText(product) }}</text>
+                      <text v-if="priceUnitLabel(product)" class="pick-unit mono">{{ priceUnitLabel(product) }}</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <!-- 结果过多：不无限展开，给一条收窄建议 -->
+            <view v-if="searchActive && !mallLoading && !mallError && searchTooMany" class="catalog-note">
+              <text class="catalog-note-text">结果较多，先展示前 {{ PAGE_SIZE }} 条；加规格或项目号可缩小范围。</text>
+            </view>
+
+            <!-- 统一出口：搜索带 keyword、分类带 category 进商城，条件原样落到列表筛选 -->
             <view
-              v-for="product in products"
-              :key="product.id"
-              class="pick-card"
+              v-if="!(searchActive && products.length === 0)"
+              class="pick-more"
               hover-class="is-press"
-              @tap="openDetail(product)"
+              @tap="openCatalog"
             >
-              <view class="pick-cover">
-                <image
-                  v-if="coverOf(product) && !isBroken(product.id)"
-                  class="pick-cover-img"
-                  :src="coverOf(product)"
-                  mode="aspectFill"
-                  lazy-load
-                  @error="markBroken(product.id)"
-                />
-                <view v-else class="pick-cover-ph" :style="tintOf(product)">
-                  <text class="pick-cover-char" :class="{ 'pick-cover-char--on-tint': !!coverTint(product) }">{{ product.title.slice(0, 1) }}</text>
-                </view>
-                <text v-if="product.brand" class="pick-cover-tag mono">{{ product.brand }}</text>
-                <view
-                  v-if="isInquiryProduct(product)"
-                  class="pick-add pick-add--inquiry"
-                  hover-class="is-press"
-                  @tap.stop="addToCart(product)"
-                >
-                  <text class="pick-add-text mono">询</text>
-                </view>
-                <view
-                  v-else-if="!isOutOfStock(product)"
-                  class="pick-add"
-                  hover-class="is-press"
-                  @tap.stop="addToCart(product)"
-                >
-                  <text class="pick-add-text mono">+</text>
-                </view>
-              </view>
-              <view class="pick-info">
-                <text class="pick-name">{{ product.title }}</text>
-                <text v-if="cardMeta(product)" class="pick-sub">{{ cardMeta(product) }}</text>
-                <text v-if="cardSpec(product)" class="pick-spec mono">{{ cardSpec(product) }}</text>
-                <text v-if="packLabel(product)" class="pick-pack mono">{{ packLabel(product) }}</text>
-                <view class="pick-foot">
-                  <view v-if="isInquiryProduct(product)" class="pick-price">
-                    <text class="pick-inquiry">询价</text>
-                    <text class="pick-inquiry-sub">联系报价</text>
-                  </view>
-                  <view v-else class="pick-price">
-                    <text class="pick-cur mono">¥</text>
-                    <text class="pick-amount mono">{{ listPriceText(product) }}</text>
-                    <text v-if="priceUnitLabel(product)" class="pick-unit mono">{{ priceUnitLabel(product) }}</text>
-                  </view>
-                </view>
-              </view>
+              <text class="pick-more-text">{{ catalogCtaLabel }}</text>
+              <text class="pick-more-arrow mono">→</text>
             </view>
-          </view>
-
-          <view class="pick-more" hover-class="is-press" @tap="go(ROUTES.mall)">
-            <text class="pick-more-text">{{ catalogAllLabel }}</text>
-            <text class="pick-more-arrow mono">→</text>
           </view>
         </view>
-
         <view class="section">
           <view class="sec-head">
             <view class="sec-head-l">
-              <text class="eyebrow">ENTRIES</text>
+              <view class="sec-kicker">
+                <text class="sec-no mono">02</text>
+                <text class="sec-cap mono">ENTRIES</text>
+              </view>
               <text class="sec-title">通行入口</text>
             </view>
             <text class="sec-count mono">目录 · {{ entries.length }} 类</text>
           </view>
           <view class="rule" />
-          <view class="index-list">
+          <view class="entry-grid">
             <view
               v-for="entry in entries"
               :key="entry.key"
-              class="index-row"
+              class="entry-card"
               hover-class="is-press"
               @tap="go(entry.url)"
             >
-              <text class="index-code mono">{{ entry.key }}</text>
-              <view class="index-main">
-                <text class="index-title">{{ entry.title }}</text>
-                <text class="index-desc">{{ entry.desc }}</text>
+              <view class="entry-top">
+                <text class="entry-no mono">{{ entry.key }}</text>
+                <text class="entry-tag mono">{{ entry.tag }}</text>
               </view>
-              <text class="index-tag mono">{{ entry.tag }}</text>
-              <text class="index-arrow mono">→</text>
+              <text class="entry-title">{{ entry.title }}</text>
+              <text class="entry-desc">{{ entry.desc }}</text>
+              <text class="entry-arrow mono">→</text>
             </view>
           </view>
         </view>
@@ -216,28 +322,31 @@
         <view class="section">
           <view class="sec-head">
             <view class="sec-head-l">
-              <text class="eyebrow">COVERAGE</text>
+              <view class="sec-kicker">
+                <text class="sec-no mono">03</text>
+                <text class="sec-cap mono">COVERAGE</text>
+              </view>
               <text class="sec-title">多端覆盖</text>
             </view>
             <text class="sec-count mono">终端 · {{ platforms.length }} 端</text>
           </view>
           <view class="rule" />
-          <view class="index-list">
+          <view class="cov-grid">
             <view
               v-for="p in platforms"
               :key="p.code"
-              class="index-row"
-              :class="{ 'index-row--idle': p.status !== 'ready' }"
+              class="cov-cell"
+              :class="{ 'cov-cell--idle': p.status !== 'ready' }"
             >
-              <text class="index-code mono">{{ p.short }}</text>
-              <view class="index-main">
-                <text class="index-title">{{ p.name }}</text>
-                <text class="index-desc mono">{{ p.code }}</text>
+              <view class="cov-cell-head">
+                <text class="cov-code mono">{{ p.short }}</text>
+                <view class="index-state" :class="{ 'index-state--idle': p.status !== 'ready' }">
+                  <view class="index-dot" />
+                  <text class="index-state-text mono">{{ p.status === 'ready' ? '已接通' : '规划中' }}</text>
+                </view>
               </view>
-              <view class="index-state" :class="{ 'index-state--idle': p.status !== 'ready' }">
-                <view class="index-dot" />
-                <text class="index-state-text mono">{{ p.status === 'ready' ? '已接通' : '规划中' }}</text>
-              </view>
+              <text class="cov-name">{{ p.name }}</text>
+              <text class="cov-slug mono">{{ p.code }}</text>
             </view>
           </view>
           <text class="section-note">H5 与 Android 已上线；iOS、鸿蒙、微信小程序、App-Plus 规划中，账号、发号器与权限按共用设计。</text>
@@ -315,7 +424,7 @@ const entries = computed(() =>
 const signedIn = computed(() => Boolean(session.user));
 const primaryUrl = computed(() => ROUTES.me);
 
-/* ---------- 精选目录：真实商城数据（mallApi 契约，不加 mock） ---------- */
+/* ---------- 目录与检索：真实商城数据（mallApi 契约，不加 mock） ---------- */
 const PAGE_SIZE = 6;
 
 const categories = ref<MallCategoryDto[]>([]);
@@ -323,6 +432,8 @@ const activeCategory = ref('');
 const products = ref<MallProductDto[]>([]);
 const mallLoading = ref(false);
 const mallError = ref('');
+/** 一次多取 1 条判断后端是否还有，用于「结果过多」引导而不是无限展开。 */
+const hasMore = ref(false);
 /** 图片 404 兜底：记录加载失败的 productId，命中后改用文字占位，避免破图。 */
 const brokenImages = reactive(new Set<string>());
 
@@ -336,13 +447,54 @@ const tabCategories = computed(() =>
     .map((item) => ({ code: item.code, name: item.name, count: item.count ?? 0 })),
 );
 
+const totalCount = computed(() => tabCategories.value.reduce((sum, item) => sum + (item.count || 0), 0));
+const totalCountText = computed(() => (totalCount.value > 0 ? totalCount.value.toLocaleString('en-US') : '—'));
+
 /**
  * 目录出口文案：带上一级分类合计件数，说明首页只展示了精选，完整目录规模多大。
  * 合计为 0（分类还没加载 / 接口失败）时回落到不带数字的文案，避免出现「查看全部 0 件」。
  */
-const catalogAllLabel = computed(() => {
-  const total = tabCategories.value.reduce((sum, item) => sum + (item.count || 0), 0);
-  return total > 0 ? `查看全部 ${total.toLocaleString('en-US')} 件商品` : '进入商城浏览完整目录';
+const catalogAllLabel = computed(() =>
+  totalCount.value > 0 ? `查看全部 ${totalCountText.value} 件商品` : '进入商城浏览完整目录',
+);
+
+/* ---------- 搜索：输入即检（320ms 防抖），提交/点按立即检索 ----------
+ * 检索口径不在前端造：多词空格 AND 且顺序无关、项目号 12 位全码与 6 位段码、
+ * 规格等价（M6-1.0x8 ≡ M6x8 ≡ 6x8 ≡ M6×8）、大小写与全半角归一，全部由
+ * `/mall/products?keyword=` 在服务端实现；首页只把原始输入原样送出并呈现结果。
+ */
+const searchKeyword = ref('');
+const searchNotice = ref('');
+const searchActive = computed(() => searchKeyword.value.trim().length > 0);
+const searchTooMany = computed(() => searchActive.value && hasMore.value);
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+/** 请求序号：连续输入时丢弃过期响应，避免旧结果盖掉新结果。 */
+let searchSeq = 0;
+
+const activeCategoryName = computed(
+  () => tabCategories.value.find((item) => item.code === activeCategory.value)?.name ?? '',
+);
+
+/** 目录区标题：搜索 > 分类预览 > 精选，三者共用一个网格，不另起一套版式。 */
+const catalogTitle = computed(() => {
+  if (searchActive.value) return '搜索结果';
+  return activeCategoryName.value ? `${activeCategoryName.value} · 精选` : '精选商品';
+});
+
+const catalogMeta = computed(() => {
+  if (mallLoading.value) return searchActive.value ? '检索中…' : '加载中…';
+  if (mallError.value) return '加载失败';
+  if (searchActive.value) {
+    return hasMore.value ? `前 ${PAGE_SIZE} 条 · 还有更多` : `${products.value.length} 件`;
+  }
+  return `精选 ${products.value.length} 件`;
+});
+
+/** 统一出口：搜索带 keyword，分类带 category（一级节点 id），其余进全量目录。 */
+const catalogCtaLabel = computed(() => {
+  if (searchActive.value) return '在商城中查看全部结果';
+  if (activeCategoryName.value) return `在商城中查看「${activeCategoryName.value}」`;
+  return catalogAllLabel.value;
 });
 
 async function loadCategories(): Promise<void> {
@@ -357,20 +509,28 @@ async function loadCategories(): Promise<void> {
 }
 
 async function loadProducts(): Promise<void> {
+  const keyword = searchKeyword.value.trim();
+  const seq = ++searchSeq;
   mallLoading.value = true;
   mallError.value = '';
   try {
     const list = await mallApi.listProducts({
-      cat: activeCategory.value || undefined,
+      keyword: keyword || undefined,
+      cat: keyword ? undefined : activeCategory.value || undefined,
       page: 1,
-      pageSize: PAGE_SIZE,
+      pageSize: PAGE_SIZE + 1,
     });
-    products.value = Array.isArray(list) ? list : [];
+    if (seq !== searchSeq) return;
+    const items = Array.isArray(list) ? list : [];
+    hasMore.value = items.length > PAGE_SIZE;
+    products.value = items.slice(0, PAGE_SIZE);
   } catch (e) {
+    if (seq !== searchSeq) return;
     mallError.value = e instanceof Error ? e.message : '商品加载失败';
     products.value = [];
+    hasMore.value = false;
   } finally {
-    mallLoading.value = false;
+    if (seq === searchSeq) mallLoading.value = false;
   }
 }
 
@@ -378,9 +538,73 @@ function loadMall(): Promise<unknown> {
   return Promise.allSettled([loadCategories(), loadProducts()]);
 }
 
-function switchCategory(code: string): void {
+function clearSearchTimer(): void {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = null;
+}
+
+function inputValue(e: unknown): string {
+  const event = e as { detail?: { value?: string }; target?: { value?: string } };
+  return event?.detail?.value ?? event?.target?.value ?? '';
+}
+
+/** 输入中：立刻切骨架态，防抖结束后再发请求，避免旧结果看起来像新结果。 */
+function onSearchInput(e: unknown): void {
+  searchKeyword.value = inputValue(e);
+  searchNotice.value = '';
+  clearSearchTimer();
+  if (!searchActive.value) {
+    void loadProducts();
+    return;
+  }
+  mallLoading.value = true;
+  searchTimer = setTimeout(() => {
+    searchTimer = null;
+    void loadProducts();
+  }, 320);
+}
+
+function submitSearch(): void {
+  clearSearchTimer();
+  if (!searchActive.value) {
+    searchNotice.value = '请输入关键词：商品名、规格或项目号';
+    return;
+  }
+  void loadProducts();
+}
+
+function clearSearch(): void {
+  clearSearchTimer();
+  searchKeyword.value = '';
+  searchNotice.value = '';
+  void loadProducts();
+}
+
+/** 分类预览会退出搜索态，保证「看到的商品 = 当前选中的类目」。 */
+function selectCategory(code: string): void {
+  clearSearchTimer();
+  searchKeyword.value = '';
+  searchNotice.value = '';
   activeCategory.value = code;
   void loadProducts();
+}
+
+function openCatalog(): void {
+  const keyword = searchKeyword.value.trim();
+  if (keyword) {
+    go(`${ROUTES.mall}?keyword=${encodeURIComponent(keyword)}`);
+    return;
+  }
+  if (activeCategory.value) {
+    go(`${ROUTES.mall}?category=${encodeURIComponent(activeCategory.value)}`);
+    return;
+  }
+  go(ROUTES.mall);
+}
+
+function openSearchInMall(): void {
+  const keyword = searchKeyword.value.trim();
+  go(keyword ? `${ROUTES.mall}?keyword=${encodeURIComponent(keyword)}` : ROUTES.mall);
 }
 
 function coverOf(product: MallProductDto): string {
@@ -479,33 +703,29 @@ onPullDownRefresh(() => {
   padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
 }
 
-/* ---------- 档案封面（深场） ---------- */
+/* ---------- 封面：深场 ---------- */
 .hero {
   position: relative;
   overflow: hidden;
-  padding: calc(56rpx + var(--status-bar-height, 0px)) $sp-4 $sp-5;
+  padding: calc(48rpx + var(--status-bar-height, 0px)) $sp-4 $sp-5;
+  /* 首层是品牌青的柔光，只能写成 rgba（需要透明度）；底色与渐变全部走令牌 */
   background:
-    radial-gradient(90% 120% at 6% 0%, rgba(15, 157, 143, 0.34), rgba(15, 157, 143, 0) 56%),
-    radial-gradient(70% 90% at 100% 8%, rgba(100, 228, 255, 0.1), rgba(100, 228, 255, 0) 60%),
-    linear-gradient(162deg, #0b0f0e 0%, #11201d 52%, #17322c 100%);
+    radial-gradient(88% 120% at 4% 0%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 58%),
+    linear-gradient(164deg, $deep 0%, $deep-2 56%, $deep-3 100%);
   border-bottom: 1rpx solid $on-deep-line;
-}
-
-.hero-inner {
-  position: relative;
-  z-index: 2;
 }
 
 .hero-eyebrow {
   display: block;
   font-size: $fs-micro;
+  line-height: 1.5;
   letter-spacing: $ls-label;
   text-transform: uppercase;
   color: $on-deep-2;
 }
 
 .hero-title-wrap {
-  margin-top: $sp-3;
+  margin-top: $sp-2;
 }
 
 .hero-title {
@@ -525,60 +745,68 @@ onPullDownRefresh(() => {
 .hero-lede {
   display: block;
   margin-top: $sp-3;
-  padding-right: $sp-5;
   font-size: $fs-meta;
   line-height: $lh-body;
   color: $on-deep-2;
 }
 
-.hero-logo {
+/* ---------- 通行证卡：品牌标 + 事实行 + 主入口 ---------- */
+.hero-card {
+  display: flex;
+  flex-direction: column;
   margin-top: $sp-5;
+  padding: $sp-4;
+  border: 1rpx solid $on-deep-line;
+  border-radius: $r-shell;
+  background: $deep-2;
 }
 
-.hero-meta {
-  display: flex;
-  align-items: stretch;
-  margin-top: $sp-5;
-  padding-top: $sp-4;
+.hero-facts {
+  margin-top: $sp-4;
+  padding-top: $sp-3;
   border-top: 1rpx solid $on-deep-line;
 }
 
-.meta-item {
-  flex: 1;
+.fact {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  padding: 8rpx 0;
 }
 
-.meta-sep {
-  width: 1rpx;
-  margin: 0 $sp-2;
-  background: $on-deep-line;
-}
-
-.meta-k {
+.fact-k {
+  width: 92rpx;
+  flex-shrink: 0;
   font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $on-deep-3;
 }
 
-.meta-v {
-  margin-top: 10rpx;
+/* 点线引导：把标签和值拉开，避免 1.3x 字体下两者挤在一起 */
+.fact-line {
+  flex: 1;
+  min-width: 24rpx;
+  margin: 0 $sp-2;
+  border-bottom: 1rpx dashed $on-deep-line;
+}
+
+.fact-v {
+  flex-shrink: 0;
   font-size: $fs-meta;
   letter-spacing: 1rpx;
   color: $on-deep-2;
+  text-align: right;
 }
 
-.meta-status {
+.fact-status {
   display: flex;
   align-items: center;
-  margin-top: 10rpx;
 }
 
 .status-dot {
   width: 12rpx;
   height: 12rpx;
-  border-radius: 50%;
   margin-right: 12rpx;
+  border-radius: 50%;
   background: $brand-on-deep;
 }
 
@@ -589,11 +817,11 @@ onPullDownRefresh(() => {
 .hero-error {
   display: flex;
   align-items: flex-start;
-  margin-top: $sp-4;
+  margin-top: $sp-3;
   padding: $sp-3;
   border: 1rpx solid $on-deep-line;
   border-radius: $r-control;
-  background: rgba(11, 18, 16, 0.56);
+  background: $deep-3;
 }
 
 .hero-error-mark {
@@ -605,7 +833,7 @@ onPullDownRefresh(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $amber-on-deep;
 }
 
@@ -633,7 +861,7 @@ onPullDownRefresh(() => {
 
 .hero-retry {
   flex-shrink: 0;
-  height: 64rpx;
+  min-height: 64rpx;
   margin-left: $sp-3;
   padding: 0 $sp-3;
   border: 1rpx solid $on-deep-line;
@@ -648,58 +876,58 @@ onPullDownRefresh(() => {
   color: $on-deep-2;
 }
 
-/* ---------- 正文：索引条目 ---------- */
-.body {
-  padding: $sp-6 $sp-3 0;
-}
-
-.cta {
-  padding: $sp-4;
-  border-radius: $r-control;
-  background: $paper-2;
-}
-
-.cta-kicker {
+/* 浅底反白块：on-deep/deep 两套主题里恒定，深色主题不会翻成浅字压浅底 */
+.hero-cta {
   display: block;
+  margin-top: $sp-4;
+  padding: $sp-3;
+  background: $on-deep;
+  border-left: 8rpx solid $brand;
+  border-radius: $r-card;
+}
+
+/* 箭头放在 kicker 同一行：标题占满整行，1.3x 或长文案也不会被箭头挤成孤字换行 */
+.hero-cta-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hero-cta-kicker {
   font-size: $fs-micro;
   letter-spacing: $ls-label;
   text-transform: uppercase;
-  color: $brand-deep;
+  color: $deep-3;
 }
 
-.cta-main {
-  display: flex;
-  align-items: center;
-  margin-top: 12rpx;
-}
-
-.cta-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.cta-title {
+.hero-cta-title {
   display: block;
+  margin-top: 10rpx;
   font-family: $font-display;
   font-size: $fs-h3;
   font-weight: 800;
   line-height: $lh-snug;
   letter-spacing: $ls-tight;
-  color: $ink;
+  color: $deep;
 }
 
-.cta-sub {
+.hero-cta-sub {
   display: block;
   margin-top: 8rpx;
-  font-size: $fs-meta;
-  color: $ink-3;
+  font-size: $fs-micro;
+  color: $deep-3;
 }
 
-.cta-arrow {
+.hero-cta-arrow {
   flex-shrink: 0;
-  margin-left: $sp-3;
+  margin-left: $sp-2;
   font-size: 30rpx;
-  color: $ink-4;
+  color: $deep-2;
+}
+
+/* ---------- 纸面 ---------- */
+.body {
+  padding: $sp-5 $sp-3 0;
 }
 
 .section {
@@ -710,16 +938,35 @@ onPullDownRefresh(() => {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
+  gap: $sp-2;
   margin-bottom: $sp-2;
 }
 
 .sec-head-l {
-  display: flex;
-  flex-direction: column;
   min-width: 0;
 }
 
+.sec-kicker {
+  display: flex;
+  align-items: center;
+}
+
+.sec-no {
+  font-size: $fs-micro;
+  letter-spacing: 2rpx;
+  color: $brand;
+}
+
+.sec-cap {
+  margin-left: 12rpx;
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  text-transform: uppercase;
+  color: $ink-4;
+}
+
 .sec-title {
+  display: block;
   margin-top: 10rpx;
   font-family: $font-display;
   font-size: $fs-h2;
@@ -731,195 +978,381 @@ onPullDownRefresh(() => {
 
 .sec-count {
   flex-shrink: 0;
-  margin-left: $sp-3;
+  padding-bottom: 6rpx;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-4;
 }
 
-.index-list {
-  margin-top: $sp-2;
+/* ---------- 01 通行入口 ---------- */
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $sp-2;
+  margin-top: $sp-3;
 }
 
-.index-row {
+.entry-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 220rpx;
+  padding: $sp-3;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+}
+
+.entry-top {
   display: flex;
   align-items: center;
-  padding: $sp-3 0;
-  border-bottom: 1rpx solid $paper-2;
+  justify-content: space-between;
+  gap: $sp-1;
 }
 
-.index-row:last-child {
-  border-bottom: none;
+.entry-no {
+  font-size: $fs-micro;
+  letter-spacing: 2rpx;
+  color: $brand;
 }
 
-.index-code {
-  width: 64rpx;
-  flex-shrink: 0;
-  font-size: $fs-meta;
-  letter-spacing: 1rpx;
+.entry-tag {
+  font-size: $fs-micro;
+  letter-spacing: 1.5rpx;
   color: $ink-4;
 }
 
-.index-main {
-  flex: 1;
-  min-width: 0;
-  margin-left: $sp-2;
-}
-
-.index-title {
+.entry-title {
   display: block;
-  font-size: $fs-body;
-  font-weight: 600;
-  line-height: 1.4;
+  margin-top: $sp-3;
+  font-family: $font-display;
+  font-size: $fs-h3;
+  font-weight: 800;
+  line-height: $lh-snug;
+  letter-spacing: $ls-tight;
   color: $ink;
 }
 
-.index-desc {
+.entry-desc {
   display: block;
-  margin-top: 4rpx;
+  margin-top: 6rpx;
   font-size: $fs-micro;
   line-height: 1.5;
   color: $ink-3;
 }
 
-.index-tag {
-  flex-shrink: 0;
-  margin-left: $sp-3;
-  padding: 4rpx 12rpx;
-  border-radius: $r-control;
-  background: $brand-soft;
-  font-size: $fs-micro;
-  letter-spacing: 1.5rpx;
-  color: $brand-deep;
-}
-
-.index-arrow {
-  flex-shrink: 0;
-  margin-left: 14rpx;
-  font-size: $fs-meta;
-  color: $ink-4;
-}
-
-/* 端状态：已接通=实心绿点；规划中=空心灰点，两者都带文字，不靠颜色单独传达 */
-.index-state {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  margin-left: $sp-3;
-}
-
-.index-dot {
-  flex-shrink: 0;
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 50%;
-  background: $brand;
-}
-
-.index-state--idle .index-dot {
-  background: transparent;
-  border: 1rpx solid $ink-4;
-}
-
-.index-state-text {
-  margin-left: 8rpx;
-  font-size: $fs-micro;
-  letter-spacing: 1rpx;
-  color: $brand-deep;
-}
-
-.index-state--idle .index-state-text {
-  color: $ink-4;
-}
-
-.index-row--idle .index-title {
-  color: $ink-3;
-}
-
-.section-note {
+.entry-arrow {
   display: block;
-  margin-top: $sp-3;
-  padding: 0 8rpx;
+  margin-top: auto;
+  padding-top: $sp-2;
   font-size: $fs-meta;
-  line-height: $lh-body;
-  color: $ink-3;
-}
-
-/* ---------- 页脚 ---------- */
-.footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: $sp-8;
-}
-
-.foot-rule {
-  width: 64rpx;
-  height: 1rpx;
-  margin-bottom: 26rpx;
-  background: $paper-3;
-}
-
-.foot-line {
-  font-size: $fs-micro;
-  letter-spacing: 2rpx;
   color: $ink-4;
 }
 
-.foot-line--dim {
-  margin-top: 10rpx;
-  opacity: 0.72;
-}
-
-/* ---------- 精选目录 ---------- */
-.pick-chips {
-  margin-top: $sp-3;
-  white-space: nowrap;
-}
-
-.pick-chip {
-  display: inline-flex;
+/* ---------- 01 检索与目录 ---------- */
+.search {
+  display: flex;
   align-items: center;
-  height: 60rpx;
-  padding: 0 22rpx;
-  margin-right: 14rpx;
+  gap: $sp-2;
+  min-height: 96rpx;
+  margin-top: $sp-3;
+  padding: 0 $sp-2 0 $sp-3;
+  box-sizing: border-box;
+  background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
-  background: $shell;
 }
 
-.pick-chip--active {
-  background: $brand-soft;
-  border-color: transparent;
+/* 聚焦时边框变品牌色：H5 / Android WebView 都生效 */
+.search:focus-within {
+  border-color: $brand;
 }
 
-.pick-chip-label {
-  font-size: $fs-micro;
-  letter-spacing: 1rpx;
+.search-mark {
+  position: relative;
+  flex-shrink: 0;
+  width: 36rpx;
+  height: 36rpx;
+}
+
+.search-lens {
+  position: absolute;
+  left: 2rpx;
+  top: 2rpx;
+  width: 24rpx;
+  height: 24rpx;
+  box-sizing: border-box;
+  border: 3rpx solid $ink-3;
+  border-radius: 50%;
+}
+
+.search-handle {
+  position: absolute;
+  right: 2rpx;
+  bottom: 5rpx;
+  width: 14rpx;
+  height: 3rpx;
+  background: $ink-3;
+  transform: rotate(45deg);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  height: 60rpx;
+  font-size: $fs-body;
+  color: $ink;
+  background: transparent;
+}
+
+.field-ph {
+  color: $ink-4;
+}
+
+.search-clear {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  background: $paper-2;
+}
+
+.search-clear-x {
+  font-size: 32rpx;
+  line-height: 1;
   color: $ink-3;
 }
 
-.pick-chip--active .pick-chip-label {
-  color: $brand-deep;
-  font-weight: 600;
+.search-go {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 68rpx;
+  padding: 0 $sp-4;
+  border-radius: $r-control;
+  background: $solid;
 }
 
-.pick-chip-count {
-  margin-left: 8rpx;
+.search-go-text {
+  font-size: $fs-meta;
+  font-weight: 600;
+  color: $on-solid;
+}
+
+/* 空态说明：不弹浮层，四条检索口径直接列在输入框下方 */
+.search-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $sp-2 $sp-3;
+  margin-top: $sp-2;
+}
+
+.search-hint-i {
+  font-size: $fs-micro;
+  letter-spacing: 0;
+  color: $ink-4;
+}
+
+.search-notice {
+  margin-top: $sp-2;
+  padding: $sp-2 $sp-3;
+  border-left: 6rpx solid $signal;
+  border-radius: 0 $r-control $r-control 0;
+  background: $paper-2;
+}
+
+.search-notice-text {
+  font-size: $fs-micro;
+  color: $ink-2;
+}
+
+/* 一级分类：与商城「商品分类」抽屉同一批节点，首页只平铺第一层 */
+.cat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: $sp-2;
+  margin-top: $sp-5;
+}
+
+.cat-head-label {
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  color: $ink-4;
+}
+
+.cat-head-note {
   font-size: $fs-micro;
   color: $ink-4;
+}
+
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $sp-2;
+  margin-top: $sp-3;
+}
+
+.cat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  min-height: 132rpx;
+  padding: $sp-3;
+  box-sizing: border-box;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+}
+
+.cat-card--active {
+  border-color: $brand;
+  background: $brand-soft;
+}
+
+.cat-no {
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  color: $ink-4;
+}
+
+.cat-card--active .cat-no {
+  color: $brand-deep;
+}
+
+.cat-name {
+  font-size: $fs-meta;
+  font-weight: 600;
+  line-height: $lh-snug;
+  color: $ink;
+}
+
+.cat-count {
+  font-size: $fs-micro;
+  color: $ink-4;
+}
+
+.cat-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $sp-2;
+  margin-top: $sp-3;
+  padding: $sp-3;
+  border: 1rpx dashed $paper-3;
+  border-radius: $r-control;
+}
+
+.cat-empty-text {
+  font-size: $fs-micro;
+  color: $ink-3;
+}
+
+.cat-empty-link {
+  flex-shrink: 0;
+}
+
+.cat-empty-link-text {
+  font-size: $fs-micro;
+  color: $brand-deep;
+}
+
+/* 目录区：精选 / 分类预览 / 搜索结果共用同一个头 + 网格 + 出口 */
+.catalog {
+  margin-top: $sp-5;
+}
+
+.catalog-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: $sp-2;
+  padding-bottom: $sp-2;
+  border-bottom: 1rpx solid $paper-3;
+}
+
+.catalog-title {
+  font-size: $fs-body;
+  font-weight: 600;
+  color: $ink;
+}
+
+.catalog-meta {
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  color: $ink-4;
+}
+
+.catalog-note {
+  margin-top: $sp-3;
+  padding: $sp-2 $sp-3;
+  border-radius: $r-control;
+  background: $paper-2;
+}
+
+.catalog-note-text {
+  font-size: $fs-micro;
+  color: $ink-3;
+}
+
+/* 无结果时给的三条改法 */
+.search-tips {
+  display: flex;
+  flex-direction: column;
+  gap: $sp-2;
+  width: 100%;
+  max-width: 520px;
+  margin-top: $sp-1;
+  text-align: left;
+}
+
+.search-tip {
+  display: flex;
+  align-items: baseline;
+  gap: $sp-2;
+}
+
+.search-tip-k {
+  flex-shrink: 0;
+  font-size: $fs-micro;
+  color: $brand-deep;
+}
+
+.search-tip-v {
+  font-size: $fs-micro;
+  line-height: $lh-snug;
+  color: $ink-2;
+}
+
+.search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $sp-2;
+  margin-top: $sp-3;
+}
+
+.search-actions .pick-retry {
+  margin-top: 0;
+}
+
+.pick-retry--ghost {
+  border-color: transparent;
+  background: transparent;
 }
 
 .pick-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $sp-2;
   margin-top: $sp-3;
 }
 
 .pick-card {
-  width: 48.6%;
-  margin-bottom: $sp-3;
+  display: flex;
+  flex-direction: column;
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-card;
@@ -976,13 +1409,13 @@ onPullDownRefresh(() => {
   left: 16rpx;
   top: 16rpx;
   z-index: 2;
+  padding: 4rpx 10rpx;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-3;
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: 6rpx;
-  padding: 4rpx 10rpx;
 }
 
 .pick-add {
@@ -1011,10 +1444,11 @@ onPullDownRefresh(() => {
 }
 
 .pick-info {
-  padding: $sp-3;
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 196rpx;
+  padding: $sp-3;
 }
 
 .pick-name {
@@ -1060,9 +1494,9 @@ onPullDownRefresh(() => {
 }
 
 .pick-cur {
+  margin-right: 2rpx;
   font-size: 24rpx;
   color: $ink-2;
-  margin-right: 2rpx;
 }
 
 .pick-amount {
@@ -1126,7 +1560,7 @@ onPullDownRefresh(() => {
 
 .pick-retry {
   margin-top: $sp-3;
-  height: 64rpx;
+  min-height: 64rpx;
   padding: 0 $sp-4;
   border: 1rpx solid $paper-3;
   border-radius: $r-control;
@@ -1171,13 +1605,137 @@ onPullDownRefresh(() => {
 
 .pick-more-text {
   font-size: $fs-meta;
-  color: $brand-deep;
   font-weight: 600;
+  color: $brand-deep;
 }
 
 .pick-more-arrow {
   font-size: $fs-meta;
   color: $ink-4;
+}
+
+/* ---------- 03 多端覆盖 ---------- */
+.cov-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $sp-2;
+  margin-top: $sp-3;
+}
+
+.cov-cell {
+  display: flex;
+  flex-direction: column;
+  padding: $sp-3;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+}
+
+.cov-cell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $sp-1;
+}
+
+.cov-code {
+  flex-shrink: 0;
+  padding: 2rpx 10rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: 6rpx;
+  font-size: $fs-micro;
+  letter-spacing: 2rpx;
+  color: $ink-2;
+}
+
+.cov-name {
+  display: block;
+  margin-top: $sp-3;
+  font-size: $fs-body;
+  font-weight: 600;
+  line-height: 1.4;
+  color: $ink;
+}
+
+.cov-slug {
+  display: block;
+  margin-top: 4rpx;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-4;
+}
+
+.cov-cell--idle .cov-name {
+  color: $ink-3;
+}
+
+.cov-cell--idle .cov-code {
+  color: $ink-4;
+}
+
+/* 端状态：已接通=实心绿点；规划中=空心灰点，两者都带文字，不靠颜色单独传达 */
+.index-state {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.index-dot {
+  flex-shrink: 0;
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: $brand;
+}
+
+.index-state--idle .index-dot {
+  background: transparent;
+  border: 1rpx solid $ink-4;
+}
+
+.index-state-text {
+  margin-left: 8rpx;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $brand-deep;
+}
+
+.index-state--idle .index-state-text {
+  color: $ink-4;
+}
+
+.section-note {
+  display: block;
+  margin-top: $sp-3;
+  font-size: $fs-meta;
+  line-height: $lh-body;
+  color: $ink-3;
+}
+
+/* ---------- 页脚 ---------- */
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: $sp-8;
+}
+
+.foot-rule {
+  width: 64rpx;
+  height: 1rpx;
+  margin-bottom: 26rpx;
+  background: $paper-3;
+}
+
+.foot-line {
+  font-size: $fs-micro;
+  letter-spacing: 2rpx;
+  color: $ink-4;
+}
+
+.foot-line--dim {
+  margin-top: 10rpx;
+  opacity: 0.72;
 }
 
 /* ---------- 窄屏：收紧展示大标，保证 375px 不挤 ---------- */
@@ -1192,103 +1750,169 @@ onPullDownRefresh(() => {
   }
 }
 
-/* ---------- 桌面 / 折叠屏展开态：横幅 CTA + 三~四列目录 + 双栏索引 ---------- */
+/* ---------- 桌面：版心内三栏节奏（入口 4 列 / 目录 左轨+3 列 / 端 3 列） ---------- */
 @media (min-width: 1000px) {
   .home {
     /* 宽屏已隐藏底部 tabBar，取消为标签栏预留的安全距离 */
     padding-bottom: 0;
   }
 
-  /* 版心不再被拉伸的移动端布局占满：CTA 与目录通栏，两个索引块并排 */
-  .body {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 40px;
-    align-items: start;
-    padding-top: 36px;
-  }
-
-  .body > .cta,
-  .body > .pick,
-  .body > .footer {
-    grid-column: 1 / -1;
-  }
-
-  /* ---------- 封面：标题左、徽标与元信息右 ---------- */
   .hero {
-    padding: 56px 40px 44px;
+    padding: 64px 48px 56px;
   }
 
-  .hero-inner {
+  .hero-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.55fr);
-    column-gap: 48px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1.4fr) minmax(340px, 0.6fr);
+    column-gap: 56px;
+    align-items: stretch;
   }
 
-  .hero-eyebrow,
-  .hero-title-wrap,
-  .hero-lede {
-    grid-column: 1;
-  }
-
-  .hero-lede {
-    max-width: 620px;
-    padding-right: 0;
-  }
-
-  .hero-logo,
-  .hero-meta {
-    grid-column: 2;
-  }
-
-  .hero-logo {
-    margin-top: 0;
-  }
-
-  .hero-meta {
+  .hero-copy {
+    display: flex;
     flex-direction: column;
-    margin-top: 32px;
-    padding-top: 0;
-    border-top: none;
-    row-gap: 18px;
+    justify-content: center;
   }
 
-  .meta-sep {
-    display: none;
+  .hero-title {
+    font-size: 64px;
+    letter-spacing: -2px;
+  }
+
+  .hero-lede {
+    max-width: 640px;
+  }
+
+  .hero-card {
+    margin-top: 0;
+    padding: 28px;
+  }
+
+  .hero-facts {
+    margin-top: 24px;
+    padding-top: 20px;
+  }
+
+  .fact {
+    padding: 7px 0;
+  }
+
+  .fact-k {
+    width: 52px;
+    font-size: 12px;
+  }
+
+  .fact-v {
+    font-size: 13px;
+  }
+
+  .hero-cta {
+    margin-top: auto;
+    padding: 18px;
+  }
+
+  .hero-cta-title {
+    font-size: 18px;
+  }
+
+  .hero-cta-sub {
+    font-size: 12px;
   }
 
   .hero-error {
-    grid-column: 1 / -1;
-  }
-
-  /* ---------- CTA：横向通栏 ---------- */
-  .cta {
-    padding: 26px 30px;
-  }
-
-  .cta-main {
-    margin-top: 10px;
-  }
-
-  .section {
-    margin-top: 44px;
-  }
-
-  /* ---------- 精选目录：等高网格，宽屏 4 列 ---------- */
-  .pick-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 20px;
     margin-top: 18px;
   }
 
-  .pick-card {
-    width: auto;
-    height: 100%;
-    margin-bottom: 0;
-    display: flex;
-    flex-direction: column;
+  .body {
+    padding: 56px 48px 0;
+  }
+
+  .section {
+    margin-top: 64px;
+  }
+
+  .sec-title {
+    font-size: 34px;
+  }
+
+  .entry-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .entry-card {
+    min-height: 190px;
+    padding: 20px;
+  }
+
+  .entry-title {
+    font-size: 20px;
+  }
+
+  .entry-desc {
+    font-size: 12.5px;
+  }
+
+  /* 检索：桌面加高输入框，口径说明并成一行 */
+  .search {
+    min-height: 64px;
+    margin-top: 24px;
+    padding: 0 8px 0 18px;
+    gap: 12px;
+  }
+
+  .search-input {
+    height: 40px;
+    font-size: 15px;
+  }
+
+  .search-go {
+    min-height: 46px;
+    padding: 0 24px;
+  }
+
+  .search-go-text {
+    font-size: 14px;
+  }
+
+  .search-hint {
+    gap: 8px 24px;
+    margin-top: 10px;
+  }
+
+  /* 一级 6 类 + 全部：桌面一行 7 格，与抽屉第一层一一对应 */
+  .cat-head {
+    margin-top: 32px;
+  }
+
+  .cat-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .cat-card {
+    min-height: 112px;
+    padding: 16px;
+  }
+
+  .cat-name {
+    font-size: 15px;
+  }
+
+  .catalog {
+    margin-top: 36px;
+  }
+
+  .catalog-title {
+    font-size: 20px;
+  }
+
+  .pick-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 20px;
   }
 
   .pick-cover,
@@ -1298,9 +1922,8 @@ onPullDownRefresh(() => {
   }
 
   .pick-info {
-    flex: 1;
     min-height: 0;
-    padding: 14px 16px 16px;
+    padding: 16px;
   }
 
   .pick-name {
@@ -1311,53 +1934,44 @@ onPullDownRefresh(() => {
     font-size: 24px;
   }
 
-  /* 分类 chip：桌面关掉横向滚动，六个一级分类一次铺开 */
-  .pick-chips {
-    margin-top: 18px;
-    white-space: normal;
+  .pick-more {
+    margin-top: 24px;
+    padding: 16px 4px;
   }
 
-  .pick-chips :deep(.uni-scroll-view) {
-    overflow: visible !important;
+  .cov-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 20px;
   }
 
-  .pick-chips :deep(.uni-scroll-view-content) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    white-space: normal;
+  .cov-cell {
+    padding: 20px;
   }
 
-  .pick-chip {
-    height: 32px;
-    margin-right: 0;
-    padding: 0 14px;
-  }
-
-  /* ---------- 索引块：收紧行高，提高信息密度 ---------- */
-  .index-row {
-    padding: 10px 0;
+  .cov-name {
+    font-size: 16px;
   }
 
   .section-note {
-    max-width: 90%;
+    max-width: 760px;
+    font-size: 12.5px;
   }
 
   .footer {
-    padding-top: 56px;
+    padding: 64px 0 56px;
   }
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 1400px) {
   /* 首页版心比通用 page--wide 更宽，桌面视觉重心不塌在中间一窄条 */
   .home {
     --shell-w: 1320px;
     max-width: 1320px;
   }
 
-  .pick-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .hero-title {
+    font-size: 76px;
   }
 }
-
 </style>
