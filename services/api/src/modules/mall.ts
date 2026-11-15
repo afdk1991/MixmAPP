@@ -812,7 +812,9 @@ export class MallService {
       assertDeliverySelection(input.deliveryMethod, input.deliverySlot ?? '');
     }
 
-    const fromCart = !input.items;
+    // 结算来源：优先用显式标记；未传时保持旧口径（没传 items 视为整车结算）。
+    // 前端从购物车勾选结算也会传 items，因此不能用「有没有 items」反推来源。
+    const fromCart = input.fromCart ?? !input.items;
     // 下单拆有效行（源站口径）：只有 A（到货）行能进单；
     // R 需求 / L 缺货 / X 下架 一律拆到 skippedLines，随响应返回给用户明确说明。
     const skippedLines: SkippedCartLineDto[] = [];
@@ -975,9 +977,18 @@ export class MallService {
       throw error;
     }
     if (fromCart) {
-      // 只清掉已下单的有效行；失效行（R/L/X）留在购物车由用户移除或等待补货
+      // 只清已结算的行：按「用户 + 已下单商品与数量」从购物车行里扣减数量，而不是按商品整行删除。
+      // - 未勾选行、四态不可售行（R/L/X）不在 lines 里，自然保留；
+      // - 同一商品在下单后又被加购时，多出来的数量必须留在购物车，不能被整行删掉。
       for (const line of lines) {
-        await this.store.mall.carts.remove(userId, line.product.id);
+        const row = await this.store.mall.carts.find(userId, line.product.id);
+        if (!row) continue;
+        const remain = row.quantity - line.quantity;
+        if (remain > 0) {
+          await this.store.mall.carts.upsert({ ...row, quantity: remain, updatedAt: new Date() });
+        } else {
+          await this.store.mall.carts.remove(userId, line.product.id);
+        }
       }
     }
     const unconfirmed = items.filter((item) => item.stockUnconfirmed);

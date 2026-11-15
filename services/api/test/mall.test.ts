@@ -692,4 +692,111 @@ describe('购物车行状态四态与三层优惠（0017）', () => {
     expect((await ctx.store.mall.products.findById('mix-split-a'))?.stock).toBe(48);
     expect((await ctx.store.mall.products.findById('mix-split-l'))?.stock).toBe(50);
   });
+
+  it('从购物车勾选结算：只清已结算行，未勾选行与失效行保留', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-settle-a', title: '已结算品', priceFen: 10000, stock: 50 }));
+    await ctx.store.mall.products.insert(product({ id: 'mix-settle-b', title: '未勾选品', priceFen: 10000, stock: 50 }));
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-settle-l', title: '缺货品', priceFen: 10000, stock: 50, sourceInvStatus: '无货' }),
+    );
+    const token = await register(app, '13800002206');
+    const user = await ctx.store.users.findByPhone('13800002206');
+    await seedCart(ctx.store, user!.id, [
+      { productId: 'mix-settle-a', quantity: 2 },
+      { productId: 'mix-settle-b', quantity: 2 },
+      { productId: 'mix-settle-l', quantity: 2 },
+    ]);
+
+    // 前端勾选结算：显式带 fromCart + 只传勾选的 A 行（旧口径会被误判成「立即购买」而不清行）
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '周九',
+        receiverPhone: '13800002206',
+        address: '浙江省宁波市鄞州区清行路 6 号',
+        fromCart: true,
+        items: [{ productId: 'mix-settle-a', quantity: 2 }],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().data.items).toHaveLength(1);
+
+    const cartAfter = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    const itemsAfter = cartAfter.json().data.items as Array<{
+      productId: string;
+      quantity: number;
+      lineStatus: string;
+    }>;
+    // 已结算行被清掉
+    expect(itemsAfter.some((line) => line.productId === 'mix-settle-a')).toBe(false);
+    // 未勾选行原样保留
+    expect(itemsAfter.find((line) => line.productId === 'mix-settle-b')?.quantity).toBe(2);
+    // 四态不可售行（L 缺货）保留
+    expect(itemsAfter.find((line) => line.productId === 'mix-settle-l')?.lineStatus).toBe('L');
+  });
+
+  it('同一商品结算后又被加购：只扣已结算数量，新加购数量保留', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'mix-readd-1', title: '重复加购品', priceFen: 10000, stock: 100 }),
+    );
+    const token = await register(app, '13800002207');
+    const user = await ctx.store.users.findByPhone('13800002207');
+    // 前端加载时行内 5 支，提交前另一处又加购 3 支 → 行内已变成 8；提交的仍是快照里的 5 支
+    await seedCart(ctx.store, user!.id, [{ productId: 'mix-readd-1', quantity: 8 }]);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '吴十',
+        receiverPhone: '13800002207',
+        address: '浙江省宁波市鄞州区加购路 7 号',
+        fromCart: true,
+        items: [{ productId: 'mix-readd-1', quantity: 5 }],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const cartAfter = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    const itemsAfter = cartAfter.json().data.items as Array<{ productId: string; quantity: number }>;
+    // 只扣已结算的 5 支，新加购的 3 支必须保留，不能被整行删除
+    expect(itemsAfter).toHaveLength(1);
+    expect(itemsAfter[0]!.productId).toBe('mix-readd-1');
+    expect(itemsAfter[0]!.quantity).toBe(3);
+  });
+
+  it('不带 fromCart 的立即购买不动购物车', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-buy-1', title: '立即购买品', priceFen: 10000, stock: 50 }));
+    const token = await register(app, '13800002208');
+    const user = await ctx.store.users.findByPhone('13800002208');
+    await seedCart(ctx.store, user!.id, [{ productId: 'mix-buy-1', quantity: 2 }]);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '郑十一',
+        receiverPhone: '13800002208',
+        address: '浙江省宁波市鄞州区直购路 8 号',
+        items: [{ productId: 'mix-buy-1', quantity: 1 }],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const cartAfter = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    const itemsAfter = cartAfter.json().data.items as Array<{ productId: string; quantity: number }>;
+    // 不是从购物车结算，购物车原样保留
+    expect(itemsAfter).toHaveLength(1);
+    expect(itemsAfter[0]!.quantity).toBe(2);
+  });
 });

@@ -425,7 +425,14 @@ export const orderCreateSchema = z.object({
   /** 配送时间段代码，必须属于所选配送方式（见 deliveryOptionsSchema） */
   deliverySlot: z.string().trim().min(1).max(24).optional(),
   remark: z.string().trim().max(120).optional(),
-  /** 不传则用购物车全部商品下单；传了就是「立即购买」 */
+  /**
+   * 结算来源标记：true 表示本次 items（或不传 items 时的整车）来自购物车，
+   * 下单成功后服务端把「已结算数量」从购物车行里扣减。
+   * 不能用「有没有 items」反推来源：前端从购物车勾选结算时也会显式传 items（只含勾选的 A 行），
+   * 旧口径会把这种情况误判成「立即购买」，已结算行就会残留在购物车。
+   */
+  fromCart: z.boolean().optional(),
+  /** 结算商品行：不传则按购物车全部可售行下单；传了则只结算这些行（勾选结算 / 立即购买都可能传） */
   items: z
     .array(
       z.object({

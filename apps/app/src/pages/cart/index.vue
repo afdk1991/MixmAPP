@@ -924,6 +924,9 @@ async function submitOrder(): Promise<void> {
       ...(selectedAddressId.value ? { addressId: selectedAddressId.value } : {}),
       ...(deliveryMethod.value ? { deliveryMethod: deliveryMethod.value } : {}),
       ...(deliverySlot.value ? { deliverySlot: deliverySlot.value } : {}),
+      // 显式声明「从购物车结算」：下单成功后由后端扣减已结算行；
+      // 不能靠「有没有 items」反推（勾选结算同样会传 items）
+      fromCart: true,
       // 只把勾选的 A 到货行交给后端；失效行/未勾选行不会进单
       items: selectedLines.value.map((line) => ({
         productId: line.productId,
