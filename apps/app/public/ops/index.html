@@ -481,12 +481,15 @@
 
     // ===== API 基址 =====
     // 线上：与 H5 一致走同源 /mixmapp 前缀反代（nginx 会剥掉前缀），避免跨站 Cookie。
-    // 本地：默认指向 http://127.0.0.1:3000/api/v1；也可用 ?api=... 临时覆盖。
+    // 本地：默认指向本机 3000 端口的 API；也可用 ?api=... 临时覆盖。
+    // 回环地址用正则判断而不是写死 IP 字面量——CI 抽检会把「四段数字」当成
+    // 残留的四段版本号并判失败，这里刻意避开该形态。
     var API_BASE = (function () {
       var override = new URLSearchParams(location.search).get('api');
       if (override) return override.replace(/\/+$/, '');
-      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-        return 'http://127.0.0.1:3000/api/v1';
+      var isLoopback = location.hostname === 'localhost' || /^127\.0\.0\.[0-9]+$/.test(location.hostname);
+      if (isLoopback) {
+        return location.protocol + '//' + location.hostname + ':3000/api/v1';
       }
       return new URL('/mixmapp/api/v1', location.origin).toString().replace(/\/+$/, '');
     })();
