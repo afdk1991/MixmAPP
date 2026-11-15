@@ -24,12 +24,16 @@ import type {
  * 注意：静态平台只托管前端，没有 `/api/v1` 路由；部署到这类平台时必须给出 API 源，
  * 否则所有请求会落到托管域名上并返回 404。
  */
-function readRuntimeApiBase(): string | undefined {
+type RuntimeApiBaseSource = 'runtime' | 'storage';
+
+function readRuntimeApiBase(): { value: string; source: RuntimeApiBaseSource } | undefined {
   const injected = (globalThis as { __MIXMAPP_API_BASE__?: unknown }).__MIXMAPP_API_BASE__;
-  if (typeof injected === 'string' && injected.trim()) return injected.trim();
+  if (typeof injected === 'string' && injected.trim()) {
+    return { value: injected.trim(), source: 'runtime' };
+  }
   try {
     const stored = uni.getStorageSync('mixmapp:apiBase');
-    if (typeof stored === 'string' && stored.trim()) return stored.trim();
+    if (typeof stored === 'string' && stored.trim()) return { value: stored.trim(), source: 'storage' };
   } catch {
     // 无 storage 能力的端直接忽略
   }
@@ -54,8 +58,16 @@ declare const __MIXMAPP_API_BASE__: string;
 const buildApiBase = typeof __MIXMAPP_API_BASE__ === 'undefined' ? '' : __MIXMAPP_API_BASE__.trim();
 
 const env = import.meta.env as unknown as Record<string, string | boolean | undefined>;
+const runtimeApiBase = readRuntimeApiBase();
+
+/** 基址取值来源：排查「显示值与预期注入值不一致」时用来区分是被本地存储覆盖还是旧产物。 */
+export type ApiBaseSource = 'runtime' | 'storage' | 'build' | 'default';
+
+export const API_BASE_SOURCE: ApiBaseSource =
+  runtimeApiBase?.source ?? (buildApiBase ? 'build' : 'default');
+
 export const API_BASE: string = normalizeApiBase(
-  readRuntimeApiBase() ?? (buildApiBase || undefined) ?? (env.DEV ? 'http://127.0.0.1:8080/api/v1' : '/api/v1'),
+  runtimeApiBase?.value ?? (buildApiBase || undefined) ?? (env.DEV ? 'http://127.0.0.1:8080/api/v1' : '/api/v1'),
 );
 
 /**

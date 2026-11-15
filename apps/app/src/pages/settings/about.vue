@@ -33,7 +33,7 @@
       <text class="block-title">运行环境</text>
       <view class="rule" />
       <view class="row"><text class="k">当前平台</text><text class="v">{{ platform }}</text></view>
-      <view class="row"><text class="k">API 基址</text><text class="v v--mono mono">{{ apiBase }}</text></view>
+      <view class="row"><text class="k">API 基址 · {{ apiBaseSource }}</text><text class="v v--mono mono">{{ apiBase }}</text></view>
       <view class="row row--last"><text class="k">上次启动</text><text class="v mono">{{ lastLaunch }}</text></view>
     </view>
 
@@ -44,7 +44,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { API_BASE, metaApi, ApiError } from '../../api/client';
+import { API_BASE, API_BASE_SOURCE, metaApi, ApiError } from '../../api/client';
 import { APP_VERSION } from '../../version';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
@@ -59,6 +59,13 @@ const meta = ref<MetaInfo | null>(null);
 const error = ref('');
 const platform = ref('');
 const apiBase = ref(API_BASE);
+const API_BASE_SOURCE_TEXT: Record<string, string> = {
+  runtime: '运行时注入',
+  storage: '本地覆盖',
+  build: '构建注入',
+  default: '默认同源',
+};
+const apiBaseSource = ref(API_BASE_SOURCE_TEXT[API_BASE_SOURCE] ?? API_BASE_SOURCE);
 const lastLaunch = ref('—');
 
 /** 对外展示的能力项与中文名；顺序即展示顺序，未在 meta 中出现的项自动跳过。 */
