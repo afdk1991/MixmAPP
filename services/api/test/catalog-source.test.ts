@@ -19,8 +19,15 @@ afterEach(async () => {
 });
 
 function cfg(mode: 'auto' | 'off' | 'force', file: string = fixture): Config {
-  return { ...testConfig, mall: { catalogSource: { mode, file }, sourceStockMode: 'off' } };
+  return {
+    ...testConfig,
+    adminToken: 'test-admin',
+    mall: { catalogSource: { mode, file }, sourceStockMode: 'off' },
+  };
 }
+
+/** healthz 详情只对管理面开放，这里统一带管理端 token。 */
+const ADMIN = { 'x-admin-token': 'test-admin' };
 
 async function makeApp(config: Config, store = new MemoryStore()) {
   const app = await buildApp({ config, store, logger: false });
@@ -123,13 +130,27 @@ describe('内嵌只读目录源（fixture 夹具）', () => {
     const { app } = await makeApp(cfg('off'), store);
     const list = await app.inject({ method: 'GET', url: '/api/v1/mall/products' });
     expect((list.json().data as AnyProduct[]).map((p) => p.id)).toEqual(['db-1']);
-    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz' });
+    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz', headers: ADMIN });
     expect(health.json().checks.catalogSource).toBe('off');
+  });
+
+  it('healthz：匿名只回 status，带 x-admin-token 才回运维详情', async () => {
+    const { app } = await makeApp(cfg('auto'));
+    const anon = await app.inject({ method: 'GET', url: '/api/v1/healthz' });
+    expect(anon.statusCode).toBe(200);
+    expect(Object.keys(anon.json())).toEqual(['status']);
+    expect(anon.body).not.toMatch(/dbTarget|dbHost|catalogSync|uptimeSec|run_id/);
+
+    const admin = await app.inject({ method: 'GET', url: '/api/v1/healthz', headers: ADMIN });
+    expect(admin.json().status).toBe('ok');
+    expect(admin.json().checks.dbTarget).toBeTruthy();
+    expect(admin.json().checks.dbHost).toBeTruthy();
+    expect(admin.json().uptimeSec).toBeGreaterThan(0);
   });
 
   it('auto：DB 无真实目录商品 → 内嵌目录源接管，并在 healthz/meta 暴露', async () => {
     const { app } = await makeApp(cfg('auto'));
-    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz' });
+    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz', headers: ADMIN });
     expect(health.json().checks.catalogSource).toBe('catalog');
     expect(health.json().catalogSource.active).toBe(true);
     expect(health.json().catalogSource.productCount).toBe(3);
@@ -141,7 +162,7 @@ describe('内嵌只读目录源（fixture 夹具）', () => {
     const store = new MemoryStore();
     await store.mall.products.insert(dbProduct({ id: 'db-real', sourceKey: 'sku:REAL' }));
     const { app } = await makeApp(cfg('auto'), store);
-    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz' });
+    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz', headers: ADMIN });
     expect(health.json().checks.catalogSource).toBe('db');
     const list = await app.inject({ method: 'GET', url: '/api/v1/mall/products' });
     expect((list.json().data as AnyProduct[]).map((p) => p.id)).toEqual(['db-real']);
@@ -151,7 +172,7 @@ describe('内嵌只读目录源（fixture 夹具）', () => {
     const store = new MemoryStore();
     await store.mall.products.insert(dbProduct());
     const { app } = await makeApp(cfg('force', join(projectRoot(), 'no-such-catalog.json')), store);
-    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz' });
+    const health = await app.inject({ method: 'GET', url: '/api/v1/healthz', headers: ADMIN });
     expect(health.statusCode).toBe(200);
     expect(health.json().checks.catalogSource).toBe('unavailable');
     const list = await app.inject({ method: 'GET', url: '/api/v1/mall/products' });
@@ -192,7 +213,7 @@ describe('内嵌目录源（真实 15,037 条 catalog.json）', () => {
     '全量索引：6 个中文类目计数正确、301 页翻页 0 重复、UTOOL 命中、图片 URL 与详情可用',
     async () => {
       const { app } = await makeApp(cfg('force', realCatalog));
-      const health = await app.inject({ method: 'GET', url: '/api/v1/healthz' });
+      const health = await app.inject({ method: 'GET', url: '/api/v1/healthz', headers: ADMIN });
       expect(health.json().catalogSource.productCount).toBe(15037);
 
       const cats = await app.inject({ method: 'GET', url: '/api/v1/mall/categories' });

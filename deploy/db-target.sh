@@ -14,6 +14,13 @@ current_target() {
   grep -E '^DB_TARGET=' "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || true
 }
 
+# healthz 的 dbTarget 详情只在带 ADMIN_TOKEN 时下发；未配时只能核对进程存活。
+admin_token() {
+  grep -E '^ADMIN_TOKEN=' "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || true
+}
+ADMIN_TOKEN=${ADMIN_TOKEN:-$(admin_token)}
+AUTH_HEADER="x-admin-token: ${ADMIN_TOKEN}"
+
 has_var() {
   local name="$1"
   grep -qE "^${name}=.+" "$ENV_FILE"
@@ -26,7 +33,7 @@ has_any_var() {
 }
 
 show_health() {
-  curl -fsS --max-time 5 "$HEALTH_URL" 2>/dev/null | head -c 800 || echo '(健康检查不可用)'
+  curl -fsS --max-time 5 -H "$AUTH_HEADER" "$HEALTH_URL" 2>/dev/null | head -c 800 || echo '(健康检查不可用)'
   echo
 }
 
@@ -68,9 +75,16 @@ case "$ACTION" in
 
     systemctl restart "$SERVICE"
     for i in $(seq 1 25); do
-      if curl -fsS --max-time 3 "$HEALTH_URL" >/tmp/mixmapp-dbtarget-health.json 2>/dev/null; then
-        if grep -q "\"dbTarget\":\"$ACTION\"" /tmp/mixmapp-dbtarget-health.json; then
-          echo "✓ 已切到 $ACTION 并通过健康检查"
+      if curl -fsS --max-time 3 -H "$AUTH_HEADER" "$HEALTH_URL" >/tmp/mixmapp-dbtarget-health.json 2>/dev/null; then
+        if grep -q '"dbTarget"' /tmp/mixmapp-dbtarget-health.json; then
+          if grep -q "\"dbTarget\":\"$ACTION\"" /tmp/mixmapp-dbtarget-health.json; then
+            echo "✓ 已切到 $ACTION 并通过健康检查"
+            show_health
+            exit 0
+          fi
+        else
+          # 未配 ADMIN_TOKEN 时拿不到落点详情，只能按「进程存活」判定
+          echo "✓ 服务已存活（未配 ADMIN_TOKEN，无法核对 dbTarget=$ACTION）"
           show_health
           exit 0
         fi

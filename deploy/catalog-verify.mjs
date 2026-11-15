@@ -20,6 +20,8 @@
  *   STORAGE_DIR           可选：生产机本地存储根，启用「products 图片数 ≥ MIN_IMAGES」硬验收
  *   MIN_IMAGES            图片数下限，默认 871
  *   LOCAL_ONLY            设为 1 时只跑本地资产硬验收（不发 HTTP），需同时设置 CATALOG_FILE 与 STORAGE_DIR
+ *   ADMIN_TOKEN           可选：healthz 运维详情只对管理面开放，带上才能核对 db/dbTarget/uptimeSec；
+ *                         未设置时自动退回 /meta 读取版本与目录源结论
  *
  * 退出码：0 全通过 / 1 有失败项 / 2 脚本自身出错。
  *
@@ -42,6 +44,7 @@ const CATALOG_FILE = (process.env.CATALOG_FILE ?? '').trim();
 const STORAGE_DIR = (process.env.STORAGE_DIR ?? '').trim();
 const MIN_IMAGES = Number(process.env.MIN_IMAGES ?? 871);
 const LOCAL_ONLY = process.env.LOCAL_ONLY === '1';
+const ADMIN_TOKEN = (process.env.ADMIN_TOKEN ?? '').trim();
 const DEMO_TITLES = ['MixmAPP 首发限定礼盒', '石墨黑轻量冲锋衣', '桌面理线收纳坞'];
 const DEMO_CATS = new Set(['featured', 'life', 'digital', 'wear']);
 const HAS_HAN = /[\u4e00-\u9fa5]/;
@@ -53,7 +56,10 @@ function rec(name, ok, detail) {
 }
 
 async function getJson(url, timeoutMs = 15000) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  const res = await fetch(url, {
+    headers: ADMIN_TOKEN ? { 'x-admin-token': ADMIN_TOKEN } : undefined,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   const text = await res.text();
   let json = null;
   try {
@@ -146,15 +152,32 @@ async function main() {
     health = { status: 0, json: null };
   }
   const hj = health.json ?? {};
+  // 匿名 healthz 只回 {status}；详情（checks/catalogSource/version）需 ADMIN_TOKEN。
+  // 未配 token 时退回 /meta 读取版本与目录源结论，避免验证脚本整体误判。
+  let meta = null;
+  if (!hj.checks) {
+    try {
+      meta = (await getJson(`${API}/meta`)).json?.data ?? null;
+    } catch {
+      meta = null;
+    }
+  }
+  console.info(
+    hj.checks
+      ? '  (healthz 运维详情：已带 ADMIN_TOKEN)'
+      : '  (healthz 运维详情：未提供，已退回 /meta；如需核对 dbTarget 请设置 ADMIN_TOKEN)',
+  );
   const db = hj.checks?.db ?? '-';
   rec(
     'healthz 状态与真库',
-    health.status === 200 && hj.status === 'ok' && ['ok', 'postgres', 'memory'].includes(db),
-    `HTTP ${health.status} status=${hj.status} db=${db} dbTarget=${hj.checks?.dbTarget ?? '-'}`,
+    health.status === 200 &&
+      hj.status === 'ok' &&
+      (!hj.checks || ['ok', 'postgres', 'memory'].includes(db)),
+    `HTTP ${health.status} status=${hj.status} db=${hj.checks ? db : '未提供'} dbTarget=${hj.checks?.dbTarget ?? '-'}`,
   );
 
   // 2. 正式版本号
-  const version = String(hj.version ?? '');
+  const version = String(hj.version ?? meta?.version ?? '');
   const versionOk = EXPECT_VERSION ? version === EXPECT_VERSION : Boolean(version) && !/preview/i.test(version);
   rec(
     '版本号为正式号',
@@ -185,7 +208,7 @@ async function main() {
   );
 
   // 4. catalog.json 目录源硬验收：source==='catalog' 证明数据文件已加载且可解析
-  const cs = hj.catalogSource ?? {};
+  const cs = hj.catalogSource ?? meta?.catalogSource ?? {};
   const source = String(cs.source ?? hj.checks?.catalogSource ?? '-');
   const sourceOk = source === EXPECT_SOURCE || (source === 'db' && sum > MIN_PRODUCTS);
   rec(

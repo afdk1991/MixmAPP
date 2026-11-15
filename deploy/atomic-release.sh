@@ -182,9 +182,12 @@ done
 # 失败只以非零退出并给出指引，代码版本已发布，按 deploy/CATALOG-DEPLOY.md 处理或 rollback.sh 回退。
 if [ "$VERIFY_CATALOG" = "1" ]; then
   echo "▶ 校验 catalog 目录源是否接管"
-  if curl -fsS --max-time 5 "$HEALTH_URL" > /tmp/mixmapp-catalog-health.json && \
+  # healthz 的运维详情只对管理面开放：api.env 配了 ADMIN_TOKEN 才带得动断言
+  if curl -fsS --max-time 5 -H "x-admin-token: ${ADMIN_TOKEN:-}" "$HEALTH_URL" > /tmp/mixmapp-catalog-health.json && \
      grep -q '"catalogSource":"catalog"' /tmp/mixmapp-catalog-health.json; then
     echo "✓ catalog 目录源已接管"
+  elif ! grep -q '"catalogSource"' /tmp/mixmapp-catalog-health.json; then
+    echo "⚠ healthz 未返回运维详情（api.env 未配 ADMIN_TOKEN），跳过目录源断言；需要硬验收请补配 ADMIN_TOKEN"
   else
     echo "✗ catalog 目录源未生效：检查 api.env 的 MALL_CATALOG_SOURCE / MALL_CATALOG_FILE 与数据文件"
     exit 1

@@ -9,19 +9,29 @@ const base = (process.argv[2] ?? process.env.HEALTH_BASE_URL ?? 'http://127.0.0.
   '',
 );
 const timeoutMs = Number(process.env.HEALTH_TIMEOUT_MS ?? 8000);
+// healthz 的运维详情只对管理面开放：设置 ADMIN_TOKEN 才拿得到 checks/version/uptimeSec，
+// 匿名只回 {status}，本脚本据此判断存活与降级。
+const adminToken = (process.env.ADMIN_TOKEN ?? '').trim();
 
 async function main() {
   const url = `${base}/api/v1/healthz`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, {
+      headers: adminToken ? { 'x-admin-token': adminToken } : undefined,
+      signal: controller.signal,
+    });
     clearTimeout(timer);
     const body = await res.json();
     const checks = body.checks ?? {};
     console.info(`目标：${url}`);
-    console.info(`状态：${body.status}  HTTP ${res.status}  版本 ${body.version}`);
-    console.info(`运行时长：${body.uptimeSec}s`);
+    console.info(
+      `状态：${body.status}  HTTP ${res.status}` +
+        (body.version ? `  版本 ${body.version}` : '') +
+        (body.uptimeSec != null ? `  运行时长 ${body.uptimeSec}s` : ''),
+    );
+    if (!body.checks) console.info('  (未配置 ADMIN_TOKEN，healthz 仅返回 status)');
     for (const [key, value] of Object.entries(checks)) {
       console.info(`  - ${key.padEnd(10)} ${value}`);
     }
