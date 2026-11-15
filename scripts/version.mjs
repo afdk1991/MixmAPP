@@ -228,11 +228,17 @@ function sync(state = loadState()) {
 
   {
     const text = readText(APP_VERSION_FILE);
-    const next = replaceOnce(
+    let next = replaceOnce(
       text,
       /(export const APP_VERSION = ')[^']*(';)/,
       `$1${display}$2`,
       APP_VERSION_FILE,
+    );
+    next = replaceOnce(
+      next,
+      /(export const APP_CHANNEL: string = ')[^']*(';)/,
+      `$1${state.channel}$2`,
+      `${APP_VERSION_FILE} APP_CHANNEL`,
     );
     if (lf(next) !== lf(text)) writeText(APP_VERSION_FILE, next);
   }
@@ -336,9 +342,15 @@ function check() {
   }
 
   {
-    const match = /export const APP_VERSION = '([^']*)';/.exec(readText(APP_VERSION_FILE));
-    const actual = match ? match[1] : '(缺失)';
+    const text = readText(APP_VERSION_FILE);
+    const versionMatch = /export const APP_VERSION = '([^']*)';/.exec(text);
+    const actual = versionMatch ? versionMatch[1] : '(缺失)';
     if (actual !== display) problems.push(`${APP_VERSION_FILE} APP_VERSION=${actual}，期望 ${display}`);
+    const channelMatch = /export const APP_CHANNEL: string = '([^']*)';/.exec(text);
+    const actualChannel = channelMatch ? channelMatch[1] : '(缺失)';
+    if (actualChannel !== state.channel) {
+      problems.push(`${APP_VERSION_FILE} APP_CHANNEL=${actualChannel}，期望 ${state.channel}`);
+    }
   }
 
   {

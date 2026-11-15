@@ -7,7 +7,7 @@ import type {
   PrivacyConsentInput,
   UserDto,
 } from '@mixmapp/contracts';
-import { APP_VERSION } from '../version';
+import { APP_CHANNEL } from '../version';
 import type {
   MallCategoryDto,
   MallCategoryNodeDto,
@@ -27,8 +27,8 @@ import type {
  */
 type RuntimeApiBaseSource = 'runtime' | 'storage';
 
-/** version.json 的 channel 已同步进 APP_VERSION（preview / dev 带后缀），无后缀即正式版。 */
-const IS_RELEASE_CHANNEL = !/-(?:preview|dev)(?:\.|$)/.test(APP_VERSION);
+/** 渠道来自 version.json（随版本同步写入 version.ts），不再从版本号后缀反推。 */
+const IS_RELEASE_CHANNEL = APP_CHANNEL === 'release';
 
 /** 正式版不接受本地覆盖：旧调试值读到即清掉，避免同一包在不同设备指向不同基址。 */
 function clearLegacyStorageApiBase(): void {
