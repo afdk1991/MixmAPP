@@ -183,11 +183,15 @@ export type Config = {
       file: string;
     };
     /**
-     * MALL_SOURCE_STOCK_GATE：库存拦截总闸（同一个环境变量决定三档行为）
+     * MALL_SOURCE_STOCK_GATE：库存拦截总闸（唯一真源，只由本文件的这一处读取）
      * - `false` / `off`：一律不按源站库存拦截（旧放行行为）
      * - `true` / 未设置（默认）：分级判定 —— 明确停售/下架/无货才拦，
      *   仅匿名视图推断的「缺货」放行并打「货源待确认」标记
      * - `strict`：恢复旧的全拦截（缺货/无货/下架/停售一律拦）
+     *
+     * 归属口径：这是「策略」，只放环境变量；`products.stock` / `source_inv_status` /
+     * `source_on_sale` 等是「数据」，只描述单个商品，不承担开关心智。
+     * 不要在数据库里再加同类策略列，也不要在业务代码里二次解析该环境变量。
      */
     sourceStockMode: 'off' | 'tier' | 'strict';
   };

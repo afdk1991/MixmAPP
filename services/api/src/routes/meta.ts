@@ -53,6 +53,7 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
       dbSource: app.cfg.databaseUrlSource,
       catalogSource: catalogSource.source,
       catalogSync: catalogSync ? catalogSync.status : 'none',
+      stockGate: app.cfg.mall.sourceStockMode,
       sms: app.cfg.sms.provider,
       pay:
         capabilitySnapshot(app.cfg)['wechatPay'] === 'on' ||
