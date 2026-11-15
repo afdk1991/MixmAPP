@@ -10,7 +10,7 @@
     <view class="head">
       <text class="eyebrow">SIGN IN</text>
       <text class="title">欢迎回来</text>
-      <text class="hint">支持邮箱、用户名、MixmAPP 号码登录；也可用手机验证码或本机号码一键登录。</text>
+      <text class="hint">支持邮箱、用户名、MixmAPP 号码登录；也可用手机验证码登录。</text>
     </view>
 
     <view class="mode">
@@ -22,10 +22,12 @@
         <text class="mode-label">验证码</text>
         <view class="mode-line" />
       </view>
+      <!-- internal:start -->
       <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">
         <text class="mode-label">一键登录</text>
         <view class="mode-line" />
       </view>
+      <!-- internal:end -->
     </view>
 
     <view class="sheet form">
@@ -93,11 +95,11 @@
         <text class="hint note">未注册的手机号登录时将自动创建账号。</text>
       </block>
 
+      <!-- internal:start -->
       <block v-else>
         <view class="field-block">
           <text class="label">本机号码</text>
           <text class="hint note">唤起本机号码认证后自动登录；未注册手机号会直接建号。</text>
-          <!-- internal:start -->
           <input
             class="field"
             type="text"
@@ -105,9 +107,9 @@
             placeholder-class="field-ph"
             v-model="onekeyToken"
           />
-          <!-- internal:end -->
         </view>
       </block>
+      <!-- internal:end -->
 
       <view v-if="error" class="error-row">
         <text class="error-mark mono">!</text>
@@ -154,7 +156,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue';
-import type { OAuthProviderId } from '@mixmapp/contracts';
+import type { AuthResult, OAuthProviderId } from '@mixmapp/contracts';
 import {
   authApi,
   ApiError,
@@ -182,7 +184,9 @@ const account = ref('');
 const password = ref('');
 const phone = ref('');
 const code = ref('');
+// internal:start
 const onekeyToken = ref('');
+// internal:end
 const devCode = ref('');
 const error = ref('');
 const submitting = ref(false);
@@ -292,15 +296,20 @@ async function submit(): Promise<void> {
   error.value = '';
   submitting.value = true;
   try {
-    const result =
-      mode.value === 'password'
-        ? await loginByPassword(account.value.trim(), password.value)
-        : mode.value === 'sms'
-          ? await loginBySms(phone.value, code.value)
-          : await authApi.oneKey({ token: onekeyToken.value }).then(async (data) => {
-              await applyAuth(data);
-              return data;
-            });
+    let result: AuthResult;
+    if (mode.value === 'password') {
+      result = await loginByPassword(account.value.trim(), password.value);
+    } else if (mode.value === 'sms') {
+      result = await loginBySms(phone.value, code.value);
+    }
+    // internal:start
+    else {
+      result = await authApi.oneKey({ token: onekeyToken.value }).then(async (data) => {
+        await applyAuth(data);
+        return data;
+      });
+    }
+    // internal:end
     uni.showToast({ title: result.user.accountNo, icon: 'none' });
     setTimeout(goAfterLogin, 600);
   } catch (e) {

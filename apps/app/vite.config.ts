@@ -6,17 +6,21 @@ const singleFile = process.env.MIXMAPP_SINGLE_FILE === '1';
 
 /**
  * 正式构建裁掉只供联调使用的片段：源码里用 <!-- internal:start --> / <!-- internal:end -->
- * 包住的模板内容在编译前整段删除，产物里既没有这些控件也没有对应文案。
+ * 包住的模板内容，以及 // internal:start / // internal:end 包住的脚本片段，
+ * 在编译前整段删除，产物里既没有这些控件也没有对应文案与逻辑。
  * 开发态（pnpm dev:h5）与内部构建（MIXMAPP_INTERNAL_BUILD=1）不启用，源码原样保留。
  */
 function stripInternalSections(): Plugin {
-  const BLOCK = /[ \t]*<!--\s*internal:start\s*-->[\s\S]*?<!--\s*internal:end\s*-->[ \t]*\r?\n?/g;
+  const TEMPLATE_BLOCK =
+    /[ \t]*<!--\s*internal:start\s*-->[\s\S]*?<!--\s*internal:end\s*-->[ \t]*\r?\n?/g;
+  const SCRIPT_BLOCK =
+    /[ \t]*\/\/\s*internal:start[^\n]*\r?\n[\s\S]*?[ \t]*\/\/\s*internal:end[^\n]*\r?\n?/g;
   return {
     name: 'mixmapp-strip-internal-sections',
     enforce: 'pre',
     transform(code, id) {
       if (!id.endsWith('.vue') || !code.includes('internal:start')) return null;
-      return { code: code.replace(BLOCK, ''), map: null };
+      return { code: code.replace(TEMPLATE_BLOCK, '').replace(SCRIPT_BLOCK, ''), map: null };
     },
   };
 }

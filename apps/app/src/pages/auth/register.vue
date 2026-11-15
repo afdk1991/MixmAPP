@@ -26,10 +26,12 @@
         <text class="mode-label">用户名</text>
         <view class="mode-line" />
       </view>
+      <!-- internal:start -->
       <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">
         <text class="mode-label">一键</text>
         <view class="mode-line" />
       </view>
+      <!-- internal:end -->
     </view>
 
     <view class="sheet form">
@@ -122,11 +124,11 @@
         <text class="hint note">不得使用管理员、官方、政府机关等名称，违者注册会被拒绝。</text>
       </block>
 
+      <!-- internal:start -->
       <block v-else>
         <view class="field-block">
           <text class="label">本机号码</text>
           <text class="hint note">点下方按钮唤起本机号码认证，一次完成注册与登录。</text>
-          <!-- internal:start -->
           <input
             class="field"
             type="text"
@@ -134,10 +136,10 @@
             placeholder-class="field-ph"
             v-model="onekeyToken"
           />
-          <!-- internal:end -->
         </view>
         <text class="hint note">同一手机号已注册时直接登录，不会重复建号。</text>
       </block>
+      <!-- internal:end -->
 
       <view class="field-block">
         <text class="label">昵称（选填）</text>
@@ -224,6 +226,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import type { AuthResult } from '@mixmapp/contracts';
 import { authApi, ApiError } from '../../api/client';
 import { applyAuth, loginByOAuth } from '../../stores/session';
 import { ROUTES } from '../../routes';
@@ -240,7 +243,9 @@ const code = ref('');
 const email = ref('');
 const username = ref('');
 const password = ref('');
+// internal:start
 const onekeyToken = ref('');
+// internal:end
 const nickname = ref('');
 const devCode = ref('');
 const error = ref('');
@@ -337,33 +342,38 @@ async function submit(): Promise<void> {
   const source = consentSource(mode.value);
   const privacyConsent = buildPrivacyConsent(source);
   try {
-    const data =
-      mode.value === 'phone'
-        ? await authApi.registerByPhone({
-            phone: phone.value,
-            code: code.value,
-            ...(nickname.value ? { nickname: nickname.value } : {}),
-            privacyConsent,
-          })
-        : mode.value === 'email'
-          ? await authApi.registerByEmail({
-              email: email.value,
-              password: password.value,
-              ...(nickname.value ? { nickname: nickname.value } : {}),
-              privacyConsent,
-            })
-          : mode.value === 'username'
-            ? await authApi.registerByUsername({
-                username: username.value,
-                password: password.value,
-                ...(nickname.value ? { nickname: nickname.value } : {}),
-                privacyConsent,
-              })
-            : await authApi.oneKey({
-                token: onekeyToken.value,
-                ...(nickname.value ? { nickname: nickname.value } : {}),
-                privacyConsent,
-              });
+    let data: AuthResult;
+    if (mode.value === 'phone') {
+      data = await authApi.registerByPhone({
+        phone: phone.value,
+        code: code.value,
+        ...(nickname.value ? { nickname: nickname.value } : {}),
+        privacyConsent,
+      });
+    } else if (mode.value === 'email') {
+      data = await authApi.registerByEmail({
+        email: email.value,
+        password: password.value,
+        ...(nickname.value ? { nickname: nickname.value } : {}),
+        privacyConsent,
+      });
+    } else if (mode.value === 'username') {
+      data = await authApi.registerByUsername({
+        username: username.value,
+        password: password.value,
+        ...(nickname.value ? { nickname: nickname.value } : {}),
+        privacyConsent,
+      });
+    }
+    // internal:start
+    else {
+      data = await authApi.oneKey({
+        token: onekeyToken.value,
+        ...(nickname.value ? { nickname: nickname.value } : {}),
+        privacyConsent,
+      });
+    }
+    // internal:end
     await applyAuth(data);
     // 服务端已随请求落库；本地再记一份，保证离线冷启动也有记录
     await recordPrivacyConsent(source);
