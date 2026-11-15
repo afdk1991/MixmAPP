@@ -208,20 +208,6 @@
 
         <view v-if="tabs.length" class="rule section-rule" />
 
-        <!-- 来源底稿（附录） -->
-        <view v-if="product.sourceUrl" class="section source">
-          <view class="sec-head">
-            <text class="sec-label mono">SOURCE</text>
-            <text class="section-title">来源底稿</text>
-          </view>
-          <text class="source-url">{{ product.sourceUrl }}</text>
-          <view class="source-actions">
-            <text class="source-copy mono" hover-class="is-press" @tap="copySource">复制链接</text>
-          </view>
-          <text v-if="capturedAt" class="source-meta mono">价格抓取时间：{{ capturedAt }}</text>
-          <text class="source-disclaimer">内部选品底稿，价格以来源为准，非对外报价。</text>
-        </view>
-
         <!-- 返回由 mx-bar 提供；分享为跨端复制兜底 -->
         <view class="share-row">
           <view class="share-btn" hover-class="is-press" @tap="shareProduct">
@@ -285,7 +271,6 @@ import type { MallProductDto } from '../../api/mall';
 import {
   breadcrumbLabel,
   fetchMallProduct,
-  formatCapturedAt,
   INQUIRY_NOTICE,
   isBulkStock,
   isInquiryProduct,
@@ -358,7 +343,6 @@ const heroTint = computed(() =>
 const mainImage = computed(() => activeImage.value || images.value[0] || '');
 const specs = computed(() => (product.value ? specEntries(product.value.specs) : []));
 const crumbs = computed(() => (product.value ? breadcrumbLabel(product.value.categoryPath) : ''));
-const capturedAt = computed(() => (product.value ? formatCapturedAt(product.value.priceCapturedAt) : ''));
 
 /** 购买方式：源站 units 原样，箱（CA）优先展示，与源站默认口径一致。 */
 const unitOptions = computed(() => {
@@ -540,15 +524,6 @@ function showOutOfStock(): void {
     content: OUT_OF_STOCK_NOTICE,
     showCancel: false,
     confirmText: '知道了',
-  });
-}
-
-function copySource(): void {
-  const url = product.value?.sourceUrl;
-  if (!url) return;
-  uni.setClipboardData({
-    data: url,
-    success: () => uni.showToast({ title: '来源链接已复制', icon: 'none' }),
   });
 }
 
@@ -1206,40 +1181,6 @@ onLoad((options) => {
   margin-top: 6rpx;
   font-size: 22rpx;
   color: $ink-3;
-}
-
-.source-url {
-  display: block;
-  margin-top: 14rpx;
-  font-size: 24rpx;
-  line-height: 1.5;
-  color: $ink-3;
-  word-break: break-all;
-}
-
-.source-actions {
-  margin-top: 10rpx;
-}
-
-.source-copy {
-  font-size: 24rpx;
-  letter-spacing: 1rpx;
-  color: $brand-deep;
-}
-
-.source-meta {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: $ink-4;
-}
-
-.source-disclaimer {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: $ink-4;
 }
 
 .share-row {
