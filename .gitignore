@@ -52,3 +52,15 @@ storage/
 
 # 交付文档的二进制导出件（源文档在各 docs/ 报告里，可重新导出）
 项目接管报告-2026-11-14.docx
+
+# 手工排查时落在仓库里的生产会话 / 令牌 / 凭据导出件（绝不入库，防 git add -A 带走）
+prod-cookie.txt
+*cookie*.txt
+*cookies*.txt
+*session*.txt
+*admin-token*
+*.token
+*.creds
+credentials*.txt
+secrets*.txt
+probe-output.txt
