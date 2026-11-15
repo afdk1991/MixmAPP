@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import {
   aiChatSchema,
   createPaymentSchema,
@@ -92,7 +92,7 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
 
     const root = resolve(app.cfg.storage.localDir);
     const target = resolve(join(root, query.key));
-    if (!target.startsWith(`${root}/`)) throw new AppError('BAD_REQUEST', '存储路径越界');
+    if (!target.startsWith(`${root}${sep}`)) throw new AppError('BAD_REQUEST', '存储路径越界');
 
     const body = request.body;
     const payload = Buffer.isBuffer(body)
