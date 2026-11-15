@@ -100,9 +100,16 @@ function mapOAuthState(row: Row): OAuthStateRecord {
   };
 }
 
+/**
+ * SQL 字符串字面量：单引号成对转义。
+ * 全角→半角译表的「半角」一侧包含 ASCII 单引号（0x27），直接内插会提前闭合字面量，
+ * 使整条搜索 SQL 变成语法错误（生产 500 的真实成因），所以译表一律走这里。
+ */
+const sqlLiteral = (value: string): string => `'${value.replace(/'/g, "''")}'`;
+
 /** 搜索 SQL 片段：与 lib/search 的 TS 归一口径逐字对应，避免两条读路径行为漂移。 */
 const normSql = (expr: string): string =>
-  `lower(translate(coalesce(${expr}, ''), '${FULLWIDTH_TRANSLATE_FROM}', '${FULLWIDTH_TRANSLATE_TO}'))`;
+  `lower(translate(coalesce(${expr}, ''), ${sqlLiteral(FULLWIDTH_TRANSLATE_FROM)}, ${sqlLiteral(FULLWIDTH_TRANSLATE_TO)}))`;
 
 /** 规格键：去空白 → 去 M 前缀 → 分隔符归一 → 去默认粗牙 1.0 → 合并连续 x。 */
 function specKeySql(expr: string): string {

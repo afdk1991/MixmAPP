@@ -54,7 +54,7 @@ suite('PostgreSQL 驱动（真实库）', () => {
       await client.query('delete from users where email = $1 or phone = $1', [email]);
       await client.query('delete from users where username = $1', [concurrentUsername]);
       await client.query('delete from sms_codes where phone = $1', [phone]);
-      await client.query("delete from products where id like 'pg-p-%'");
+      await client.query("delete from products where id like 'pg-p-%' or id like 'pg-kw-%'");
     } finally {
       await client.end();
     }
@@ -254,5 +254,54 @@ suite('PostgreSQL 驱动（真实库）', () => {
     const found = await store.mall.orders.findByOrderNo(orderNo);
     expect(found?.totalFen).toBe(25800);
     expect(await store.mall.orders.itemsByOrder(orderId)).toHaveLength(1);
+  });
+
+  /**
+   * 回归守卫：PgStore 的关键词搜索是拼 SQL 字符串实现的（translate 译表做全半角归一）。
+   * 译表的半角一侧含单引号，一旦漏转义，整条 SQL 语法错误 → 线上任意文本关键词 500；
+   * 内存实现不走 SQL，单测和本地 catalog 模式都发现不了，只能靠真实库兜住。
+   * 这里覆盖三条分支：普通文本、规格等价、6 位段码，并顺带验证全角输入。
+   */
+  it('关键词搜索走真实 SQL：文本、规格等价、段码都能命中且不报错', async () => {
+    const productId = `pg-kw-${stamp}`;
+    await store.mall.products.insert({
+      id: productId,
+      title: '内六角圆柱头螺钉',
+      subtitle: '304 不锈钢',
+      priceFen: 100,
+      originalPriceFen: 120,
+      stock: 10,
+      category: 'featured',
+      cover: '#0f9d8f',
+      images: [],
+      tags: [],
+      description: '',
+      sortNo: 9999,
+      createdAt: new Date(),
+    });
+    // insert 只写基础列；specs / source_id 属于目录导入增补字段，直接补库以覆盖 SQL 分支。
+    const client = new pg.Client({ connectionString });
+    await client.connect();
+    try {
+      await client.query('update products set specs = $1::jsonb, source_id = $2 where id = $3', [
+        JSON.stringify({ 规格: 'M6-1.0x8' }),
+        '110001030004',
+        productId,
+      ]);
+    } finally {
+      await client.end();
+    }
+
+    const byText = await store.mall.products.list({ keyword: '内六角', limit: 20, offset: 0 });
+    expect(byText.some((p) => p.id === productId)).toBe(true);
+
+    // 规格等价：M6-1.0x8 / M6x8 / 6x8 / 全角 ６Ｘ８ 都应命中同一条
+    for (const keyword of ['M6-1.0x8', '6x8', '６Ｘ８']) {
+      const rows = await store.mall.products.list({ keyword, limit: 20, offset: 0 });
+      expect(rows.some((p) => p.id === productId), `规格关键词 ${keyword} 未命中`).toBe(true);
+    }
+
+    const byCode = await store.mall.products.list({ keyword: '110001', limit: 20, offset: 0 });
+    expect(byCode.some((p) => p.id === productId)).toBe(true);
   });
 });
