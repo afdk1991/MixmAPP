@@ -22,8 +22,10 @@ concurrency:
 #   生产 /api/v1/admin/* 整体 404（未配 ADMIN_TOKEN），不能远程灌库；
 #   数据以「catalog.json 随包发布 + API 内嵌只读目录源（MALL_CATALOG_*）」生效。
 #
-# 静态产物：build:h5 每次重新构建；抽检 step 保证产物无四段号、无渠道后缀、
-#   无「单码多端预览版」字样、API 基址不指向已失效域名 cloud.mix.top。
+# 静态产物：build:h5 每次重新构建；抽检 step（deploy/check-h5-artifacts.mjs）按地址语义判定，
+#   只拦真正可疑的内容：真实公网 IP、内部服务域名、私钥/token/硬编码口令、预览残留，
+#   以及 API 基址指向已失效域名 cloud.mix.top。回环（127/8）、私有网段（10/8、172.16/12、
+#   192.168/16）、链路本地、CGNAT 是兜底逻辑本来就要用的地址，不再判失败。
 #   发布产物为三段式，基线 V0.0.0，之后递增第三段。
 #
 # 现有门禁不变：DEPLOY_SSH_KEY_B64/DEPLOY_HOST/DEPLOY_USER 缺失 → SSH_READY=false 全跳过；
@@ -63,24 +65,13 @@ jobs:
           MIXMAPP_MEDIA_BASE: ${{ vars.MIXMAPP_MEDIA_BASE || 'https://img.mixm.top' }}
         run: pnpm build:h5
 
-      # 抽检新构建产物：版本号 / 预览字样 / API 基址三项都要过，防止「只改源码不重发产物」。
-      - name: 抽检 H5 产物（版本号 / 预览字样 / API 基址）
+      # 抽检新构建产物：只拦真正可疑的地址与凭据，避免把兜底用的 loopback / 私有网段误判成泄漏。
+      # 判定口径见 deploy/check-h5-artifacts.mjs 顶部注释；本地可用同一命令复跑。
+      - name: 抽检 H5 产物（公网 IP / 内部域名 / 凭据 / 预览残留 / API 基址）
         run: |
           H5=apps/app/dist/build/h5
           [ -d "$H5" ] || { echo "✗ 缺少 H5 产物目录 $H5"; exit 1; }
-          if grep -rEq '([0-9]+\.){3}[0-9]+|0\.0\.0-(preview|dev)|单码多端预览版' "$H5"; then
-            echo "✗ H5 产物残留四段号 / 渠道后缀 / 预览字样，重新构建未生效"; exit 1
-          fi
-          if grep -rq 'cloud\.mix\.top/mixmapp' "$H5"; then
-            echo "✗ H5 产物 API 基址指向已失效域名 cloud.mix.top"; exit 1
-          fi
-          if ! grep -rq 'https://api\.mixm\.top/mixmapp/api/v1' "$H5"; then
-            echo "✗ H5 产物未内置绝对基址 https://api.mixm.top/mixmapp/api/v1"; exit 1
-          fi
-          if ! grep -rq 'https://img\.mixm\.top' "$H5"; then
-            echo "✗ H5 产物未内置媒体源 https://img.mixm.top"; exit 1
-          fi
-          echo "✓ H5 产物抽检通过（无四段号 / 无渠道后缀 / 无预览字样 / 基址 api.mixm.top / 媒体 img.mixm.top）"
+          node deploy/check-h5-artifacts.mjs "$H5"
 
       - name: 生成独立可运行 API 发布包
         run: pnpm --filter @mixmapp/api deploy --prod "$GITHUB_WORKSPACE/out/api"
