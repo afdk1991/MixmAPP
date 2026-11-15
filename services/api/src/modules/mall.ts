@@ -36,6 +36,12 @@ export type ImportCategoryCount = { code: string; name: string; count: number };
 /** 分类树节点：level 1/2/3，id 形如 c1:002 / c2:002:007 / c3:007。 */
 export type CategoryNode = { id: string; code: string; name: string; level: number; count: number };
 
+/**
+ * 演示分类码（精选/生活/数码/穿戴）：来自 db/demo-seed.ts 与 infra/sql/0002_mall.sql 的示例商品。
+ * 公开类目列表不下发这一组，避免正式目录里混进演示分类。
+ */
+const DEMO_CATEGORY_CODES = new Set(['featured', 'life', 'digital', 'wear']);
+
 /** 单行金额：有厘/支精确价时用它（1 分 = 10 厘），否则回落到旧的分/件口径。 */
 function lineTotalFen(product: Pick<ProductRecord, 'priceFen' | 'priceLi'>, quantity: number): number {
   const li = product.priceLi;
@@ -345,11 +351,12 @@ export class MallService {
     return this.toProductDto(product, loggedIn);
   }
 
-  /** 公开分类聚合：目录源激活时只返回 6 个真实中文类目；否则走数据层全量聚合。 */
+  /** 公开分类聚合：目录源激活时只返回 6 个真实中文类目；否则走数据层全量聚合并剔除演示分类。 */
   async listCategories(): Promise<ImportCategoryCount[]> {
     if (await this.useCatalog()) return this.catalog!.listCategories();
     const rows = await this.store.mall.products.aggregateCategories();
-    return [...rows].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+    const real = rows.filter((row) => !DEMO_CATEGORY_CODES.has(row.code));
+    return [...real].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   }
 
   /** 分类树下一层：parent 为空取一级，否则取该节点直接子级；includeEmpty 连 0 商品节点一起返回。 */
