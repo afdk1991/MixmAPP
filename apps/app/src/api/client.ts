@@ -7,6 +7,7 @@ import type {
   PrivacyConsentInput,
   UserDto,
 } from '@mixmapp/contracts';
+import { APP_VERSION } from '../version';
 import type {
   MallCategoryDto,
   MallCategoryNodeDto,
@@ -17,7 +18,7 @@ import type {
 /**
  * 统一 API 基址。优先级：
  * 1. 运行时注入 `window.__MIXMAPP_API_BASE__`（静态托管平台部署时写进 HTML，改地址不用重新构建）
- * 2. 本地存储 `mixmapp:apiBase`（调试/应急切换）
+ * 2. 本地存储 `mixmapp:apiBase`（仅 preview / dev 有效；正式版忽略并清除该键）
  * 3. 构建变量 `VITE_MIXMAPP_API_BASE`
  * 4. 开发态指向本机 8080，生产态同源 `/api/v1`
  *
@@ -26,11 +27,25 @@ import type {
  */
 type RuntimeApiBaseSource = 'runtime' | 'storage';
 
+/** version.json 的 channel 已同步进 APP_VERSION（preview / dev 带后缀），无后缀即正式版。 */
+const IS_RELEASE_CHANNEL = !/-(?:preview|dev)(?:\.|$)/.test(APP_VERSION);
+
+/** 正式版不接受本地覆盖：旧调试值读到即清掉，避免同一包在不同设备指向不同基址。 */
+function clearLegacyStorageApiBase(): void {
+  try {
+    if (uni.getStorageSync('mixmapp:apiBase')) uni.removeStorageSync('mixmapp:apiBase');
+  } catch {
+    // 无 storage 能力的端直接忽略
+  }
+}
+
 function readRuntimeApiBase(): { value: string; source: RuntimeApiBaseSource } | undefined {
+  if (IS_RELEASE_CHANNEL) clearLegacyStorageApiBase();
   const injected = (globalThis as { __MIXMAPP_API_BASE__?: unknown }).__MIXMAPP_API_BASE__;
   if (typeof injected === 'string' && injected.trim()) {
     return { value: injected.trim(), source: 'runtime' };
   }
+  if (IS_RELEASE_CHANNEL) return undefined;
   try {
     const stored = uni.getStorageSync('mixmapp:apiBase');
     if (typeof stored === 'string' && stored.trim()) return { value: stored.trim(), source: 'storage' };
