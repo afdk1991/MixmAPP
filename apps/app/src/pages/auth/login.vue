@@ -87,7 +87,9 @@
             </view>
           </view>
         </view>
+        <!-- internal:start -->
         <text v-if="devCode" class="dev-hint">开发态验证码：{{ devCode }}</text>
+        <!-- internal:end -->
         <text class="hint note">未注册的手机号登录时将自动创建账号。</text>
       </block>
 
@@ -95,6 +97,7 @@
         <view class="field-block">
           <text class="label">本机号码</text>
           <text class="hint note">唤起本机号码认证后自动登录；未注册手机号会直接建号。</text>
+          <!-- internal:start -->
           <input
             class="field"
             type="text"
@@ -102,6 +105,7 @@
             placeholder-class="field-ph"
             v-model="onekeyToken"
           />
+          <!-- internal:end -->
         </view>
       </block>
 
