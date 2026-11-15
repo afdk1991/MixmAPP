@@ -50,14 +50,14 @@ describe('CORS 白名单', () => {
 
     const allowed = await app.inject({
       method: 'GET',
-      url: '/api/v1/mall/products?pageSize=1',
+      url: '/api/v1/mall/products?pageSize=20',
       headers: { Origin: 'https://localhost' },
     });
     expect(allowed.headers['access-control-allow-origin']).toBe('https://localhost');
 
     const denied = await app.inject({
       method: 'GET',
-      url: '/api/v1/mall/products?pageSize=1',
+      url: '/api/v1/mall/products?pageSize=20',
       headers: { Origin: 'https://evil.example' },
     });
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();

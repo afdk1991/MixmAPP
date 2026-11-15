@@ -59,7 +59,7 @@ SITE=https://cloud.mixm.top
 curl -fsS "$SITE/api/v1/healthz"; echo          # 改动前：version 带 -preview 后缀, storage=local, db=ok
 curl -fsS "$SITE/api/v1/meta"; echo            # 改动前：env=production, catalogSource.source=unavailable/db
 curl -fsS "$SITE/api/v1/mall/categories"; echo # 改动前：6 条演示类目 featured/life/digital/wear
-curl -fsS "$SITE/api/v1/mall/products?page=1&pageSize=3"; echo  # 改动前：首发限定礼盒/冲锋衣/理线坞
+curl -fsS "$SITE/api/v1/mall/products?page=1&pageSize=20"; echo  # 改动前：前 3 条为 首发限定礼盒/冲锋衣/理线坞
 curl -sS -o /dev/null -w 'media HTTP %{http_code}\n' \
   "$SITE/media/products/000518191826ddfe69815af4ffe2513f1ca0de08.jpg"   # 改动前：404
 
@@ -342,11 +342,12 @@ node -e 'const j=require("/tmp/cats.json"); const a=j.data||[];
     "类目="+a.length,"中文="+han.length,"Σcount="+sum);
   process.exit(ok?0:1)'
 
-# ④ products?page=1&pageSize=3：真实五金商品，非 3 条演示品  [必需]
-curl -fsS "$API/mall/products?page=1&pageSize=3" | tee /tmp/products.json; echo
-# 期望：data 长度 3，标题不再出现
+# ④ products?page=1&pageSize=20：真实五金商品，非演示品  [必需]
+#    pageSize 只接受契约白名单 20/50/100（传 3 会 422）；这里取 20 后只看前 3 条
+curl -fsS "$API/mall/products?page=1&pageSize=20" | tee /tmp/products.json; echo
+# 期望：前 3 条真实五金商品，标题不再出现
 #       「MixmAPP 首发限定礼盒 / 石墨黑轻量冲锋衣 / 桌面理线收纳坞」
-node -e 'const j=require("/tmp/products.json"); const a=j.data||[];
+node -e 'const j=require("/tmp/products.json"); const a=(j.data||[]).slice(0,3);
   const demo=["MixmAPP 首发限定礼盒","石墨黑轻量冲锋衣","桌面理线收纳坞"];
   const titles=a.map(p=>String(p.title??p.name??""));
   const ok=a.length===3 && !titles.some(t=>demo.some(d=>t.includes(d)));
@@ -377,7 +378,7 @@ LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
 | 版本正式号 | `curl $SITE/api/v1/healthz` | `version` 不含 `preview` / `dev` 后缀，`db=ok` |
 | **catalog 目录源接管** | `curl $SITE/api/v1/healthz` | `checks.catalogSource === "catalog"`（或 `/meta` 的 `data.catalogSource.source==="catalog"`） |
 | 6 个真实中文类目 | `curl $SITE/api/v1/mall/categories` | `data.length>=6`、中文名、非演示码、`Σcount>10000` |
-| 真实五金商品 | `curl "$SITE/api/v1/mall/products?page=1&pageSize=3"` | 3 条真实商品名，无演示三品 |
+| 真实五金商品 | `curl "$SITE/api/v1/mall/products?page=1&pageSize=20"` | 前 3 条为真实商品名，无演示三品（pageSize 仅接受 20/50/100） |
 | 图片直出 200 | `curl -o /dev/null -w '%{http_code}' $SITE/media/products/<sha1>.jpg` | `200` + `content-type: image/*` |
 | **静态产物三项** | §4 抽检命令 | 无渠道后缀号 / 无预览字样 / 无 `cloud.mix.top` |
 | **本地资产** | `LOCAL_ONLY=1 CATALOG_FILE=... STORAGE_DIR=... node deploy/catalog-verify.mjs` | `catalog.json` 可解析、图片数 `≥871` |

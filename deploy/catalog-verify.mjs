@@ -223,9 +223,10 @@ async function main() {
   let productsText = '';
   let products = [];
   try {
-    const r = await getJson(`${API}/mall/products?page=1&pageSize=3`);
+    // 列表接口的 pageSize 只接受 20/50/100（契约白名单），这里按 20 取回后只校验前 3 条
+    const r = await getJson(`${API}/mall/products?page=1&pageSize=20`);
     productsText = r.text ?? '';
-    products = Array.isArray(r.json?.data) ? r.json.data : [];
+    products = Array.isArray(r.json?.data) ? r.json.data.slice(0, 3) : [];
   } catch (e) {
     console.info(`  (products 请求异常：${e})`);
   }

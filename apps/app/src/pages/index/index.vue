@@ -426,6 +426,7 @@ import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
 import type { MallCategoryDto, MallProductDto } from '../../api/mall';
+import { PAGE_SIZE_OPTIONS } from '@mixmapp/contracts';
 import type { HomeAdDto, HomeAdTarget, HomeRecommendedCategoryDto } from '@mixmapp/contracts';
 import {
   breadcrumbLabel,
@@ -479,7 +480,13 @@ const signedIn = computed(() => Boolean(session.user));
 const primaryUrl = computed(() => ROUTES.me);
 
 /* ---------- 目录与检索：真实商城数据（mallApi 契约，不加 mock） ---------- */
+/** 首页精选只展示 6 条（前端截断的展示口径）。 */
 const PAGE_SIZE = 6;
+/**
+ * 请求口径必须落在契约白名单（20/50/100）内：此前传 PAGE_SIZE + 1 = 7 会被 422，
+ * 首页精选区直接落到错误态。这里取白名单最小档，取回后再截断到 PAGE_SIZE。
+ */
+const REQUEST_PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
 
 const categories = ref<MallCategoryDto[]>([]);
 const activeCategory = ref('');
@@ -579,7 +586,7 @@ async function loadProducts(): Promise<void> {
       keyword: keyword || undefined,
       cat: keyword ? undefined : activeCategory.value || undefined,
       page: 1,
-      pageSize: PAGE_SIZE + 1,
+      pageSize: REQUEST_PAGE_SIZE,
     });
     if (seq !== searchSeq) return;
     const items = Array.isArray(list) ? list : [];
