@@ -68,7 +68,9 @@
             </view>
           </view>
         </view>
+        <!-- internal:start -->
         <text v-if="devCode" class="dev-hint">开发态验证码：{{ devCode }}（正式环境不会显示）</text>
+        <!-- internal:end -->
       </block>
 
       <block v-else-if="mode === 'email'">
@@ -124,6 +126,7 @@
         <view class="field-block">
           <text class="label">本机号码</text>
           <text class="hint note">点下方按钮唤起本机号码认证，一次完成注册与登录。</text>
+          <!-- internal:start -->
           <input
             class="field"
             type="text"
@@ -131,6 +134,7 @@
             placeholder-class="field-ph"
             v-model="onekeyToken"
           />
+          <!-- internal:end -->
         </view>
         <text class="hint note">同一手机号已注册时直接登录，不会重复建号。</text>
       </block>
