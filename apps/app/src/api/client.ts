@@ -1,6 +1,10 @@
 import type {
   AuthResult,
   CartDto,
+  FavoriteFolderDto,
+  FavoriteItemDto,
+  HomeAdDto,
+  HomeRecommendedCategoryDto,
   OAuthProviderId,
   OrderCreateInput,
   OrderDto,
@@ -491,4 +495,64 @@ export const mallApi = {
   listOrders: () => apiRequest<OrderDto[]>('/mall/orders'),
   getOrder: (orderNo: string) =>
     apiRequest<OrderDto>(`/mall/orders/${encodeURIComponent(orderNo)}`),
+  /** 用户侧取消订单（0018）：已分配拣货/已发货/已完成不可取消；重复取消服务端幂等返回当前订单 */
+  cancelOrder: (orderNo: string, reason?: string) =>
+    apiRequest<OrderDto>(`/mall/orders/${encodeURIComponent(orderNo)}/cancel`, {
+      method: 'POST',
+      data: reason ? { reason } : {},
+    }),
+  // ===== 收藏夹（0019） =====
+  /** 收藏夹列表：服务端首次访问会懒创建「默认收藏夹」 */
+  listFavoriteFolders: () => apiRequest<FavoriteFolderDto[]>('/mall/favorites/folders'),
+  /** 收藏条目：folderId 省略取默认收藏夹 */
+  listFavoriteItems: (folderId?: string) =>
+    apiRequest<FavoriteItemDto[]>(
+      `/mall/favorites/items${folderId ? `?folderId=${encodeURIComponent(folderId)}` : ''}`,
+    ),
+  /** 加收藏：同夹重复收藏幂等返回原有条目 */
+  addFavorite: (productId: string, folderId?: string) =>
+    apiRequest<FavoriteItemDto>('/mall/favorites/items', {
+      method: 'POST',
+      data: { productId, ...(folderId ? { folderId } : {}) },
+    }),
+  /** 删收藏条目：不存在也算成功 */
+  removeFavorite: (productId: string, folderId?: string) =>
+    apiRequest<{ removed: boolean }>(
+      `/mall/favorites/items/${encodeURIComponent(productId)}${
+        folderId ? `?folderId=${encodeURIComponent(folderId)}` : ''
+      }`,
+      { method: 'DELETE' },
+    ),
+  /** 复制收藏夹：name 省略时服务端生成「<原名> 的副本」 */
+  copyFavoriteFolder: (folderId: string, name?: string) =>
+    apiRequest<FavoriteFolderDto>(`/mall/favorites/folders/${encodeURIComponent(folderId)}/copy`, {
+      method: 'POST',
+      data: name ? { name } : {},
+    }),
+  /** 设默认收藏夹 */
+  setDefaultFavoriteFolder: (folderId: string) =>
+    apiRequest<FavoriteFolderDto>(`/mall/favorites/folders/${encodeURIComponent(folderId)}/default`, {
+      method: 'POST',
+    }),
+  /** 清空收藏夹（收藏夹本身保留） */
+  clearFavoriteFolder: (folderId: string) =>
+    apiRequest<{ removed: number }>(
+      `/mall/favorites/folders/${encodeURIComponent(folderId)}/items`,
+      { method: 'DELETE' },
+    ),
+};
+
+/**
+ * 首页运营位（home/ggs 广告位、home/rcs 推荐分类）：公开读，不需要登录态。
+ * 内容由服务端下发，前端只负责排版；接口失败时首页照常展示搜索与目录，不做阻断。
+ */
+export const homeApi = {
+  /** 首页广告位：服务端按 sortNo 排好序 */
+  getAds: () => apiRequest<HomeAdDto[]>('/home/ggs', { auth: false }),
+  /** 首页推荐分类：默认取商品数最多的 6 个一级分类 */
+  getRecommendedCategories: (limit?: number) =>
+    apiRequest<HomeRecommendedCategoryDto[]>(
+      `/home/rcs${limit ? `?limit=${encodeURIComponent(String(limit))}` : ''}`,
+      { auth: false },
+    ),
 };

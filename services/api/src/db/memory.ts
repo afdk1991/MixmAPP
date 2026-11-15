@@ -1,8 +1,11 @@
+import { buildSearchIndexRow, buildSearchTokens, matchesSearchTokens } from '../lib/search.js';
 import type {
   AccountMergeRecord,
   AddressRecord,
   BindingRecord,
   CartItemRecord,
+  FavoriteFolderRecord,
+  FavoriteItemRecord,
   ManjianTierRecord,
   MergeCandidate,
   OrderItemRecord,
@@ -47,6 +50,9 @@ export class MemoryStore implements Store {
   private orderList: OrderRecord[] = [];
   private orderItemList: OrderItemRecord[] = [];
   private orderRequestMap = new Map<string, { orderNo: string | null }>();
+  /** 收藏夹与条目（0019） */
+  private favoriteFolderList: FavoriteFolderRecord[] = [];
+  private favoriteItemList: FavoriteItemRecord[] = [];
   private mergeList: AccountMergeRecord[] = [];
 
   async ping(): Promise<boolean> {
@@ -72,6 +78,8 @@ export class MemoryStore implements Store {
     this.orderList = [];
     this.orderItemList = [];
     this.orderRequestMap.clear();
+    this.favoriteFolderList = [];
+    this.favoriteItemList = [];
     this.mergeList = [];
   }
 
@@ -290,21 +298,44 @@ export class MemoryStore implements Store {
       list: async (filter: {
         category?: string;
         cat?: string;
+        ctgs?: string[];
         dims?: string;
         lens?: string;
+        ttt?: string;
+        trts?: string[];
         keyword?: string;
         limit: number;
         offset: number;
       }): Promise<ProductRecord[]> => {
         // 内存实现没有分类树与规格数据：树节点/规格筛选下无商品可返回，保持与 PG 口径一致。
         if (filter.cat || filter.dims || filter.lens) return [];
-        const keyword = filter.keyword?.toLowerCase();
+        // 分类多选（源站 ctgs）：内存库只有一级类目（id = c1:<category>），其它节点视为无商品。
+        const ctgCategories = filter.ctgs?.length
+          ? filter.ctgs.map((id) => (id.startsWith('c1:') ? id.slice(3) : '\u0000'))
+          : null;
+        // 牙别（源站 trts）：直接比对 specs.牙别，多值 OR。
+        const trts = filter.trts?.length ? filter.trts : null;
+        const tokens = buildSearchTokens(filter.keyword);
         return this.productList
           .filter((p) => p.listed !== false)
           .filter((p) => (filter.category ? p.category === filter.category : true))
-          .filter((p) =>
-            keyword ? p.title.toLowerCase().includes(keyword) || p.subtitle.toLowerCase().includes(keyword) : true,
-          )
+          .filter((p) => (ctgCategories ? ctgCategories.includes(p.category) : true))
+          // 表面处理（ttt）与牙别（trts）都直接比对 specs 上的真实取值
+          .filter((p) => (filter.ttt ? p.specs?.['表面处理'] === filter.ttt : true))
+          .filter((p) => (trts ? trts.includes(p.specs?.['牙别'] ?? '') : true))
+          .filter((p) => {
+            if (!tokens.length) return true;
+            const row = buildSearchIndexRow({
+              title: p.title,
+              subtitle: p.subtitle,
+              brand: p.brand,
+              specs: p.specs,
+              sourceId: p.sourceId ?? null,
+              sourceItemNo: p.sourceItemNo ?? null,
+              sourceKey: p.sourceKey ?? null,
+            });
+            return matchesSearchTokens(row, tokens);
+          })
           .sort((a, b) => a.sortNo - b.sortNo)
           .slice(filter.offset, filter.offset + filter.limit)
           .map(clone);
@@ -346,6 +377,7 @@ export class MemoryStore implements Store {
         grds: [],
         mtls: [],
         ttts: [],
+        trts: [],
       }),
       findById: async (id: string): Promise<ProductRecord | null> => {
         const found = this.productList.find((p) => p.id === id);
@@ -538,6 +570,36 @@ export class MemoryStore implements Store {
         found.status = to;
         return true;
       },
+      cancel: async (
+        orderId: string,
+        fromStatuses: OrderRecord['status'][],
+        reason: string,
+        by: NonNullable<OrderRecord['cancelledBy']>,
+      ): Promise<boolean> => {
+        const found = this.orderList.find((o) => o.id === orderId);
+        // 与 pg 同口径：状态必须命中，且 picking 未发生（picking_at 为空）才允许取消
+        if (!found || !fromStatuses.includes(found.status) || found.pickingAt) return false;
+        found.status = 'cancelled';
+        found.cancelledAt = new Date();
+        found.cancelReason = reason;
+        found.cancelledBy = by;
+        return true;
+      },
+      markStatusAt: async (
+        orderId: string,
+        from: OrderRecord['status'],
+        to: OrderRecord['status'],
+        at: Date,
+      ): Promise<boolean> => {
+        const found = this.orderList.find((o) => o.id === orderId);
+        if (!found || found.status !== from) return false;
+        found.status = to;
+        // 只给 picking/shipped/completed 打点，其余状态不写时间戳
+        if (to === 'picking') found.pickingAt = at;
+        if (to === 'shipped') found.shippedAt = at;
+        if (to === 'completed') found.completedAt = at;
+        return true;
+      },
     },
     orderRequests: {
       claim: async (userId: string, key: string) => {
@@ -558,6 +620,78 @@ export class MemoryStore implements Store {
           if (key.startsWith(prefix)) this.orderRequestMap.delete(key);
         }
       },
+    },
+    favorites: {
+      listFolders: async (userId: string): Promise<FavoriteFolderRecord[]> =>
+        this.favoriteFolderList
+          .filter((f) => f.userId === userId)
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .map(clone),
+      findFolder: async (userId: string, folderId: string): Promise<FavoriteFolderRecord | null> => {
+        const found = this.favoriteFolderList.find((f) => f.id === folderId && f.userId === userId);
+        return found ? clone(found) : null;
+      },
+      insertFolder: async (folder: FavoriteFolderRecord): Promise<FavoriteFolderRecord> => {
+        this.favoriteFolderList.push(clone(folder));
+        return clone(folder);
+      },
+      updateFolder: async (
+        userId: string,
+        folderId: string,
+        patch: { name?: string; isDefault?: boolean },
+      ): Promise<FavoriteFolderRecord | null> => {
+        const found = this.favoriteFolderList.find((f) => f.id === folderId && f.userId === userId);
+        if (!found) return null;
+        if (patch.name !== undefined) found.name = patch.name;
+        if (patch.isDefault !== undefined) {
+          // 与 pg 部分唯一索引同口径：置为默认时先把同用户其它夹的默认位清掉
+          if (patch.isDefault) {
+            for (const other of this.favoriteFolderList) {
+              if (other.userId === userId) other.isDefault = other.id === folderId;
+            }
+          } else {
+            found.isDefault = false;
+          }
+        }
+        found.updatedAt = new Date();
+        return clone(found);
+      },
+      setDefault: async (userId: string, folderId: string): Promise<FavoriteFolderRecord | null> => {
+        const target = this.favoriteFolderList.find((f) => f.id === folderId && f.userId === userId);
+        if (!target) return null;
+        for (const other of this.favoriteFolderList) {
+          if (other.userId === userId) other.isDefault = other.id === folderId;
+        }
+        target.updatedAt = new Date();
+        return clone(target);
+      },
+      listItems: async (folderId: string): Promise<FavoriteItemRecord[]> =>
+        this.favoriteItemList
+          .filter((item) => item.folderId === folderId)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .map(clone),
+      insertItem: async (item: FavoriteItemRecord): Promise<FavoriteItemRecord> => {
+        const existing = this.favoriteItemList.find(
+          (i) => i.folderId === item.folderId && i.productId === item.productId,
+        );
+        if (existing) return clone(existing);
+        this.favoriteItemList.push(clone(item));
+        return clone(item);
+      },
+      deleteItem: async (folderId: string, productId: string): Promise<boolean> => {
+        const before = this.favoriteItemList.length;
+        this.favoriteItemList = this.favoriteItemList.filter(
+          (i) => !(i.folderId === folderId && i.productId === productId),
+        );
+        return this.favoriteItemList.length !== before;
+      },
+      clearItems: async (folderId: string): Promise<number> => {
+        const before = this.favoriteItemList.length;
+        this.favoriteItemList = this.favoriteItemList.filter((i) => i.folderId !== folderId);
+        return before - this.favoriteItemList.length;
+      },
+      countItems: async (folderId: string): Promise<number> =>
+        this.favoriteItemList.filter((i) => i.folderId === folderId).length,
     },
   };
 

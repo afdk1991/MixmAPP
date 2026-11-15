@@ -208,11 +208,15 @@
 
         <view v-if="tabs.length" class="rule section-rule" />
 
-        <!-- 返回由 mx-bar 提供；分享为跨端复制兜底 -->
+        <!-- 返回由 mx-bar 提供；分享为跨端复制兜底；收藏落默认收藏夹（0019） -->
         <view class="share-row">
           <view class="share-btn" hover-class="is-press" @tap="shareProduct">
             <text class="share-btn-text">分享商品信息</text>
             <text class="share-btn-arrow mono">↗</text>
+          </view>
+          <view class="share-btn fav-btn" hover-class="is-press" @tap="toggleFavorite">
+            <text class="share-btn-text">{{ favorited ? '已收藏（点击取消）' : '收藏商品' }}</text>
+            <text class="share-btn-arrow mono">{{ favorited ? '★' : '☆' }}</text>
           </view>
         </view>
 
@@ -539,6 +543,39 @@ function shareProduct(): void {
     data: text,
     success: () => uni.showToast({ title: '商品信息已复制，可粘贴分享', icon: 'none' }),
   });
+}
+
+/**
+ * 收藏 / 取消收藏（0019）：收藏落默认收藏夹，服务端同夹重复收藏幂等。
+ * 未登录时接口回 401，这里引导去登录页。
+ */
+const favorited = ref(false);
+const favoriteBusy = ref(false);
+
+async function toggleFavorite(): Promise<void> {
+  if (!product.value || favoriteBusy.value) return;
+  favoriteBusy.value = true;
+  try {
+    if (favorited.value) {
+      await mallApi.removeFavorite(productId.value);
+      favorited.value = false;
+      uni.showToast({ title: '已取消收藏', icon: 'none' });
+    } else {
+      await mallApi.addFavorite(productId.value);
+      favorited.value = true;
+      uni.showToast({ title: '已加入收藏', icon: 'success' });
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '收藏操作失败';
+    // 未登录：与订单页同口径，直接引导登录，不弹红字
+    if (message.includes('登录') || message.includes('未授权')) {
+      goLogin();
+      return;
+    }
+    uni.showToast({ title: message, icon: 'none' });
+  } finally {
+    favoriteBusy.value = false;
+  }
 }
 
 function isBroken(src: string): boolean {
@@ -1184,7 +1221,14 @@ onLoad((options) => {
 }
 
 .share-row {
+  display: flex;
+  flex-direction: column;
   margin-top: $sp-5;
+}
+
+/* 收藏按钮与分享按钮之间留一条间距（0019） */
+.fav-btn {
+  margin-top: 14rpx;
 }
 
 .share-btn {

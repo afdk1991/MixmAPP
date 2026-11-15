@@ -292,10 +292,18 @@ export type HealthReport = {
 
 // ===== 商城域（商品 / 购物车 / 订单） =====
 
+/** 商品列表每页条数可选档位（源站列表分页口径）：前端切换、服务端校验共用同一份。 */
+export const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+
 export const productQuerySchema = z.object({
   category: z.string().trim().max(32).optional(),
   /** 分类树节点 id（c1:002 / c2:002:007 / c3:007）；c2、c3 会按子孙关系收敛商品 */
   cat: z.string().trim().max(32).optional(),
+  /**
+   * 分类多选（源站 ccc_filter 的 `ctgs` 维度）：逗号分隔的分类树节点 id，多值之间 OR；
+   * 每个节点仍按子孙关系收敛（与 cat 同口径），与 category/cat 之间是 AND。
+   */
+  ctgs: z.string().trim().max(256).optional(),
   /** 规格筛选：维度数 / 长度，取值只来自源站 ccc_filter 选项（空值表示不过滤） */
   dims: z.string().trim().max(16).optional(),
   lens: z.string().trim().max(16).optional(),
@@ -305,10 +313,22 @@ export const productQuerySchema = z.object({
   grd: z.string().trim().max(64).optional(),
   mtl: z.string().trim().max(64).optional(),
   ttt: z.string().trim().max(64).optional(),
+  /**
+   * 牙别多选（源站 ccc_filter 的 `trts` 维度）：逗号分隔，取值只来自商品 `specs.牙别` 的真实值，
+   * 多值之间 OR；与其它维度 AND。源站把「牙别」单列为第 9 个筛选维度（表面处理是 ttt）。
+   */
+  trts: z.string().trim().max(128).optional(),
   keyword: z.string().trim().max(64).optional(),
-  // 页上界放大到可覆盖全量目录（万级以上）；pageSize 上限保持 50，前端首屏/触底翻页不放大。
+  // 页上界放大到可覆盖全量目录（万级以上）。
+  // pageSize 只允许 20/50/100 三档（源站列表每页条数口径），默认 20；超出上界直接 400。
   page: z.coerce.number().int().min(1).max(100000).default(1),
-  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .refine((v) => PAGE_SIZE_OPTIONS.includes(v as (typeof PAGE_SIZE_OPTIONS)[number]), {
+      message: 'pageSize 只支持 20 / 50 / 100',
+    })
+    .default(20),
 });
 
 // ===== 目录导入（抓取端 catalog.json → 商城库） =====
@@ -447,6 +467,14 @@ export const orderCreateSchema = z.object({
     .optional(),
 });
 
+/**
+ * 用户侧取消订单入参。
+ * 原因可选：源站取消不强制填原因，缺省时服务端记「用户主动取消」。
+ */
+export const orderCancelSchema = z.object({
+  reason: z.string().trim().max(120).optional(),
+});
+
 export type ProductQueryInput = z.infer<typeof productQuerySchema>;
 export type ImportProductImageInput = z.infer<typeof importProductImageSchema>;
 export type ImportProductInput = z.infer<typeof importProductSchema>;
@@ -454,6 +482,7 @@ export type ImportCatalogInput = z.infer<typeof importCatalogSchema>;
 export type CartAddInput = z.infer<typeof cartAddSchema>;
 export type CartUpdateInput = z.infer<typeof cartUpdateSchema>;
 export type OrderCreateInput = z.infer<typeof orderCreateSchema>;
+export type OrderCancelInput = z.infer<typeof orderCancelSchema>;
 export type AddressCreateInput = z.infer<typeof addressCreateSchema>;
 export type AddressUpdateInput = z.infer<typeof addressUpdateSchema>;
 export type AddressCheckInput = z.infer<typeof addressCheckSchema>;
@@ -711,10 +740,31 @@ export type SkippedCartLineDto = {
   reason: string;
 };
 
+/**
+ * 订单状态（六态，源站口径）：
+ * pending → paid → picking → shipped → completed；
+ * pending / paid 可转 cancelled，进入 picking（已分配拣货）后不可取消。
+ */
+export const ORDER_STATUSES = [
+  'pending',
+  'paid',
+  'picking',
+  'shipped',
+  'completed',
+  'cancelled',
+] as const;
+
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+/** 取消方：用户主动 / 系统（超时自动取消）/ 管理员（后台介入） */
+export const ORDER_CANCEL_ROLES = ['user', 'system', 'admin'] as const;
+
+export type OrderCancelledBy = (typeof ORDER_CANCEL_ROLES)[number];
+
 export type OrderDto = {
   id: string;
   orderNo: string;
-  status: 'pending' | 'paid' | 'cancelled';
+  status: OrderStatus;
   totalFen: number;
   /** 三层优惠快照（历史订单为 0） */
   subtotalFen?: number;
@@ -735,6 +785,118 @@ export type OrderDto = {
   items: OrderItemDto[];
   /** 下单时拆出的失效行（仅创建订单的响应带，列表/详情不带） */
   skippedLines?: SkippedCartLineDto[];
+  /** 进入拣货的时间（非空即已分配拣货，此后不可取消；未进入为 null） */
+  pickingAt?: string | null;
+  /** 发货时间（未发货为 null） */
+  shippedAt?: string | null;
+  /** 完成时间（未完成为 null） */
+  completedAt?: string | null;
+  /** 取消时间（未取消为 null） */
+  cancelledAt?: string | null;
+  /** 取消原因（未取消为 null） */
+  cancelReason?: string | null;
+  /** 取消方：user / system / admin（未取消为 null） */
+  cancelledBy?: OrderCancelledBy | null;
   createdAt: string;
+};
+
+// ===== 收藏夹（0019） =====
+
+/**
+ * 加收藏入参：folderId 省略时落到「默认收藏夹」；
+ * 同一收藏夹内重复收藏同一商品按幂等处理（返回原有条目，不报错）。
+ */
+export const favoriteAddSchema = z.object({
+  productId: z.string().trim().min(1).max(64),
+  folderId: z.string().trim().min(1).max(64).optional(),
+});
+
+/** 复制收藏夹入参：name 省略时自动生成「<原名> 的副本」。 */
+export const favoriteCopySchema = z.object({
+  name: z.string().trim().min(1).max(40).optional(),
+});
+
+/** 删除 / 清空收藏条目时的查询参数。 */
+export const favoriteQuerySchema = z.object({
+  folderId: z.string().trim().min(1).max(64).optional(),
+});
+
+export type FavoriteAddInput = z.infer<typeof favoriteAddSchema>;
+export type FavoriteCopyInput = z.infer<typeof favoriteCopySchema>;
+
+export type FavoriteFolderDto = {
+  id: string;
+  name: string;
+  /** 默认收藏夹：加收藏未指定收藏夹时落到这里，一个用户最多一个 */
+  isDefault: boolean;
+  /** 该收藏夹下的条目数（服务端实时统计） */
+  itemCount: number;
+  createdAt: string;
+};
+
+/**
+ * 收藏条目：只存商品引用，标题/价格/图片读时从商品表取（与购物车同口径，不落价格快照）。
+ */
+export type FavoriteItemDto = {
+  id: string;
+  folderId: string;
+  productId: string;
+  title: string;
+  priceFen: number;
+  originalPriceFen: number;
+  /** 封面用色（前端据此渲染纯色封面） */
+  cover: string;
+  images: string[];
+  /** 单位（如「支」「包」），旧商品可能没有 */
+  unit?: string;
+  /** 是否可直接购买（库存 > 0 且不是询价商品） */
+  available: boolean;
+  createdAt: string;
+};
+
+/**
+ * 首页广告位的点击去向（语义目标）。
+ *
+ * 不在契约里下发页面路径字面量：页面路由表只有 apps/app/src/routes.ts 一份
+ * （repo-lint 强制），服务端只说明「点了去哪里」，由前端映射到 ROUTES；
+ * `none` 表示纯展示位、不可点击。
+ */
+export type HomeAdTarget = 'mall' | 'me' | 'none';
+
+/**
+ * 首页广告位（GET /home/ggs）。
+ *
+ * 源站（eg.egluosi.com/b2b-svr）没有广告位接口 —— 抓取笔记里首页入口只有
+ * api/mall/newItem | newItemC3 | newPack，全站也没有 ggs/rcs。因此这里按「服务端下发、
+ * 前端只负责排版」的形态定义契约：内容由服务端提供，前端不写死运营位。
+ */
+export type HomeAdDto = {
+  id: string;
+  /** 主标题 */
+  title: string;
+  /** 副标题 / 一句说明，允许空串 */
+  subtitle: string;
+  /** 图片地址；空串表示无图，前端用纯色块兜底，不允许出现裂图 */
+  image: string;
+  /** 点击去向的语义目标，由前端映射到 ROUTES；none 表示不可点击 */
+  target: HomeAdTarget;
+  /** 角标文案，如「目录」「检索」 */
+  badge: string;
+  /** 排序值，越小越靠前，由服务端排好序后下发 */
+  sortNo: number;
+};
+
+/**
+ * 首页推荐分类（GET /home/rcs）：取真实目录里商品数最多的一级分类。
+ * 与 `/mall/categories` 同一取数口径（目录源优先、演示类目已剔除），
+ * 保证「推荐里点进去不是空类目」。
+ */
+export type HomeRecommendedCategoryDto = {
+  code: string;
+  name: string;
+  /** 该分类下的商品数 */
+  count: number;
+  /** 代表色（目录没有分类配图，前端据此渲染纯色封面，与商品卡 cover 同一约定） */
+  cover: string;
 };
 

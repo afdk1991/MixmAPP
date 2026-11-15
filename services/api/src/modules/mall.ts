@@ -6,6 +6,10 @@ import type {
   CartLineDto,
   CartLineStatus,
   CartPricingDto,
+  FavoriteFolderDto,
+  FavoriteItemDto,
+  HomeAdDto,
+  HomeRecommendedCategoryDto,
   ImportProductInput,
   ManjianTierDto,
   OrderCreateInput,
@@ -21,6 +25,8 @@ import type { CatalogSource } from './catalog-source.js';
 import { projectRoot, type Config } from '../config.js';
 import type {
   CartItemRecord,
+  FavoriteFolderRecord,
+  FavoriteItemRecord,
   ManjianTierRecord,
   OrderItemRecord,
   OrderRecord,
@@ -41,6 +47,59 @@ export type CategoryNode = { id: string; code: string; name: string; level: numb
  * 公开类目列表不下发这一组，避免正式目录里混进演示分类。
  */
 const DEMO_CATEGORY_CODES = new Set(['featured', 'life', 'digital', 'wear']);
+
+/** 默认收藏夹名称（0019）：懒创建时使用，与迁移里 name 的 1–40 字符约束一致 */
+const DEFAULT_FAVORITE_FOLDER_NAME = '默认收藏夹';
+
+/**
+ * 首页广告位（home/ggs）内置内容。
+ *
+ * 源站没有广告位接口（抓取笔记 api-notes.md 里首页只有 api/mall/newItem | newItemC3 | newPack，
+ * 全站检索不到 ggs/rcs），所以这里不伪装成远端数据，由服务端统一内置一组运营位。
+ * 将来接 CMS 只替换 listHomeAds() 的取数实现，路由与 DTO 契约不动，前端无需跟着改。
+ * target 只给语义目标（mall / me / none），不下发页面路径 —— 路由表只有前端一份。
+ */
+const HOME_ADS: HomeAdDto[] = [
+  {
+    id: 'ad-catalog',
+    title: '15,000+ 五金目录已就绪',
+    subtitle: '按三级分类下钻 · 9 维规格筛选',
+    image: '',
+    target: 'mall',
+    badge: '目录',
+    sortNo: 10,
+  },
+  {
+    id: 'ad-search',
+    title: '搜规格、搜项目号，一次命中',
+    subtitle: 'M6-1.0x8 ≡ M6x8 ≡ 6x8 · 12 位项目号',
+    image: '',
+    target: 'mall',
+    badge: '检索',
+    sortNo: 20,
+  },
+  {
+    id: 'ad-pass',
+    title: '一张通行证通行全部星域',
+    subtitle: '登录即签发 · 唯一公民编号',
+    image: '',
+    target: 'me',
+    badge: '通行证',
+    sortNo: 30,
+  },
+];
+
+/**
+ * 推荐分类的默认色板：目录源没有分类配图，用固定色块保证视觉区分；
+ * 取不到时回落到品牌青，绝不返回空字符串（前端会当背景色直接用）。
+ */
+const RECOMMEND_COVER_COLORS = ['#0f9d8f', '#1f6feb', '#c2410c', '#6d28d9', '#0e7490', '#b45309'];
+
+/** 逗号分隔的多选参数（源站 ctgs/trts 形态）：去空白、去重、丢空；空数组表示不过滤。 */
+function parseMultiValues(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return [...new Set(raw.split(',').map((v) => v.trim()).filter(Boolean))];
+}
 
 /** 单行金额：有厘/支精确价时用它（1 分 = 10 厘），否则回落到旧的分/件口径。 */
 function lineTotalFen(product: Pick<ProductRecord, 'priceFen' | 'priceLi'>, quantity: number): number {
@@ -314,6 +373,13 @@ export class MallService {
       items: items.map((item) => this.toOrderItemDto(item)),
       // 失效行只在创建订单的响应里返回，列表/详情不带
       ...(skippedLines?.length ? { skippedLines } : {}),
+      // 0018 六态流转时间与取消留痕：历史订单统一按 null 回显，前端据此判断能否取消
+      pickingAt: order.pickingAt ? order.pickingAt.toISOString() : null,
+      shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+      completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+      cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+      cancelReason: order.cancelReason ?? null,
+      cancelledBy: order.cancelledBy ?? null,
       createdAt: order.createdAt.toISOString(),
     };
   }
@@ -323,9 +389,13 @@ export class MallService {
       const rows = this.catalog!.listProducts(query);
       return rows.map((row) => stripUpstreamFields(this.applyViewerGate(row, loggedIn)));
     }
+    // ctgs/trts 是源站 ccc_filter 的多选维度：逗号分隔，多值 OR；与其它维度 AND。
+    const ctgs = parseMultiValues(query.ctgs);
+    const trts = parseMultiValues(query.trts);
     const rows = await this.store.mall.products.list({
       ...(query.category ? { category: query.category } : {}),
       ...(query.cat ? { cat: query.cat } : {}),
+      ...(ctgs.length ? { ctgs } : {}),
       ...(query.dims ? { dims: query.dims } : {}),
       ...(query.lens ? { lens: query.lens } : {}),
       ...(query.brand ? { brand: query.brand } : {}),
@@ -333,6 +403,7 @@ export class MallService {
       ...(query.grd ? { grd: query.grd } : {}),
       ...(query.mtl ? { mtl: query.mtl } : {}),
       ...(query.ttt ? { ttt: query.ttt } : {}),
+      ...(trts.length ? { trts } : {}),
       ...(query.keyword ? { keyword: query.keyword } : {}),
       limit: query.pageSize,
       offset: (query.page - 1) * query.pageSize,
@@ -357,6 +428,29 @@ export class MallService {
     const rows = await this.store.mall.products.aggregateCategories();
     const real = rows.filter((row) => !DEMO_CATEGORY_CODES.has(row.code));
     return [...real].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+  }
+
+  /** 首页广告位（home/ggs）：内置运营位按 sortNo 升序下发，返回副本避免调用方改到常量。 */
+  async listHomeAds(): Promise<HomeAdDto[]> {
+    return [...HOME_ADS].sort((a, b) => a.sortNo - b.sortNo).map((ad) => ({ ...ad }));
+  }
+
+  /**
+   * 首页推荐分类（home/rcs）：取真实目录商品数最多的前 N 个一级分类。
+   * 与 listCategories() 同源（目录源优先、演示类目已剔除），因此不会推荐出空类目。
+   */
+  async listRecommendedCategories(limit = 6): Promise<HomeRecommendedCategoryDto[]> {
+    const categories = await this.listCategories();
+    const size = Math.max(1, Math.floor(limit));
+    return categories
+      .filter((category) => category.count > 0)
+      .slice(0, size)
+      .map((category, index) => ({
+        code: category.code,
+        name: category.name,
+        count: category.count,
+        cover: RECOMMEND_COVER_COLORS[index % RECOMMEND_COVER_COLORS.length] ?? '#0f9d8f',
+      }));
   }
 
   /** 分类树下一层：parent 为空取一级，否则取该节点直接子级；includeEmpty 连 0 商品节点一起返回。 */
@@ -717,7 +811,15 @@ export class MallService {
     packQty?: number,
   ): Promise<CartDto> {
     const product = await this.store.mall.products.findById(productId);
-    if (!product) throw AppError.notFound('商品不存在或已下架');
+    if (!product) {
+      // 目录源命中但库里没有：商品尚未 catalog:sync 入库，属于「稍后重试」而非「已下架」，
+      // 两种情况的下一步动作不同，文案必须分开（状态码保持 404，不改既有契约）。
+      if (await this.useCatalog()) {
+        const fromCatalog = this.catalog!.getProduct(productId);
+        if (fromCatalog) throw AppError.notFound('该商品尚未同步到本地，请稍后');
+      }
+      throw AppError.notFound('商品不存在或已下架');
+    }
     this.assertOrderable(product);
     const addQty = this.resolveQuantity(product, quantity, packUnit, packQty);
     const existing = await this.store.mall.carts.find(userId, productId);
@@ -1023,8 +1125,9 @@ export class MallService {
     const expired = await this.store.mall.orders.listExpiredPending(before);
     const cancelled: string[] = [];
     for (const order of expired) {
-      // 条件流转：只有 still pending 的才改，避免和「刚好支付成功」抢
-      const ok = await this.store.mall.orders.transitionStatus(order.id, 'pending', 'cancelled');
+      // 条件取消：只有 still pending 且未进入拣货的才改，避免和「刚好支付成功」抢；
+      // 0018 起统一走 cancel()，超时取消记 cancelled_by=system 并落取消原因。
+      const ok = await this.store.mall.orders.cancel(order.id, ['pending'], '超时未支付，系统自动取消', 'system');
       if (!ok) continue;
       const items = await this.store.mall.orders.itemsByOrder(order.id);
       for (const item of items) {
@@ -1035,6 +1138,52 @@ export class MallService {
       cancelled.push(order.orderNo);
     }
     return cancelled;
+  }
+
+  /**
+   * 用户侧取消订单（0018 六态状态机）：
+   * - pending / paid 可取消；已分配拣货（picking_at 非空）/ 已发货 / 已完成不可取消；
+   * - 已取消直接幂等返回现状，不重复归还库存；
+   * - 库存归还口径与超时取消完全一致（跳过「货源待确认」行），不改金额口径。
+   */
+  async cancelOrder(userId: string, orderNo: string, reason?: string): Promise<OrderDto> {
+    const order = await this.store.mall.orders.findByOrderNo(orderNo);
+    if (!order || order.userId !== userId) throw AppError.notFound('订单不存在');
+
+    // 幂等：重复取消直接回显当前订单
+    if (order.status === 'cancelled') {
+      const items = await this.store.mall.orders.itemsByOrder(order.id);
+      return this.toOrderDto(order, items);
+    }
+    // 已发货 / 已完成 / 已进入拣货（源站「已分配拣货不可取消」）：给出明确原因。
+    // 判定顺序按流程由后往前，保证提示的是最接近当下的状态（shipped 行 picking_at 同样非空）。
+    if (order.status === 'completed') throw AppError.conflict('订单已完成，无法取消');
+    if (order.status === 'shipped') throw AppError.conflict('订单已发货，无法取消');
+    if (order.pickingAt || order.status === 'picking') {
+      throw AppError.conflict('订单已分配拣货，无法取消');
+    }
+    if (order.status !== 'pending' && order.status !== 'paid') {
+      throw AppError.conflict('当前订单状态不可取消');
+    }
+
+    const text = reason?.trim() || '用户主动取消';
+    const ok = await this.store.mall.orders.cancel(order.id, ['pending', 'paid'], text, 'user');
+
+    if (ok) {
+      const items = await this.store.mall.orders.itemsByOrder(order.id);
+      for (const item of items) {
+        // 与超时取消同口径：货源待确认行下单时没扣库存，取消也不归还
+        if (item.stockUnconfirmed) continue;
+        await this.store.mall.products.restoreStock(item.productId, item.quantity);
+      }
+    }
+
+    // 并发下可能被别人抢先取消或推进状态：重新读一次，按真实结果决定回显还是报冲突
+    const latest = await this.store.mall.orders.findByOrderNo(orderNo);
+    if (!latest) throw AppError.notFound('订单不存在');
+    if (latest.status !== 'cancelled' && !ok) throw AppError.conflict('订单状态已变化，请刷新后重试');
+    const items = await this.store.mall.orders.itemsByOrder(latest.id);
+    return this.toOrderDto(latest, items);
   }
 
   async listOrders(userId: string): Promise<OrderDto[]> {
@@ -1052,5 +1201,158 @@ export class MallService {
     if (!order || order.userId !== userId) throw AppError.notFound('订单不存在');
     const items = await this.store.mall.orders.itemsByOrder(order.id);
     return this.toOrderDto(order, items);
+  }
+
+  // ===== 收藏夹（0019）=====
+
+  /** 收藏夹列表：首次访问时懒创建默认收藏夹，存量用户不需要批量补数据 */
+  async listFavoriteFolders(userId: string): Promise<FavoriteFolderDto[]> {
+    const folders = await this.ensureDefaultFavoriteFolder(userId);
+    const counts = await Promise.all(folders.map((folder) => this.store.mall.favorites.countItems(folder.id)));
+    return folders.map((folder, i) => this.toFavoriteFolderDto(folder, counts[i] ?? 0));
+  }
+
+  /** 条目列表：folderId 省略时取默认收藏夹；只存引用，标题/价格为读时快照 */
+  async listFavoriteItems(userId: string, folderId?: string): Promise<FavoriteItemDto[]> {
+    const folder = await this.resolveFavoriteFolder(userId, folderId);
+    const items = await this.store.mall.favorites.listItems(folder.id);
+    if (!items.length) return [];
+    const products = await Promise.all(items.map((item) => this.store.mall.products.findById(item.productId)));
+    return items.map((item, i) => this.toFavoriteItemDto(item, products[i] ?? null));
+  }
+
+  /** 加收藏：同夹内重复收藏按幂等处理（返回已有条目），folderId 省略时落到默认收藏夹 */
+  async addFavoriteItem(userId: string, productId: string, folderId?: string): Promise<FavoriteItemDto> {
+    const product = await this.store.mall.products.findById(productId);
+    if (!product) throw AppError.notFound('商品不存在');
+    const folder = await this.resolveFavoriteFolder(userId, folderId);
+    const item = await this.store.mall.favorites.insertItem({
+      id: this.ids.next().id,
+      folderId: folder.id,
+      userId,
+      productId,
+      createdAt: new Date(),
+    });
+    return this.toFavoriteItemDto(item, product);
+  }
+
+  /** 删收藏条目：不存在也按成功返回（幂等） */
+  async removeFavoriteItem(userId: string, productId: string, folderId?: string): Promise<boolean> {
+    const folder = await this.resolveFavoriteFolder(userId, folderId);
+    return this.store.mall.favorites.deleteItem(folder.id, productId);
+  }
+
+  /** 清空收藏夹：返回删除条数，收藏夹本身保留 */
+  async clearFavoriteFolder(userId: string, folderId: string): Promise<number> {
+    const folder = await this.requireOwnFolder(userId, folderId);
+    return this.store.mall.favorites.clearItems(folder.id);
+  }
+
+  /** 复制收藏夹：同名副本，新夹不抢默认位，条目逐条复制（同夹唯一约束不会重复） */
+  async copyFavoriteFolder(userId: string, folderId: string, name?: string): Promise<FavoriteFolderDto> {
+    const source = await this.requireOwnFolder(userId, folderId);
+    const items = await this.store.mall.favorites.listItems(source.id);
+    const now = new Date();
+    // 名称上限 40 字符（与迁移里的 check 约束一致），超长直接截断
+    const copyName = (name?.trim() || `${source.name} 的副本`).slice(0, 40);
+    const copy: FavoriteFolderRecord = {
+      id: this.ids.next().id,
+      userId,
+      name: copyName,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.store.mall.favorites.insertFolder(copy);
+    for (const item of items) {
+      await this.store.mall.favorites.insertItem({
+        id: this.ids.next().id,
+        folderId: copy.id,
+        userId,
+        productId: item.productId,
+        createdAt: now,
+      });
+    }
+    return this.toFavoriteFolderDto(copy, items.length);
+  }
+
+  /** 设默认收藏夹：同用户其它夹的默认位由存储层一并清掉 */
+  async setDefaultFavoriteFolder(userId: string, folderId: string): Promise<FavoriteFolderDto> {
+    const updated = await this.store.mall.favorites.setDefault(userId, folderId);
+    if (!updated) throw AppError.notFound('收藏夹不存在');
+    const count = await this.store.mall.favorites.countItems(updated.id);
+    return this.toFavoriteFolderDto(updated, count);
+  }
+
+  private toFavoriteFolderDto(folder: FavoriteFolderRecord, itemCount: number): FavoriteFolderDto {
+    return {
+      id: folder.id,
+      name: folder.name,
+      isDefault: folder.isDefault,
+      itemCount,
+      createdAt: folder.createdAt.toISOString(),
+    };
+  }
+
+  /** 商品删除后条目仍可能残留引用：此时按「已下架」回显，不抛错 */
+  private toFavoriteItemDto(item: FavoriteItemRecord, product: ProductRecord | null): FavoriteItemDto {
+    return {
+      id: item.id,
+      folderId: item.folderId,
+      productId: item.productId,
+      title: product?.title ?? '商品已下架',
+      priceFen: product?.priceFen ?? 0,
+      originalPriceFen: product?.originalPriceFen ?? 0,
+      cover: product?.cover ?? '',
+      images: product?.images ?? [],
+      ...(product?.unit ? { unit: product.unit } : {}),
+      available: !!product && product.stock > 0 && product.priceSource !== 'inquiry',
+      createdAt: item.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * 懒创建默认收藏夹：
+   * - 一个收藏夹都没有 → 建「默认收藏夹」并置默认；
+   * - 有收藏夹但没有默认位（历史数据异常）→ 把最早创建的那个置默认。
+   */
+  private async ensureDefaultFavoriteFolder(userId: string): Promise<FavoriteFolderRecord[]> {
+    let folders = await this.store.mall.favorites.listFolders(userId);
+    if (folders.length === 0) {
+      const now = new Date();
+      await this.store.mall.favorites.insertFolder({
+        id: this.ids.next().id,
+        userId,
+        name: DEFAULT_FAVORITE_FOLDER_NAME,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      folders = await this.store.mall.favorites.listFolders(userId);
+      return folders;
+    }
+    if (!folders.some((folder) => folder.isDefault)) {
+      const fallback = folders[0];
+      if (!fallback) return folders;
+      await this.store.mall.favorites.setDefault(userId, fallback.id);
+      folders = await this.store.mall.favorites.listFolders(userId);
+    }
+    return folders;
+  }
+
+  /** 解析收藏夹：省略 folderId 时用默认夹；显式传入则必须属于该用户（越权按不存在处理） */
+  private async resolveFavoriteFolder(userId: string, folderId?: string): Promise<FavoriteFolderRecord> {
+    const folder = folderId
+      ? await this.store.mall.favorites.findFolder(userId, folderId)
+      : (await this.ensureDefaultFavoriteFolder(userId)).find((f) => f.isDefault) ?? null;
+    if (!folder) throw AppError.notFound('收藏夹不存在');
+    return folder;
+  }
+
+  /** 复制 / 设默认 / 清空等夹级操作：必须显式给夹且属于当前用户 */
+  private async requireOwnFolder(userId: string, folderId: string): Promise<FavoriteFolderRecord> {
+    const folder = await this.store.mall.favorites.findFolder(userId, folderId);
+    if (!folder) throw AppError.notFound('收藏夹不存在');
+    return folder;
   }
 }

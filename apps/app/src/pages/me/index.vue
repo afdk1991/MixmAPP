@@ -177,6 +177,12 @@
           <text class="link-desc">下单后可查看进度</text>
           <text class="link-arrow mono">→</text>
         </view>
+        <!-- 收藏夹（0019）：默认收藏夹由服务端首次访问时懒创建 -->
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.favorites)">
+          <text class="link-title">收藏夹</text>
+          <text class="link-desc">收藏的商品 · 分类整理</text>
+          <text class="link-arrow mono">→</text>
+        </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
           <text class="link-title">隐私政策与权限说明</text>
           <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>

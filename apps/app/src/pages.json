@@ -27,6 +27,10 @@
       "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
+      "path": "pages/me/favorites",
+      "style": { "navigationBarTitleText": "MixmAPP" }
+    },
+    {
       "path": "pages/mall/index",
       "style": {
         "navigationBarTitleText": "MixmAPP",

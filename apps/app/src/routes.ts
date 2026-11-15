@@ -13,6 +13,7 @@ export const ROUTES = {
   login: '/pages/auth/login',
   register: '/pages/auth/register',
   me: '/pages/me/index',
+  favorites: '/pages/me/favorites',
   mall: '/pages/mall/index',
   mallDetail: '/pages/mall/detail',
   cart: '/pages/cart/index',

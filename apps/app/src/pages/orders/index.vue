@@ -73,6 +73,23 @@
         </view>
 
         <text class="address">{{ order.address }}</text>
+
+        <!-- 0018 六态：已取消展示取消留痕；其余状态给取消入口，不可取消时说明原因（不静默置灰） -->
+        <view v-if="order.status === 'cancelled'" class="cancel-row">
+          <text class="cancel-note mono">{{ cancelLine(order) }}</text>
+        </view>
+        <view v-else class="action-row">
+          <view
+            v-if="canCancel(order)"
+            class="btn btn--ghost btn--sm cancel-btn"
+            :class="{ 'btn--disabled': cancelling === order.orderNo }"
+            hover-class="is-press"
+            @tap="askCancel(order)"
+          >
+            {{ cancelling === order.orderNo ? '取消中…' : '取消订单' }}
+          </view>
+          <text v-else class="lock-note">{{ cancelHint(order) }}</text>
+        </view>
       </view>
     </view>
 
@@ -94,6 +111,8 @@ const orders = ref<OrderDto[]>([]);
 const loading = ref(false);
 const error = ref('');
 const highlight = ref('');
+/** 正在取消的订单号：防止重复点击 + 按钮态提示 */
+const cancelling = ref('');
 
 function price(fen: number): string {
   return (fen / 100).toFixed(2);
@@ -103,8 +122,76 @@ function maskPhone(phone: string): string {
   return phone.length === 11 ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : phone;
 }
 
+/** 六态文案（0018）：未知态直接回显原值，避免新增状态时前端显示空白 */
+const STATUS_TEXT: Record<OrderDto['status'], string> = {
+  pending: '待支付',
+  paid: '已支付',
+  picking: '拣货中',
+  shipped: '已发货',
+  completed: '已完成',
+  cancelled: '已取消',
+};
+
 function statusText(status: OrderDto['status']): string {
-  return { pending: '待支付', paid: '已支付', cancelled: '已取消' }[status];
+  return STATUS_TEXT[status] ?? status;
+}
+
+/** 可取消：仅待支付 / 已支付，且服务端未分配拣货（picking_at 为空） */
+function canCancel(order: OrderDto): boolean {
+  return (order.status === 'pending' || order.status === 'paid') && !order.pickingAt;
+}
+
+/** 不可取消时的原因文案：不要把按钮置灰了事，要明确告诉用户为什么 */
+function cancelHint(order: OrderDto): string {
+  // 与后端判定顺序一致：先报最接近当下的状态，shipped 行 pickingAt 同样非空
+  if (order.status === 'completed') return '订单已完成，无法取消';
+  if (order.status === 'shipped') return '已发货，无法取消';
+  if (order.pickingAt || order.status === 'picking') return '已分配拣货，无法取消';
+  return '';
+}
+
+/** 取消方文案：系统取消 / 管理员取消 / 用户主动取消 */
+function cancelRoleText(by: OrderDto['cancelledBy']): string {
+  if (by === 'system') return '（系统自动）';
+  if (by === 'admin') return '（管理员）';
+  if (by === 'user') return '（本人操作）';
+  return '';
+}
+
+/** 已取消订单的留痕行：取消方 + 取消原因 */
+function cancelLine(order: OrderDto): string {
+  const role = cancelRoleText(order.cancelledBy ?? null);
+  return order.cancelReason ? `已取消${role} · ${order.cancelReason}` : `已取消${role}`;
+}
+
+function askCancel(order: OrderDto): void {
+  if (cancelling.value) return;
+  uni.showModal({
+    title: '取消订单',
+    content: `确认取消订单 ${order.orderNo}？取消后不可恢复，库存将退回。`,
+    confirmText: '确认取消',
+    confirmColor: '#C0392B',
+    success: (res) => {
+      if (res.confirm) void doCancel(order);
+    },
+  });
+}
+
+async function doCancel(order: OrderDto): Promise<void> {
+  if (cancelling.value) return;
+  cancelling.value = order.orderNo;
+  try {
+    const updated = await mallApi.cancelOrder(order.orderNo);
+    // 原地替换单条，避免整表重载导致列表跳动
+    const idx = orders.value.findIndex((o) => o.id === updated.id);
+    if (idx >= 0) orders.value[idx] = updated;
+    uni.showToast({ title: '订单已取消', icon: 'none' });
+  } catch (e) {
+    // 服务端会返回「已分配拣货 / 已发货 / 已完成」等具体原因，原样展示
+    uni.showToast({ title: e instanceof Error ? e.message : '取消失败', icon: 'none' });
+  } finally {
+    cancelling.value = '';
+  }
 }
 
 function dateText(iso: string): string {
@@ -263,6 +350,31 @@ onLoad((options) => {
   color: $ink-4;
 }
 
+/* 0018 新增三态：拣货中（进行中）/ 已发货（送达中）/ 已完成（终态） */
+.status-chip--picking {
+  background: $brand-soft;
+}
+
+.status-chip--picking .status-chip-text {
+  color: $brand-deep;
+}
+
+.status-chip--shipped {
+  background: $brand;
+}
+
+.status-chip--shipped .status-chip-text {
+  color: $shell;
+}
+
+.status-chip--completed {
+  background: $paper-2;
+}
+
+.status-chip--completed .status-chip-text {
+  color: $ink-2;
+}
+
 .status-chip-text {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
@@ -359,10 +471,37 @@ onLoad((options) => {
 .address {
   display: block;
   margin-top: $sp-2;
-  padding-bottom: $sp-4;
+  padding-bottom: $sp-2;
   font-size: 26rpx;
   line-height: 1.6;
   color: $ink-3;
+}
+
+/* ---------- 取消入口 / 取消留痕（0018） ---------- */
+.action-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: $sp-4;
+}
+
+.cancel-btn {
+  min-width: 180rpx;
+}
+
+.cancel-row {
+  padding-bottom: $sp-4;
+}
+
+.cancel-note {
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: $ink-4;
+}
+
+.lock-note {
+  font-size: 26rpx;
+  color: $ink-4;
 }
 
 /* ---------- 骨架 / 空态 ---------- */

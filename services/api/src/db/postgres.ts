@@ -1,11 +1,19 @@
 import pg from 'pg';
 import type { Queryable } from './gateway.js';
+import {
+  buildSearchTokens,
+  escapeLikePattern,
+  FULLWIDTH_TRANSLATE_FROM,
+  FULLWIDTH_TRANSLATE_TO,
+} from '../lib/search.js';
 import type {
   AccountMergeRecord,
   BindingRecord,
   CartItemRecord,
   CatalogSyncRunRecord,
   AddressRecord,
+  FavoriteFolderRecord,
+  FavoriteItemRecord,
   ManjianTierRecord,
   MergeCandidate,
   OrderItemRecord,
@@ -91,6 +99,33 @@ function mapOAuthState(row: Row): OAuthStateRecord {
     consumedAt: toDateOrNull(row['consumed_at']),
   };
 }
+
+/** 搜索 SQL 片段：与 lib/search 的 TS 归一口径逐字对应，避免两条读路径行为漂移。 */
+const normSql = (expr: string): string =>
+  `lower(translate(coalesce(${expr}, ''), '${FULLWIDTH_TRANSLATE_FROM}', '${FULLWIDTH_TRANSLATE_TO}'))`;
+
+/** 规格键：去空白 → 去 M 前缀 → 分隔符归一 → 去默认粗牙 1.0 → 合并连续 x。 */
+function specKeySql(expr: string): string {
+  return [
+    'regexp_replace(',
+    'regexp_replace(',
+    'regexp_replace(',
+    'regexp_replace(',
+    'regexp_replace(',
+    `regexp_replace(${normSql(expr)}, '\\s+', '', 'g'),`,
+    `'^m', '', 'g'),`,
+    `'[-*×]', 'x', 'g'),`,
+    `'([-x])1(\\.0+)?([-x]|$)', '\\1\\3', 'g'),`,
+    `'-', 'x', 'g'),`,
+    `'x{2,}', 'x', 'g')`,
+  ].join(' ');
+}
+
+const SQL_SEARCH_TEXT = normSql(
+  `concat_ws(' ', title, subtitle, coalesce(brand, ''), coalesce(source_id, ''), coalesce(source_item_no, ''), coalesce(specs::text, ''))`,
+);
+
+const SQL_SPEC_KEY = specKeySql(`specs->>'规格'`);
 
 /** PostgreSQL 驱动：生产环境唯一使用的持久化实现。 */
 export class PgStore implements Store {
@@ -616,6 +651,7 @@ export class PgStore implements Store {
       list: async (filter: {
         category?: string;
         cat?: string;
+        ctgs?: string[];
         dims?: string;
         lens?: string;
         brand?: string;
@@ -623,6 +659,7 @@ export class PgStore implements Store {
         grd?: string;
         mtl?: string;
         ttt?: string;
+        trts?: string[];
         keyword?: string;
         limit: number;
         offset: number;
@@ -640,6 +677,15 @@ export class PgStore implements Store {
           conditions.push(
             `c3_id in (select id from catalog_categories where id = $${i} or parent_id = $${i}
                         or parent_id in (select id from catalog_categories where parent_id = $${i}))`,
+          );
+        }
+        // 分类多选（源站 ctgs）：多值 OR；每个节点仍按子孙三级类目收敛，与 cat 完全同口径。
+        if (filter.ctgs?.length) {
+          params.push(filter.ctgs);
+          const i = params.length;
+          conditions.push(
+            `c3_id in (select id from catalog_categories where id = any($${i}::text[]) or parent_id = any($${i}::text[])
+                        or parent_id in (select id from catalog_categories where parent_id = any($${i}::text[])))`,
           );
         }
         if (filter.dims) {
@@ -666,9 +712,49 @@ export class PgStore implements Store {
           params.push(value);
           conditions.push(`specs->>'${column}' = $${params.length}`);
         }
+        // 牙别多选（源站 trts）：取值来自 specs.牙别，多值 OR；单独成维，不与表面处理（ttt）合并。
+        if (filter.trts?.length) {
+          params.push(filter.trts);
+          conditions.push(`specs->>'牙别' = any($${params.length}::text[])`);
+        }
         if (filter.keyword) {
-          params.push(`%${filter.keyword}%`);
-          conditions.push(`(title ilike $${params.length} or subtitle ilike $${params.length})`);
+          // 搜索口径统一走 lib/search：多词 AND、项目号 12/6 位、规格等价、全半角/大小写归一。
+          // 落点在 SQL：用 translate 做全半角归一（不新增列、不要求回填），15k 目录上为顺序扫描，
+          // 现有索引无法覆盖 `%kw%`，这是有意的取舍（见里程碑报告）。
+          const tokens = buildSearchTokens(filter.keyword);
+          for (const token of tokens) {
+            if (token.kind === 'itemNoMiss') {
+              // 7~11 位中间片段源站不匹配，保持一致：整条查询直接不命中
+              conditions.push('false');
+              continue;
+            }
+            if (token.kind === 'itemNo12') {
+              params.push(token.raw);
+              const i = params.length;
+              conditions.push(`(coalesce(source_id, '') = $${i} or coalesce(source_item_no, '') = $${i})`);
+              continue;
+            }
+            if (token.kind === 'itemNo6') {
+              params.push(`${escapeLikePattern(token.raw)}%`);
+              const i = params.length;
+              conditions.push(
+                `(coalesce(source_id, '') like $${i} escape '\\' or coalesce(source_item_no, '') like $${i} escape '\\')`,
+              );
+              continue;
+            }
+            params.push(`%${escapeLikePattern(token.raw)}%`);
+            const pattern = params.length;
+            if (token.kind === 'spec') {
+              params.push(token.canonical);
+              // 有「规格」键时只做等价比对（避免 M12x1 命中 M12x1.5）；缺规格字段才回落到文本子串。
+              conditions.push(
+                `((coalesce(specs->>'规格', '') <> '' and ${SQL_SPEC_KEY} = $${params.length})
+                  or (coalesce(specs->>'规格', '') = '' and ${SQL_SEARCH_TEXT} like $${pattern} escape '\\'))`,
+              );
+            } else {
+              conditions.push(`${SQL_SEARCH_TEXT} like $${pattern} escape '\\'`);
+            }
+          }
         }
         const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
         params.push(filter.limit, filter.offset);
@@ -717,7 +803,7 @@ export class PgStore implements Store {
                         where id = $1 or parent_id = $1
                            or parent_id in (select id from catalog_categories where parent_id = $1))
                        and listed is not false`;
-        const [dims, lens, brands, stds, grds, mtls, ttts] = await Promise.all([
+        const [dims, lens, brands, stds, grds, mtls, ttts, trts] = await Promise.all([
           this.pool.query(
             `select distinct spec_dims as v from products where ${scope} and spec_dims is not null order by v`,
             [nodeId],
@@ -730,7 +816,7 @@ export class PgStore implements Store {
             `select distinct brand as v from products where ${scope} and coalesce(brand, '') <> '' order by v`,
             [nodeId],
           ),
-          ...(['标准', '等级', '材质', '表面处理'] as const).map((column) =>
+          ...(['标准', '等级', '材质', '表面处理', '牙别'] as const).map((column) =>
             this.pool.query(
               `select distinct specs->>'${column}' as v from products
                 where ${scope} and coalesce(specs->>'${column}', '') <> '' order by v`,
@@ -748,6 +834,7 @@ export class PgStore implements Store {
           grds: values(grds!),
           mtls: values(mtls!),
           ttts: values(ttts!),
+          trts: values(trts!),
         };
       },
       findById: async (id: string): Promise<ProductRecord | null> => {
@@ -1176,6 +1263,47 @@ export class PgStore implements Store {
         );
         return res.rowCount === 1;
       },
+      cancel: async (
+        orderId: string,
+        fromStatuses: OrderRecord['status'][],
+        reason: string,
+        by: NonNullable<OrderRecord['cancelledBy']>,
+      ): Promise<boolean> => {
+        // 与源站「已分配拣货不可取消」同口径：picking_at 非空的行任何情况都不允许再取消
+        const res = await this.pool.query(
+          `update orders
+              set status = 'cancelled',
+                  cancelled_at = now(),
+                  cancel_reason = $3,
+                  cancelled_by = $4
+            where id = $1
+              and status = any($2::text[])
+              and picking_at is null
+            returning id`,
+          [orderId, fromStatuses, reason, by],
+        );
+        return res.rowCount === 1;
+      },
+      markStatusAt: async (
+        orderId: string,
+        from: OrderRecord['status'],
+        to: OrderRecord['status'],
+        at: Date,
+      ): Promise<boolean> => {
+        // 时间戳列与状态一一对应；只有 picking/shipped/completed 会写，其它状态只改状态
+        const column =
+          to === 'picking' ? 'picking_at' : to === 'shipped' ? 'shipped_at' : to === 'completed' ? 'completed_at' : null;
+        const res = column
+          ? await this.pool.query(
+              `update orders set status = $3, ${column} = $4 where id = $1 and status = $2 returning id`,
+              [orderId, from, to, at],
+            )
+          : await this.pool.query(
+              'update orders set status = $3 where id = $1 and status = $2 returning id',
+              [orderId, from, to],
+            );
+        return res.rowCount === 1;
+      },
     },
     orderRequests: {
       claim: async (userId: string, key: string) => {
@@ -1202,6 +1330,143 @@ export class PgStore implements Store {
       },
       dropByUser: async (userId: string): Promise<void> => {
         await this.pool.query('delete from order_requests where user_id = $1', [userId]);
+      },
+    },
+    favorites: {
+      listFolders: async (userId: string): Promise<FavoriteFolderRecord[]> => {
+        const res = await this.pool.query(
+          'select * from mall_favorite_folders where user_id = $1 order by created_at asc',
+          [userId],
+        );
+        return res.rows.map(mapFavoriteFolder);
+      },
+      findFolder: async (userId: string, folderId: string): Promise<FavoriteFolderRecord | null> => {
+        const res = await this.pool.query(
+          'select * from mall_favorite_folders where id = $1 and user_id = $2 limit 1',
+          [folderId, userId],
+        );
+        return res.rows[0] ? mapFavoriteFolder(res.rows[0]) : null;
+      },
+      insertFolder: async (folder: FavoriteFolderRecord): Promise<FavoriteFolderRecord> => {
+        const res = await this.pool.query(
+          `insert into mall_favorite_folders (id, user_id, name, is_default, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$5) returning *`,
+          [folder.id, folder.userId, folder.name, folder.isDefault, folder.createdAt],
+        );
+        const row = res.rows[0];
+        if (!row) throw new Error('收藏夹写入失败');
+        return mapFavoriteFolder(row);
+      },
+      updateFolder: async (
+        userId: string,
+        folderId: string,
+        patch: { name?: string; isDefault?: boolean },
+      ): Promise<FavoriteFolderRecord | null> => {
+        // 置默认走事务内「先清旧默认、再置新默认」，避免部分唯一索引被中间态撞到
+        if (patch.isDefault === true) {
+          if (!this.pool.connect) throw new Error('当前存储驱动不支持事务');
+          const client = await this.pool.connect();
+          try {
+            await client.query('begin');
+            await client.query(
+              'update mall_favorite_folders set is_default = false, updated_at = now() where user_id = $1 and is_default',
+              [userId],
+            );
+            // 改名与设默认可能同时传，合并到同一条 update
+            const res = await client.query(
+              `update mall_favorite_folders
+                  set is_default = true,
+                      name = coalesce($3, name),
+                      updated_at = now()
+                where id = $1 and user_id = $2
+                returning *`,
+              [folderId, userId, patch.name ?? null],
+            );
+            await client.query('commit');
+            return res.rows[0] ? mapFavoriteFolder(res.rows[0]) : null;
+          } catch (error) {
+            await client.query('rollback');
+            throw error;
+          } finally {
+            client.release();
+          }
+        }
+        const res = await this.pool.query(
+          `update mall_favorite_folders
+              set name = coalesce($3, name), updated_at = now()
+            where id = $1 and user_id = $2
+            returning *`,
+          [folderId, userId, patch.name ?? null],
+        );
+        return res.rows[0] ? mapFavoriteFolder(res.rows[0]) : null;
+      },
+      setDefault: async (userId: string, folderId: string): Promise<FavoriteFolderRecord | null> => {
+        if (!this.pool.connect) throw new Error('当前存储驱动不支持事务');
+        const client = await this.pool.connect();
+        try {
+          await client.query('begin');
+          await client.query(
+            'update mall_favorite_folders set is_default = false, updated_at = now() where user_id = $1 and is_default',
+            [userId],
+          );
+          const res = await client.query(
+            `update mall_favorite_folders
+                set is_default = true, updated_at = now()
+              where id = $1 and user_id = $2
+              returning *`,
+            [folderId, userId],
+          );
+          await client.query('commit');
+          return res.rows[0] ? mapFavoriteFolder(res.rows[0]) : null;
+        } catch (error) {
+          await client.query('rollback');
+          throw error;
+        } finally {
+          client.release();
+        }
+      },
+      listItems: async (folderId: string): Promise<FavoriteItemRecord[]> => {
+        const res = await this.pool.query(
+          'select * from mall_favorite_items where folder_id = $1 order by created_at desc',
+          [folderId],
+        );
+        return res.rows.map(mapFavoriteItem);
+      },
+      insertItem: async (item: FavoriteItemRecord): Promise<FavoriteItemRecord> => {
+        // on conflict do nothing：同夹内重复收藏按幂等处理，再回查既有行
+        const res = await this.pool.query(
+          `insert into mall_favorite_items (id, folder_id, user_id, product_id, created_at)
+           values ($1,$2,$3,$4,$5)
+           on conflict (folder_id, product_id) do nothing
+           returning *`,
+          [item.id, item.folderId, item.userId, item.productId, item.createdAt],
+        );
+        if (res.rows[0]) return mapFavoriteItem(res.rows[0]);
+        const existing = await this.pool.query(
+          'select * from mall_favorite_items where folder_id = $1 and product_id = $2 limit 1',
+          [item.folderId, item.productId],
+        );
+        const existingRow = existing.rows[0];
+        if (!existingRow) throw new Error('收藏条目写入失败');
+        return mapFavoriteItem(existingRow);
+      },
+      deleteItem: async (folderId: string, productId: string): Promise<boolean> => {
+        const res = await this.pool.query(
+          'delete from mall_favorite_items where folder_id = $1 and product_id = $2',
+          [folderId, productId],
+        );
+        return (res.rowCount ?? 0) > 0;
+      },
+      clearItems: async (folderId: string): Promise<number> => {
+        const res = await this.pool.query('delete from mall_favorite_items where folder_id = $1', [folderId]);
+        return res.rowCount ?? 0;
+      },
+      countItems: async (folderId: string): Promise<number> => {
+        const res = await this.pool.query(
+          'select count(*)::int as n from mall_favorite_items where folder_id = $1',
+          [folderId],
+        );
+        return (res.rows[0]?.['n'] as number) ?? 0;
       },
     },
   };
@@ -1434,6 +1699,13 @@ function mapOrder(row: Row): OrderRecord {
     discountTotalFen: row['discount_total_fen'] == null ? 0 : Number(row['discount_total_fen']),
     createdAt: toDate(row['created_at']),
     paidAt: toDateOrNull(row['paid_at']),
+    // 0018 六态流转时间与取消留痕：历史订单全部为 null
+    pickingAt: toDateOrNull(row['picking_at']),
+    shippedAt: toDateOrNull(row['shipped_at']),
+    completedAt: toDateOrNull(row['completed_at']),
+    cancelledAt: toDateOrNull(row['cancelled_at']),
+    cancelReason: (row['cancel_reason'] as string | null) ?? null,
+    cancelledBy: (row['cancelled_by'] as OrderRecord['cancelledBy']) ?? null,
   };
 }
 
@@ -1452,6 +1724,29 @@ function mapOrderItem(row: Row): OrderItemRecord {
     stockUnconfirmed: row['stock_unconfirmed'] === true,
     // 0017 行状态快照；历史订单列缺失时按 A（到货）处理
     lineStatus: ((row['line_status'] as string | null) ?? 'A') as OrderItemRecord['lineStatus'],
+  };
+}
+
+/** 收藏夹映射（0019）。 */
+function mapFavoriteFolder(row: Row): FavoriteFolderRecord {
+  return {
+    id: String(row['id']),
+    userId: String(row['user_id']),
+    name: String(row['name']),
+    isDefault: row['is_default'] === true,
+    createdAt: toDate(row['created_at']),
+    updatedAt: toDate(row['updated_at']),
+  };
+}
+
+/** 收藏条目映射（0019）：只存商品引用，不落价格快照。 */
+function mapFavoriteItem(row: Row): FavoriteItemRecord {
+  return {
+    id: String(row['id']),
+    folderId: String(row['folder_id']),
+    userId: String(row['user_id']),
+    productId: String(row['product_id']),
+    createdAt: toDate(row['created_at']),
   };
 }
 

@@ -21,6 +21,7 @@ import { verifyAccessToken } from './lib/jwt.js';
 import { authRoutes } from './routes/auth.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { mallRoutes } from './routes/mall.js';
+import { homeRoutes } from './routes/home.js';
 import { addressRoutes } from './routes/address.js';
 import { adminRoutes } from './routes/admin.js';
 import { mediaRoutes } from './routes/media.js';
@@ -224,6 +225,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await oauthRoutes(scope);
       await meRoutes(scope);
       await mallRoutes(scope);
+      await homeRoutes(scope);
       await addressRoutes(scope);
       await integrationRoutes(scope);
       await adminRoutes(scope);

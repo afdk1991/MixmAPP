@@ -64,8 +64,61 @@
         </view>
       </view>
 
-      <!-- ---------- 纸面：01 检索 / 02 入口 / 03 多端 ---------- -->
+      <!-- ---------- 纸面：运营位 / 01 检索 / 02 入口 / 03 多端 ---------- -->
       <view class="body">
+
+        <!-- 广告位（home/ggs）：内容与顺序完全由服务端下发，取不到就整块不渲染，不留空壳 -->
+        <view v-if="ads.length" class="ggs">
+          <view class="ggs-head">
+            <text class="ggs-kicker mono">SPOTLIGHT · 运营位</text>
+            <text class="ggs-note mono">{{ ads.length }} 条 · 服务端下发</text>
+          </view>
+          <scroll-view class="ggs-strip" scroll-x :show-scrollbar="false">
+            <view class="ggs-track">
+              <view
+                v-for="ad in ads"
+                :key="ad.id"
+                class="gg-card"
+                hover-class="is-press"
+                @tap="openAd(ad)"
+              >
+                <image v-if="ad.image" class="gg-img" :src="ad.image" mode="aspectFill" lazy-load />
+                <view class="gg-top">
+                  <text class="gg-badge mono">{{ ad.badge }}</text>
+                  <text v-if="ad.target !== 'none'" class="gg-arrow mono">→</text>
+                </view>
+                <text class="gg-title">{{ ad.title }}</text>
+                <text class="gg-sub">{{ ad.subtitle }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
+
+        <!-- 推荐分类（home/rcs）：按真实商品数排序，点选直接在下方 01 区预览该分类 -->
+        <view v-if="recommended.length" class="rec">
+          <view class="rec-head">
+            <text class="rec-kicker mono">RECOMMENDED · 推荐分类</text>
+            <text class="rec-note">按商品数排序 · 点选预览</text>
+          </view>
+          <view class="rec-grid">
+            <view
+              v-for="(item, index) in recommended"
+              :key="item.code"
+              class="rec-card"
+              :class="{ 'rec-card--active': activeCategory === item.code }"
+              hover-class="is-press"
+              @tap="selectCategory(item.code)"
+            >
+              <view class="rec-swatch" :style="{ background: item.cover }">
+                <text class="rec-no mono">{{ String(index + 1).padStart(2, '0') }}</text>
+              </view>
+              <view class="rec-body">
+                <text class="rec-name">{{ item.name }}</text>
+                <text class="rec-count mono">{{ item.count }} 件</text>
+              </view>
+            </view>
+          </view>
+        </view>
 
         <!-- 01 检索与目录：搜索在上、一级分类居中、商品网格在下；分类节点与商城抽屉同源 -->
         <view class="section">
@@ -365,7 +418,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { metaApi, mallApi, productCover, coverTint, ApiError } from '../../api/client';
+import { metaApi, mallApi, homeApi, productCover, coverTint, ApiError } from '../../api/client';
 import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
@@ -373,6 +426,7 @@ import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
 import type { MallCategoryDto, MallProductDto } from '../../api/mall';
+import type { HomeAdDto, HomeAdTarget, HomeRecommendedCategoryDto } from '@mixmapp/contracts';
 import {
   breadcrumbLabel,
   INQUIRY_NOTICE,
@@ -432,6 +486,13 @@ const activeCategory = ref('');
 const products = ref<MallProductDto[]>([]);
 const mallLoading = ref(false);
 const mallError = ref('');
+
+/* ---------- 首页运营位：广告位（home/ggs）与推荐分类（home/rcs） ----------
+ * 两块内容都由服务端下发：广告位是服务端内置运营位（源站没有该接口），推荐分类复用
+ * `/mall/categories` 的真实计数口径。任一块取不到就整块不渲染，不影响搜索与目录主流程。
+ */
+const ads = ref<HomeAdDto[]>([]);
+const recommended = ref<HomeRecommendedCategoryDto[]>([]);
 /** 一次多取 1 条判断后端是否还有，用于「结果过多」引导而不是无限展开。 */
 const hasMore = ref(false);
 /** 图片 404 兜底：记录加载失败的 productId，命中后改用文字占位，避免破图。 */
@@ -536,6 +597,34 @@ async function loadProducts(): Promise<void> {
 
 function loadMall(): Promise<unknown> {
   return Promise.allSettled([loadCategories(), loadProducts()]);
+}
+
+/**
+ * 首页运营位：两个接口互不依赖，也都不影响主流程，用 allSettled 各自兜底。
+ * 失败时置空数组即可 —— 模板里 v-if 会整块隐藏，不显示空壳也不挤占版面。
+ */
+async function loadHome(): Promise<void> {
+  const [adsResult, recResult] = await Promise.allSettled([
+    homeApi.getAds(),
+    homeApi.getRecommendedCategories(),
+  ]);
+  ads.value = adsResult.status === 'fulfilled' && Array.isArray(adsResult.value) ? adsResult.value : [];
+  recommended.value =
+    recResult.status === 'fulfilled' && Array.isArray(recResult.value) ? recResult.value : [];
+}
+
+/** 服务端只下发语义目标，页面路径统一由本表映射，避免后端复制一份路由表 */
+const AD_TARGET_ROUTES: Record<HomeAdTarget, string> = {
+  mall: ROUTES.mall,
+  me: ROUTES.me,
+  none: '',
+};
+
+/** 广告位点击：none 表示纯展示位不跳转；站内路径统一交给 go 处理 tabBar 差异。 */
+function openAd(ad: HomeAdDto): void {
+  const url = AD_TARGET_ROUTES[ad.target];
+  if (!url) return;
+  go(url);
 }
 
 function clearSearchTimer(): void {
@@ -684,11 +773,12 @@ async function loadMeta(): Promise<void> {
 onLoad(() => {
   void loadMeta();
   void loadMall();
+  void loadHome();
 });
 
 /** 原生下拉刷新：同时刷新运行环境与精选目录，两者都落定后收起指示器 */
 onPullDownRefresh(() => {
-  void Promise.allSettled([loadMeta(), loadMall()]).then(() => uni.stopPullDownRefresh());
+  void Promise.allSettled([loadMeta(), loadMall(), loadHome()]).then(() => uni.stopPullDownRefresh());
 });
 </script>
 
@@ -928,6 +1018,189 @@ onPullDownRefresh(() => {
 /* ---------- 纸面 ---------- */
 .body {
   padding: $sp-5 $sp-3 0;
+}
+
+/* ---------- 运营位：广告位（home/ggs） ---------- */
+.ggs {
+  margin-top: $sp-4;
+}
+
+.ggs-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: $sp-2;
+  margin-bottom: $sp-2;
+}
+
+.ggs-kicker {
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  text-transform: uppercase;
+  color: $ink-4;
+}
+
+.ggs-note {
+  font-size: $fs-micro;
+  color: $ink-4;
+}
+
+/* 横向滑动：不显示原生滚动条，靠卡片被裁切的边缘暗示还能继续滑 */
+.ggs-strip {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.ggs-track {
+  display: flex;
+  gap: $sp-2;
+  padding-bottom: 4rpx;
+}
+
+.gg-card {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 420rpx;
+  min-height: 168rpx;
+  padding: $sp-3;
+  box-sizing: border-box;
+  /* 父级为横向滚动设了 nowrap，卡片内部要复位，否则长文案不换行会撑破卡片 */
+  white-space: normal;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+}
+
+.gg-img {
+  width: 100%;
+  height: 150rpx;
+  margin-bottom: $sp-2;
+  border-radius: $r-card;
+}
+
+.gg-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $sp-1;
+  margin-bottom: 8rpx;
+}
+
+.gg-badge {
+  padding: 4rpx 12rpx;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $brand-deep;
+  background: $brand-soft;
+  border-radius: $r-pill;
+}
+
+.gg-arrow {
+  font-size: $fs-meta;
+  color: $brand;
+}
+
+.gg-title {
+  display: block;
+  font-size: $fs-meta;
+  font-weight: 600;
+  line-height: $lh-snug;
+  color: $ink;
+}
+
+.gg-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: $fs-micro;
+  line-height: 1.5;
+  color: $ink-4;
+}
+
+/* ---------- 推荐分类（home/rcs） ---------- */
+.rec {
+  margin-top: $sp-5;
+}
+
+.rec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: $sp-2;
+  margin-bottom: $sp-2;
+}
+
+.rec-kicker {
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  text-transform: uppercase;
+  color: $brand;
+}
+
+.rec-note {
+  font-size: $fs-micro;
+  color: $ink-4;
+}
+
+.rec-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $sp-2;
+}
+
+.rec-card {
+  display: flex;
+  align-items: center;
+  gap: $sp-2;
+  min-width: 0;
+  padding: $sp-2;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
+}
+
+.rec-card--active {
+  border-color: $brand;
+  background: $brand-soft;
+}
+
+.rec-swatch {
+  display: flex;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  width: 72rpx;
+  height: 72rpx;
+  padding: 8rpx;
+  box-sizing: border-box;
+  border-radius: $r-pill;
+}
+
+.rec-no {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $on-solid;
+}
+
+.rec-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.rec-name {
+  font-size: $fs-meta;
+  font-weight: 600;
+  line-height: $lh-snug;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-count {
+  font-size: $fs-micro;
+  color: $ink-4;
 }
 
 .section {

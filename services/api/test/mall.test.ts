@@ -72,6 +72,60 @@ describe('商城：商品 / 购物车 / 订单', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('每页条数只接受 20/50/100，默认 20', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    for (let i = 1; i <= 3; i += 1) {
+      await ctx.store.mall.products.insert(product({ id: `ps-${i}`, title: `分页商品 ${i}`, sortNo: i }));
+    }
+
+    // 默认 20：3 条全部返回
+    const def = await app.inject({ method: 'GET', url: '/api/v1/mall/products' });
+    expect(def.statusCode).toBe(200);
+    expect(def.json().data).toHaveLength(3);
+
+    // 100 档合法，且一次取回全部
+    const max = await app.inject({ method: 'GET', url: '/api/v1/mall/products?pageSize=100' });
+    expect(max.statusCode).toBe(200);
+    expect(max.json().data).toHaveLength(3);
+
+    // 白名单之外的档位直接 422（30 / 101 / 0）；校验错误沿用全局约定的 422
+    for (const bad of ['30', '101', '0']) {
+      const res = await app.inject({ method: 'GET', url: `/api/v1/mall/products?pageSize=${bad}` });
+      expect(res.statusCode).toBe(422);
+    }
+  });
+
+  it('9 维筛选：ctgs 多选 OR，trts（牙别）多选 OR 且与其它维度 AND', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'dim-1', title: '全牙螺丝', category: 'featured', specs: { 牙别: '全牙', 表面处理: '发黑' } }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'dim-2', title: '半牙螺丝', category: 'featured', specs: { 牙别: '半牙', 表面处理: '发黑' } }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'dim-3', title: '全牙丝锥', category: 'digital', specs: { 牙别: '全牙', 表面处理: '镀锌' } }),
+    );
+
+    const ids = async (qs: string) => {
+      const res = await app!.inject({ method: 'GET', url: `/api/v1/mall/products?${qs}` });
+      expect(res.statusCode).toBe(200);
+      return (res.json().data as Array<{ id: string }>).map((p) => p.id).sort();
+    };
+
+    // ctgs：分类树节点多选，多值 OR（c1:featured / c1:digital）
+    expect(await ids('ctgs=c1:featured')).toEqual(['dim-1', 'dim-2']);
+    expect(await ids('ctgs=c1:featured,c1:digital')).toEqual(['dim-1', 'dim-2', 'dim-3']);
+    // trts：牙别多选，多值 OR
+    expect(await ids(`trts=${encodeURIComponent('半牙')}`)).toEqual(['dim-2']);
+    expect(await ids(`trts=${encodeURIComponent('全牙,半牙')}`)).toEqual(['dim-1', 'dim-2', 'dim-3']);
+    // 维度之间 AND：全牙 + 镀锌只命中丝锥；分类 + 牙别叠加同样收敛
+    expect(await ids(`trts=${encodeURIComponent('全牙')}&ttt=${encodeURIComponent('镀锌')}`)).toEqual(['dim-3']);
+    expect(await ids(`ctgs=c1:featured&trts=${encodeURIComponent('全牙')}`)).toEqual(['dim-1']);
+  });
+
   it('加购、改量、删除与库存上限校验', async () => {
     const ctx = await makeApp();
     app = ctx.app;
@@ -440,6 +494,250 @@ describe('下单幂等与超时取消', () => {
   });
 });
 
+describe('订单六态流转与用户取消（0018）', () => {
+  /** 下单夹具：单行、直接购买（不经过购物车）。 */
+  async function placeOrder(
+    instance: FastifyInstance,
+    token: string,
+    productId: string,
+    phone: string,
+  ): Promise<{ id: string; orderNo: string }> {
+    const res = await instance.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: {
+        receiverName: '周九',
+        receiverPhone: phone,
+        address: '浙江省宁波市镇海区六条路 9 号',
+        items: [{ productId, quantity: 1 }],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    return { id: res.json().data.id as string, orderNo: res.json().data.orderNo as string };
+  }
+
+  it('待支付订单可取消：落取消留痕并归还库存，重复取消幂等不重复归还', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-cx-1', title: '六态帆布袋', stock: 1, priceFen: 3900 }));
+    const token = await register(app, '13800002201');
+    const order = await placeOrder(app, token, 'mix-cx-1', '13800002201');
+
+    const cancel = await app.inject({
+      method: 'POST',
+      url: `/api/v1/mall/orders/${order.orderNo}/cancel`,
+      headers: auth(token),
+      payload: {},
+    });
+    expect(cancel.statusCode).toBe(200);
+    expect(cancel.json().data.status).toBe('cancelled');
+    // 未填原因时服务端补默认文案，并标记取消方为 user
+    expect(cancel.json().data.cancelReason).toBe('用户主动取消');
+    expect(cancel.json().data.cancelledBy).toBe('user');
+    expect(cancel.json().data.cancelledAt).toBeTruthy();
+
+    const stock = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-cx-1' });
+    expect(stock.json().data.stock).toBe(1);
+
+    // 重复取消：幂等返回当前订单，库存不会被二次归还
+    const again = await app.inject({
+      method: 'POST',
+      url: `/api/v1/mall/orders/${order.orderNo}/cancel`,
+      headers: auth(token),
+      payload: { reason: '再点一次' },
+    });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().data.status).toBe('cancelled');
+    expect(again.json().data.cancelReason).toBe('用户主动取消');
+    const stock2 = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-cx-1' });
+    expect(stock2.json().data.stock).toBe(1);
+  });
+
+  it('已分配拣货（picking_at 非空）不可取消；已发货、已完成同样拒绝并说明原因', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-cx-2', title: '六态保温杯', stock: 5, priceFen: 6900 }));
+    const token = await register(app, '13800002202');
+    const order = await placeOrder(app, token, 'mix-cx-2', '13800002202');
+
+    // 模拟后台已分配拣货
+    expect(await ctx.store.mall.orders.markStatusAt(order.id, 'pending', 'picking', new Date())).toBe(true);
+    const denied = await app.inject({
+      method: 'POST',
+      url: `/api/v1/mall/orders/${order.orderNo}/cancel`,
+      headers: auth(token),
+      payload: {},
+    });
+    expect(denied.statusCode).toBe(409);
+    expect(denied.json().error.message).toContain('拣货');
+
+    // 拣货 → 已发货：仍不可取消
+    expect(await ctx.store.mall.orders.markStatusAt(order.id, 'picking', 'shipped', new Date())).toBe(true);
+    const shipped = await app.inject({
+      method: 'POST',
+      url: `/api/v1/mall/orders/${order.orderNo}/cancel`,
+      headers: auth(token),
+      payload: {},
+    });
+    expect(shipped.statusCode).toBe(409);
+    expect(shipped.json().error.message).toContain('已发货');
+
+    // 已发货 → 已完成：终态同样拒绝
+    expect(await ctx.store.mall.orders.markStatusAt(order.id, 'shipped', 'completed', new Date())).toBe(true);
+    const done = await app.inject({
+      method: 'POST',
+      url: `/api/v1/mall/orders/${order.orderNo}/cancel`,
+      headers: auth(token),
+      payload: {},
+    });
+    expect(done.statusCode).toBe(409);
+    expect(done.json().error.message).toContain('已完成');
+
+    // 库存自始至终没有被归还（订单没有取消）
+    const stock = await app.inject({ method: 'GET', url: '/api/v1/mall/products/mix-cx-2' });
+    expect(stock.json().data.stock).toBe(4);
+  });
+});
+
+describe('收藏夹（0019）', () => {
+  it('默认收藏夹懒创建；同夹重复收藏幂等，条目带商品快照', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-fav-1', title: '收藏马克杯', stock: 3, priceFen: 4900 }));
+    const token = await register(app, '13800002301');
+
+    const empty = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+    });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json().data).toHaveLength(1);
+    const folder = empty.json().data[0] as { id: string; isDefault: boolean; itemCount: number };
+    expect(folder.isDefault).toBe(true);
+    expect(folder.itemCount).toBe(0);
+
+    // 连续收藏两次：幂等，条目数仍然只有 1
+    for (let i = 0; i < 2; i += 1) {
+      const added = await app.inject({
+        method: 'POST',
+        url: '/api/v1/mall/favorites/items',
+        headers: auth(token),
+        payload: { productId: 'mix-fav-1' },
+      });
+      expect(added.statusCode).toBe(201);
+      expect(added.json().data.productId).toBe('mix-fav-1');
+      expect(added.json().data.title).toBe('收藏马克杯');
+      expect(added.json().data.available).toBe(true);
+    }
+
+    const folders = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+    });
+    expect(folders.json().data[0].itemCount).toBe(1);
+    const items = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/items',
+      headers: auth(token),
+    });
+    expect(items.json().data).toHaveLength(1);
+    expect(items.json().data[0].priceFen).toBe(4900);
+  });
+
+  it('复制收藏夹、设默认、移除条目与清空；他人收藏夹按不存在处理', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-fav-2', title: '收藏帆布袋', stock: 5, priceFen: 1900 }));
+    const token = await register(app, '13800002302');
+
+    const folders0 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+    });
+    const defaultId = folders0.json().data[0].id as string;
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/favorites/items',
+      headers: auth(token),
+      payload: { productId: 'mix-fav-2' },
+    });
+
+    // 复制：条目一并带过去，副本不抢默认位
+    const copied = await app.inject({
+      method: 'POST',
+      url: `/api/v1/mall/favorites/folders/${defaultId}/copy`,
+      headers: auth(token),
+      payload: { name: '礼盒收藏' },
+    });
+    expect(copied.statusCode).toBe(201);
+    expect(copied.json().data.name).toBe('礼盒收藏');
+    expect(copied.json().data.isDefault).toBe(false);
+    expect(copied.json().data.itemCount).toBe(1);
+    const copyId = copied.json().data.id as string;
+
+    // 设默认：默认位从原夹转到副本，且全用户只有一个默认
+    const setDefault = await app.inject({
+      method: 'POST',
+      url: `/api/v1/mall/favorites/folders/${copyId}/default`,
+      headers: auth(token),
+    });
+    expect(setDefault.statusCode).toBe(200);
+    expect(setDefault.json().data.isDefault).toBe(true);
+    const folders1 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+    });
+    const flags = (folders1.json().data as Array<{ id: string; isDefault: boolean }>).filter((f) => f.isDefault);
+    expect(flags).toHaveLength(1);
+    expect(flags[0]?.id).toBe(copyId);
+
+    // 移除副本里的条目：幂等，再删一次仍返回成功
+    for (let i = 0; i < 2; i += 1) {
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/mall/favorites/items/mix-fav-2?folderId=${copyId}`,
+        headers: auth(token),
+      });
+      expect(removed.statusCode).toBe(200);
+    }
+    const copyItems = await app.inject({
+      method: 'GET',
+      url: `/api/v1/mall/favorites/folders/${copyId}/items`,
+      headers: auth(token),
+    });
+    expect(copyItems.json().data).toHaveLength(0);
+
+    // 清空原夹：收藏夹本身保留
+    const cleared = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/mall/favorites/folders/${defaultId}/items`,
+      headers: auth(token),
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json().data.removed).toBe(1);
+    const folders2 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+    });
+    expect(folders2.json().data).toHaveLength(2);
+
+    // 越权：另一个用户操作他人收藏夹一律 404
+    const otherToken = await register(app, '13800002303');
+    const forbidden = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/mall/favorites/folders/${defaultId}/items`,
+      headers: auth(otherToken),
+    });
+    expect(forbidden.statusCode).toBe(404);
+  });
+});
+
 describe('购物车行状态四态与三层优惠（0017）', () => {
   /** 直接写购物车行：L/X 行无法通过加购接口进入（会被 assertOrderable 拦住），用于构造四态夹具。 */
   async function seedCart(
@@ -798,5 +1096,37 @@ describe('购物车行状态四态与三层优惠（0017）', () => {
     // 不是从购物车结算，购物车原样保留
     expect(itemsAfter).toHaveLength(1);
     expect(itemsAfter[0]!.quantity).toBe(2);
+  });
+});
+
+describe('首页运营位（home/ggs、home/rcs）', () => {
+  it('广告位按 sortNo 升序下发；推荐分类只取真实类目并按商品数排序', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    // 造两个非演示类目：cat-a 2 件、cat-b 1 件；演示类目 featured 必须被推荐位过滤掉
+    await ctx.store.mall.products.insert(product({ id: 'home-a1', title: '首页A1', category: 'cat-a' }));
+    await ctx.store.mall.products.insert(product({ id: 'home-a2', title: '首页A2', category: 'cat-a' }));
+    await ctx.store.mall.products.insert(product({ id: 'home-b1', title: '首页B1', category: 'cat-b' }));
+
+    const ads = await app.inject({ method: 'GET', url: '/api/v1/home/ggs' });
+    expect(ads.statusCode).toBe(200);
+    const adList = ads.json().data as Array<{ id: string; sortNo: number; target: string }>;
+    expect(adList.length).toBeGreaterThan(0);
+    const sortNos = adList.map((ad) => ad.sortNo);
+    expect(sortNos).toEqual([...sortNos].sort((a, b) => a - b));
+
+    // limit=1：只回商品数最多的 cat-a，且带代表色（前端直接当背景色用，不能是空串）
+    const rec = await app.inject({ method: 'GET', url: '/api/v1/home/rcs?limit=1' });
+    expect(rec.statusCode).toBe(200);
+    const categories = rec.json().data as Array<{ code: string; count: number; cover: string }>;
+    expect(categories).toHaveLength(1);
+    expect(categories[0]?.code).toBe('cat-a');
+    expect(categories[0]?.count).toBe(2);
+    expect(categories[0]?.cover).toMatch(/^#/);
+
+    // 非法/越界 limit 一律按默认值收口，不报 422（首页运营位不值得为参数挡住整个首页）
+    const relaxed = await app.inject({ method: 'GET', url: '/api/v1/home/rcs?limit=999' });
+    expect(relaxed.statusCode).toBe(200);
+    expect((relaxed.json().data as unknown[]).length).toBeLessThanOrEqual(6);
   });
 });

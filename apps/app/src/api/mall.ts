@@ -78,6 +78,8 @@ export type MallSpecOptionsDto = {
   grds: string[];
   mtls: string[];
   ttts: string[];
+  /** 牙别（源站 trts 维度）候选值 */
+  trts: string[];
 };
 
 /**
@@ -273,6 +275,8 @@ export function yuanText(value: number | null | undefined): string {
 export type MallProductQuery = {
   category?: string;
   cat?: string;
+  /** 分类多选（源站 ctgs）：逗号分隔的分类树节点 id */
+  ctgs?: string;
   dims?: string;
   lens?: string;
   brand?: string;
@@ -280,6 +284,8 @@ export type MallProductQuery = {
   grd?: string;
   mtl?: string;
   ttt?: string;
+  /** 牙别多选（源站 trts）：逗号分隔的 specs.牙别 取值 */
+  trts?: string;
   keyword?: string;
   page?: number;
   pageSize?: number;

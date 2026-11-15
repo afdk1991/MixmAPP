@@ -48,7 +48,26 @@
         <text class="cat-entry-arrow mono">›</text>
       </view>
 
-      <!-- 筛选：直径/长度/品牌/标准/等级/材质/表面处理；选项来自商品真实取值，空维度不渲染 -->
+      <!-- 分类多选（源站 ccc_filter 的 ctgs 维度）：一级类目可多选，多值之间 OR -->
+      <view v-if="l1Nodes.length" class="spec-group">
+        <text class="spec-label mono">分类</text>
+        <scroll-view :scroll-x="true" class="chips chips--spec" :show-scrollbar="false">
+          <view class="chip chip--spec" :class="{ 'chip--active': !ctgs.length }" @tap="clearCtgs">
+            <text class="chip-label">不限</text>
+          </view>
+          <view
+            v-for="node in l1Nodes"
+            :key="`ctg-${node.id}`"
+            class="chip chip--spec"
+            :class="{ 'chip--active': ctgs.includes(node.id) }"
+            @tap="toggleCtg(node.id)"
+          >
+            <text class="chip-label">{{ node.name }}</text>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 筛选：直径/长度/品牌/标准/等级/材质/表面处理/牙别；选项来自商品真实取值，空维度不渲染 -->
       <view v-for="group in filterGroups" :key="group.key" class="spec-group">
         <text class="spec-label mono">{{ group.label }}</text>
         <scroll-view :scroll-x="true" class="chips chips--spec" :show-scrollbar="false">
@@ -100,8 +119,21 @@
 
     <view v-else>
       <view class="list-head">
-        <text class="micro mono">{{ products.length }} ITEMS</text>
-        <text class="micro mono">按上架顺序</text>
+        <text class="micro mono">{{ products.length }} ITEMS · 按上架顺序</text>
+        <!-- 每页条数切换（20/50/100）：无限滚动保留，切换后从第一页重新拉取 -->
+        <view class="page-size">
+          <text class="page-size-label mono">每页</text>
+          <view
+            v-for="size in PAGE_SIZE_OPTIONS"
+            :key="`ps-${size}`"
+            class="page-size-chip"
+            :class="{ 'page-size-chip--on': pageSize === size }"
+            hover-class="is-press"
+            @tap="selectPageSize(size)"
+          >
+            <text class="page-size-text mono">{{ size }}</text>
+          </view>
+        </view>
       </view>
       <view class="grid wrap">
         <view
@@ -292,11 +324,18 @@ import {
   specEntries,
   yuanText,
 } from '../../api/mall';
+import { PAGE_SIZE_OPTIONS as PAGE_SIZE_WHITELIST } from '@mixmapp/contracts';
 import { mallApi, productCover, coverTint } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 
-const PAGE_SIZE = 20;
+/**
+ * 每页条数可选档位（源站列表分页口径）：与 services/api 的 productQuerySchema 共用同一份白名单，
+ * 避免前端能选、服务端拒收。
+ */
+const PAGE_SIZE_OPTIONS = PAGE_SIZE_WHITELIST;
+/** 当前每页条数：默认 20，切换后重置分页（无限滚动只改变每次追加的条数） */
+const pageSize = ref<number>(20);
 
 /**
  * 分类三层下钻状态：l1/l2/l3 存分类树节点 id（c1:002 / c2:002:007 / c3:007）。
@@ -309,7 +348,7 @@ const l1Nodes = ref<MallCategoryNodeDto[]>([]);
 const l2Nodes = ref<MallCategoryNodeDto[]>([]);
 const l3Nodes = ref<MallCategoryNodeDto[]>([]);
 /** 筛选：选项全部来自 `/mall/specs` 里真实落库的取值，空维度不渲染。 */
-type FilterKey = 'dims' | 'lens' | 'brand' | 'std' | 'grd' | 'mtl' | 'ttt';
+type FilterKey = 'dims' | 'lens' | 'brand' | 'std' | 'grd' | 'mtl' | 'ttt' | 'trts';
 const FILTER_FIELDS: Array<{ key: FilterKey; label: string; field: keyof MallSpecOptionsDto }> = [
   { key: 'dims', label: '直径', field: 'dims' },
   { key: 'lens', label: '长度', field: 'lens' },
@@ -318,6 +357,8 @@ const FILTER_FIELDS: Array<{ key: FilterKey; label: string; field: keyof MallSpe
   { key: 'grd', label: '等级', field: 'grds' },
   { key: 'mtl', label: '材质', field: 'mtls' },
   { key: 'ttt', label: '表面处理', field: 'ttts' },
+  // 牙别（源站 ccc_filter 的 trts 维度）：单独成维，不与表面处理合并
+  { key: 'trts', label: '牙别', field: 'trts' },
 ];
 const filters = reactive<Record<FilterKey, string>>({
   dims: '',
@@ -327,6 +368,7 @@ const filters = reactive<Record<FilterKey, string>>({
   grd: '',
   mtl: '',
   ttt: '',
+  trts: '',
 });
 const filterOptions = reactive<Record<FilterKey, string[]>>({
   dims: [],
@@ -336,7 +378,21 @@ const filterOptions = reactive<Record<FilterKey, string[]>>({
   grd: [],
   mtl: [],
   ttt: [],
+  trts: [],
 });
+/** 分类多选（源站 ccc_filter 的 ctgs 维度）：存分类树节点 id，多值 OR，空数组表示不限 */
+const ctgs = ref<string[]>([]);
+
+function toggleCtg(id: string): void {
+  ctgs.value = ctgs.value.includes(id) ? ctgs.value.filter((v) => v !== id) : [...ctgs.value, id];
+  refresh();
+}
+
+function clearCtgs(): void {
+  if (!ctgs.value.length) return;
+  ctgs.value = [];
+  refresh();
+}
 const filterGroups = computed(() =>
   FILTER_FIELDS.map((f) => ({
     key: f.key,
@@ -592,6 +648,7 @@ async function fetchPage(reset: boolean): Promise<void> {
     // 可选登录态：登录后服务端才下发折后千支价与真实库存（源站 disbasePrc / bpInvQty 口径）
     const list = await fetchMallProducts({
       cat: activeCat.value || undefined,
+      ctgs: ctgs.value.length ? ctgs.value.join(',') : undefined,
       dims: filters.dims || undefined,
       lens: filters.lens || undefined,
       brand: filters.brand || undefined,
@@ -599,14 +656,15 @@ async function fetchPage(reset: boolean): Promise<void> {
       grd: filters.grd || undefined,
       mtl: filters.mtl || undefined,
       ttt: filters.ttt || undefined,
+      trts: filters.trts || undefined,
       keyword: keyword.value.trim() || undefined,
       page: page.value,
-      pageSize: PAGE_SIZE,
+      pageSize: pageSize.value,
     });
     // 接口异常或网关返回非 JSON 时保持空数组，避免模板读取 length 时报错白屏
     const rows = Array.isArray(list) ? list : [];
     products.value = reset ? rows : [...products.value, ...rows];
-    if (rows.length < PAGE_SIZE) noMore.value = true;
+    if (rows.length < pageSize.value) noMore.value = true;
     else page.value += 1;
   } catch (e) {
     if (reset) {
@@ -653,6 +711,13 @@ function onSearch(): void {
 
 function loadMore(): void {
   void fetchPage(false);
+}
+
+/** 切换每页条数：重置分页后重新拉取，已加载的旧条数不保留（避免 20→100 时出现半页重复）。 */
+function selectPageSize(size: number): void {
+  if (pageSize.value === size) return;
+  pageSize.value = size;
+  refresh();
 }
 
 function coverOf(product: MallProductDto): string {
@@ -1165,8 +1230,46 @@ onPullDownRefresh(() => {
 /* ---------- 目录索引卡 ---------- */
 .list-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: $sp-2 0 $sp-3;
+}
+
+/* ---------- 每页条数切换（20 / 50 / 100） ---------- */
+.page-size {
+  display: flex;
+  align-items: center;
+}
+
+.page-size-label {
+  margin-right: 10rpx;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-4;
+}
+
+.page-size-chip {
+  margin-left: 8rpx;
+  padding: 6rpx 16rpx;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+}
+
+.page-size-chip--on {
+  background: $brand-soft;
+  border-color: transparent;
+}
+
+.page-size-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.page-size-chip--on .page-size-text {
+  color: $brand-deep;
+  font-weight: 600;
 }
 
 .wrap {

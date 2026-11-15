@@ -104,14 +104,36 @@ describe('内嵌只读目录源（fixture 夹具）', () => {
     expect(kw.json().data).toHaveLength(1);
     expect(kw.json().data[0].brand).toBe('OSG');
 
+    // 搜索口径：多词 AND 顺序无关、全半角/大小写归一、规格等价
+    const search = async (keyword: string) => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/mall/products?keyword=${encodeURIComponent(keyword)}&pageSize=50`,
+      });
+      return (res.json().data as AnyProduct[]).map((p) => p.id);
+    };
+    const both = await search('内六角 12.9');
+    expect(both).toHaveLength(1);
+    expect(await search('12.9 内六角')).toEqual(both);
+    expect(await search('Ｍ６')).toHaveLength(1);
+    expect(await search('１２.9')).toEqual(both);
+    // M6×20 的等价写法都应命中同一条
+    for (const form of ['M6-1.0x20', 'M6x20', '6x20', '6*20', 'M6×20']) {
+      expect(await search(form), form).toHaveLength(1);
+    }
+    // 细牙 0.5 不能被当成默认粗牙吞掉
+    expect(await search('M12x1.5')).toHaveLength(1);
+    expect(await search('M12x1')).toHaveLength(0);
+
     const cat = await app.inject({ method: 'GET', url: '/api/v1/mall/products?category=eg-screw&pageSize=50' });
     expect(cat.json().data).toHaveLength(1);
     expect(cat.json().data[0].category).toBe('eg-screw');
 
     // 逐页取（含越界页），顺序稳定、不重不漏
+    // pageSize 只允许 20/50/100（源站列表每页条数口径），这里用 20：第 1 页拿全 3 条，第 2 页为空
     const ids: string[] = [];
-    for (let page = 1; page <= 4; page += 1) {
-      const r = await app.inject({ method: 'GET', url: `/api/v1/mall/products?page=${page}&pageSize=1` });
+    for (let page = 1; page <= 2; page += 1) {
+      const r = await app.inject({ method: 'GET', url: `/api/v1/mall/products?page=${page}&pageSize=20` });
       ids.push(...(r.json().data as AnyProduct[]).map((p) => p.id));
     }
     expect(ids).toHaveLength(3);
@@ -239,12 +261,35 @@ describe('内嵌目录源（真实 15,037 条 catalog.json）', () => {
       }
       expect(seen.size).toBe(15037);
 
-      const kw = await app.inject({ method: 'GET', url: '/api/v1/mall/products?keyword=UTOOL&pageSize=3' });
+      const kw = await app.inject({ method: 'GET', url: '/api/v1/mall/products?keyword=UTOOL&pageSize=20' });
       expect((kw.json().data as AnyProduct[]).some((p) => p.brand === 'UTOOL')).toBe(true);
 
-      const first = await app.inject({ method: 'GET', url: '/api/v1/mall/products?page=1&pageSize=3' });
+      // 项目号：12 位全码精确、6 位段码前缀、7~11 位中间片段不匹配
+      const full = await app.inject({ method: 'GET', url: '/api/v1/mall/products?keyword=110001030004' });
+      expect((full.json().data as AnyProduct[])).toHaveLength(1);
+      expect((full.json().data as AnyProduct[])[0]!.specs?.['规格']).toBe('M3-0.5x4');
+      const seg = await app.inject({ method: 'GET', url: '/api/v1/mall/products?keyword=110001&pageSize=50' });
+      expect((seg.json().data as AnyProduct[]).length).toBeGreaterThan(1);
+      const mid = await app.inject({ method: 'GET', url: '/api/v1/mall/products?keyword=1100010' });
+      expect((mid.json().data as AnyProduct[])).toHaveLength(0);
+
+      // 规格等价：M6-1.0x8 / M6x8 / 6x8 / 6*8 / M6×8 结果集完全一致
+      const specIds = async (keyword: string) => {
+        const r = await app.inject({
+          method: 'GET',
+          url: `/api/v1/mall/products?keyword=${encodeURIComponent(keyword)}&pageSize=50`,
+        });
+        return (r.json().data as AnyProduct[]).map((p) => p.id).sort();
+      };
+      const base = await specIds('M6-1.0x8');
+      expect(base.length).toBe(26);
+      for (const form of ['M6x8', '6x8', '6*8', 'M6×8']) {
+        expect(await specIds(form), form).toEqual(base);
+      }
+
+      const first = await app.inject({ method: 'GET', url: '/api/v1/mall/products?page=1&pageSize=20' });
       const products = first.json().data as AnyProduct[];
-      expect(products).toHaveLength(3);
+      expect(products.length).toBeGreaterThanOrEqual(3);
       const p = products[0]!;
       expect(p.sourceUrl).toBeUndefined();
       expect(p.brand).toBeTruthy();

@@ -5,6 +5,12 @@ import { fileURLToPath } from 'node:url';
 import type { ProductDto, ProductQueryInput } from '@mixmapp/contracts';
 import { projectRoot, type Config } from '../config.js';
 import type { Store } from '../db/types.js';
+import {
+  buildSearchIndexRow,
+  buildSearchTokens,
+  matchesSearchTokens,
+  type SearchIndexRow,
+} from '../lib/search.js';
 
 /**
  * 内嵌只读商品目录源。
@@ -79,7 +85,7 @@ export class CatalogSource {
   private all: ProductDto[] = [];
   private byId = new Map<string, ProductDto>();
   private byCategory = new Map<string, ProductDto[]>();
-  private search = new Map<string, string>();
+  private search = new Map<string, SearchIndexRow>();
   private categories: CatalogCategory[] = [];
 
   constructor(
@@ -263,7 +269,7 @@ export class CatalogSource {
     const crawledAt = raw.meta?.crawledAt ?? new Date(0).toISOString();
     const byCode = new Map<string, number>();
     const items: ProductDto[] = [];
-    const search = new Map<string, string>();
+    const search = new Map<string, SearchIndexRow>();
     const usedIds = new Set<string>();
 
     for (const p of raw.products) {
@@ -327,9 +333,19 @@ export class CatalogSource {
       };
       items.push(dto);
 
-      const parts: string[] = [p.name, p.subtitle ?? '', brand, p.sourceId ?? ''];
-      for (const [key, value] of Object.entries(specs)) parts.push(key, value);
-      search.set(id, parts.join(' ').toLowerCase());
+      // 搜索索引与 DB 读路径共用 lib/search 的归一口径：
+      // 全半角/大小写归一、AND 分词、项目号 12/6 位规则、规格等价（M6-1.0x8 ≡ M6x8 ≡ 6*8）。
+      search.set(
+        id,
+        buildSearchIndexRow({
+          title: p.name,
+          subtitle: p.subtitle ?? '',
+          brand,
+          specs,
+          sourceId: p.sourceId ?? null,
+          sourceKey: p.sourceKey,
+        }),
+      );
 
       byCode.set(p.categoryCode, (byCode.get(p.categoryCode) ?? 0) + 1);
     }
@@ -353,14 +369,18 @@ export class CatalogSource {
       .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   }
 
-  /** 公开读：category（一级 code）、keyword（name/subtitle/brand/specs/sourceId）、page/pageSize。 */
+  /**
+   * 公开读：category（一级 code）、keyword、page/pageSize。
+   * keyword 口径见 lib/search：多词 AND（顺序无关）、项目号 12/6 位、规格等价、全半角/大小写归一。
+   */
   listProducts(query: ProductQueryInput): ProductDto[] {
     const base = query.category ? (this.byCategory.get(query.category) ?? []) : this.all;
-    const keyword = query.keyword?.toLowerCase();
+    const tokens = buildSearchTokens(query.keyword);
     const offset = (query.page - 1) * query.pageSize;
     const matched: ProductDto[] = [];
     for (const item of base) {
-      if (keyword && !this.search.get(item.id)?.includes(keyword)) continue;
+      const index = this.search.get(item.id);
+      if (tokens.length && (!index || !matchesSearchTokens(index, tokens))) continue;
       matched.push(item);
     }
     return matched.slice(offset, offset + query.pageSize);

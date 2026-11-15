@@ -232,6 +232,25 @@ export type OrderItemRecord = {
   lineStatus?: StoredCartLineStatus;
 };
 
+/** 收藏夹（0019）：一个用户可建多个，恰好一个为默认收藏夹 */
+export type FavoriteFolderRecord = {
+  id: string;
+  userId: string;
+  name: string;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** 收藏条目（0019）：只存商品引用，不落价格快照 */
+export type FavoriteItemRecord = {
+  id: string;
+  folderId: string;
+  userId: string;
+  productId: string;
+  createdAt: Date;
+};
+
 /**
  * 满减梯度档位（0017）：`min~max → percent%`，金额单位统一为分。
  * min 含、max 不含，max 为 null 表示无上限。
@@ -251,7 +270,8 @@ export type OrderRecord = {
   id: string;
   orderNo: string;
   userId: string;
-  status: 'pending' | 'paid' | 'cancelled';
+  /** 六态订单状态（0018）：pending/paid/picking/shipped/completed/cancelled */
+  status: 'pending' | 'paid' | 'picking' | 'shipped' | 'completed' | 'cancelled';
   totalFen: number;
   receiverName: string;
   receiverPhone: string;
@@ -271,6 +291,18 @@ export type OrderRecord = {
   discountTotalFen?: number;
   createdAt: Date;
   paidAt: Date | null;
+  /** 进入拣货时间（0018）：非空即已分配拣货，此后禁止取消 */
+  pickingAt?: Date | null;
+  /** 发货时间（0018） */
+  shippedAt?: Date | null;
+  /** 完成时间（0018） */
+  completedAt?: Date | null;
+  /** 取消时间（0018） */
+  cancelledAt?: Date | null;
+  /** 取消原因（0018） */
+  cancelReason?: string | null;
+  /** 取消方（0018）：user / system / admin */
+  cancelledBy?: 'user' | 'system' | 'admin' | null;
 };
 
 /** 账号合并的触发原因；审计与前端提示都依赖它。 */
@@ -400,6 +432,8 @@ export type Store = {
       list(filter: {
         category?: string;
         cat?: string;
+        /** 分类多选（源站 ctgs）：节点 id 数组，多值 OR，每个节点按子孙收敛 */
+        ctgs?: string[];
         dims?: string;
         lens?: string;
         brand?: string;
@@ -407,6 +441,8 @@ export type Store = {
         grd?: string;
         mtl?: string;
         ttt?: string;
+        /** 牙别多选（源站 trts）：specs.牙别 的取值数组，多值 OR */
+        trts?: string[];
         keyword?: string;
         limit: number;
         offset: number;
@@ -429,6 +465,8 @@ export type Store = {
         grds: string[];
         mtls: string[];
         ttts: string[];
+        /** 牙别（源站 trts 维度）候选值 */
+        trts: string[];
       }>;
       /**
        * 是否存在「真实目录商品」：以 source_key 非空为判据（0002 演示品、测试夹具都不带）。
@@ -491,6 +529,23 @@ export type Store = {
       listExpiredPending(before: Date): Promise<OrderRecord[]>;
       /** 条件状态流转：只有当前状态等于 from 才改成 to，返回是否真的改了（并发安全） */
       transitionStatus(orderId: string, from: OrderRecord['status'], to: OrderRecord['status']): Promise<boolean>;
+      /**
+       * 取消订单（0018）：仅当当前状态命中 fromStatuses 且 picking 未发生（picking_at 为空）时才写入，
+       * 同时落 cancelled_at / cancel_reason / cancelled_by；返回是否真的改了（并发安全 + 幂等）。
+       */
+      cancel(
+        orderId: string,
+        fromStatuses: OrderRecord['status'][],
+        reason: string,
+        by: NonNullable<OrderRecord['cancelledBy']>,
+      ): Promise<boolean>;
+      /** 状态流转打点（0018）：picking/shipped/completed 时写入对应时间戳；返回是否真的改了 */
+      markStatusAt(
+        orderId: string,
+        from: OrderRecord['status'],
+        to: OrderRecord['status'],
+        at: Date,
+      ): Promise<boolean>;
     };
     /** 下单幂等表：claim 占位 → attach 回写 order_no，并发重试不会重复扣库存 */
     orderRequests: {
@@ -501,6 +556,30 @@ export type Store = {
       release(userId: string, key: string): Promise<void>;
       /** 账号合并：次账号的幂等占位整体丢弃（合并后旧键不再有意义） */
       dropByUser(userId: string): Promise<void>;
+    };
+    /** 收藏夹（0019）：多收藏夹 + 条目，条目只存商品引用 */
+    favorites: {
+      listFolders(userId: string): Promise<FavoriteFolderRecord[]>;
+      findFolder(userId: string, folderId: string): Promise<FavoriteFolderRecord | null>;
+      /** 同一用户最多一个默认收藏夹由部分唯一索引兜底；插入默认夹前需先清掉旧默认 */
+      insertFolder(folder: FavoriteFolderRecord): Promise<FavoriteFolderRecord>;
+      /** 改名 / 改默认（只允许这两个字段），归属不匹配返回 null */
+      updateFolder(
+        userId: string,
+        folderId: string,
+        patch: { name?: string; isDefault?: boolean },
+      ): Promise<FavoriteFolderRecord | null>;
+      /** 设默认：一条 update 把该用户全部收藏夹改写成「仅目标为 true」，规避两条语句竞态 */
+      setDefault(userId: string, folderId: string): Promise<FavoriteFolderRecord | null>;
+      listItems(folderId: string): Promise<FavoriteItemRecord[]>;
+      /** 加条目：同一收藏夹内重复收藏返回已有行（幂等） */
+      insertItem(item: FavoriteItemRecord): Promise<FavoriteItemRecord>;
+      /** 删条目：返回是否真的删掉了 */
+      deleteItem(folderId: string, productId: string): Promise<boolean>;
+      /** 清空某收藏夹的条目，返回删除条数 */
+      clearItems(folderId: string): Promise<number>;
+      /** 条目数统计（收藏夹列表用） */
+      countItems(folderId: string): Promise<number>;
     };
   };
   /** 账号合并审计与快照；同一 mergeKey 只允许一条记录 */
