@@ -219,7 +219,7 @@ export function formatCapturedAt(iso?: string): string {
 }
 
 /** 询价商品的统一说明文案：详情弹窗 / 加购拦截共用。 */
-export const INQUIRY_NOTICE = '该商品为目录选品，价格需联系报价确认，暂不支持直接加入购物车或下单。';
+export const INQUIRY_NOTICE = '该商品为询价商品，价格需联系报价确认，暂不支持直接加入购物车或下单。';
 
 /** 源站未登录时的统一占位文案（disbasePrc / bpInvQty / invStatus 三列同文案）。 */
 export const LOGIN_VISIBLE_TEXT = '登录可见';

@@ -6,7 +6,7 @@
         <view class="head-title">
           <text class="eyebrow">MIXMAPP STORE</text>
           <text class="title">商城</text>
-          <text class="count mono">目录 · {{ products.length }} 件</text>
+          <text class="count mono">商品 · {{ products.length }} 件</text>
         </view>
         <view class="cart-btn" hover-class="is-press" @tap="goCart">
           <text class="cart-text">购物车</text>

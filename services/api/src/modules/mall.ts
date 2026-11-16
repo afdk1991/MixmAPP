@@ -66,7 +66,7 @@ const HOME_ADS: HomeAdDto[] = [
     subtitle: '从大类进，再看细分规格',
     image: '',
     target: 'mall',
-    badge: '逛目录',
+    badge: '逛商城',
     sortNo: 10,
   },
   {

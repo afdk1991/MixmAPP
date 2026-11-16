@@ -221,7 +221,7 @@
         </view>
 
         <view class="note">
-          <text class="micro mono">MIXMAPP · 目录选品 · 报价以对接确认为准</text>
+          <text class="micro mono">MIXMAPP · 精选商品 · 报价以对接确认为准</text>
         </view>
       </view>
 

@@ -18,7 +18,7 @@
         <view class="hero-grid">
           <view class="hero-main">
             <view class="hero-eyebrow-row">
-              <text class="hero-eyebrow mono">MIXMAPP 五金目录</text>
+              <text class="hero-eyebrow mono">MIXMAPP 五金商品</text>
               <!-- 状态只给用户能理解的两种说法，不暴露内部链路术语 -->
               <view class="hero-badge" :class="{ 'hero-badge--off': !online }">
                 <view class="hero-badge-dot" />
@@ -27,7 +27,7 @@
             </view>
 
             <view class="hero-title-wrap">
-              <text class="hero-title">五金目录，</text>
+              <text class="hero-title">五金商品，</text>
               <text class="hero-title hero-title--accent">一搜就到。</text>
             </view>
             <text class="hero-lede">输入名称、规格或项目号，结果直接出现在下面；想慢慢挑，也可以从类目进去看。</text>
@@ -211,7 +211,7 @@
             <view class="sec-head-l">
               <view class="sec-kicker">
                 <text class="sec-no mono">01</text>
-                <text class="sec-cap mono">{{ searchActive ? '搜索结果' : '商品目录' }}</text>
+                <text class="sec-cap mono">{{ searchActive ? '搜索结果' : '商品列表' }}</text>
               </view>
               <text class="sec-title">{{ searchActive ? '搜索结果' : '按类找货' }}</text>
             </view>
@@ -327,7 +327,7 @@
             <view v-else-if="products.length === 0" class="pick-state">
               <view class="pick-state-mark">空</view>
               <text class="pick-state-title">这一类暂时没有商品</text>
-              <text class="pick-state-sub">换个类目看看，或进商城浏览完整目录。</text>
+              <text class="pick-state-sub">换个类目看看，或进商城浏览全部商品。</text>
             </view>
 
             <view v-else class="pick-grid">
@@ -488,7 +488,7 @@
 
         <view class="footer">
           <view class="foot-rule" />
-          <text class="foot-line mono">五金目录 · 手机与电脑通用</text>
+          <text class="foot-line mono">五金商品 · 手机与电脑通用</text>
           <text class="foot-line foot-line--dim mono">{{ releaseLabel }}</text>
         </view>
       </view>
@@ -618,7 +618,7 @@ const totalCountText = computed(() => (totalCount.value > 0 ? totalCount.value.t
  * 合计为 0（分类还没加载 / 接口失败）时回落到不带数字的文案，避免出现「查看全部 0 件」。
  */
 const catalogAllLabel = computed(() =>
-  totalCount.value > 0 ? `去商城看全部 ${totalCountText.value} 件商品` : '去商城浏览完整目录',
+  totalCount.value > 0 ? `去商城看全部 ${totalCountText.value} 件商品` : '去商城浏览全部商品',
 );
 
 /* ---------- 搜索：输入即检（320ms 防抖），提交/点按立即检索 ----------
