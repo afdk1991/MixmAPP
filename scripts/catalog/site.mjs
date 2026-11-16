@@ -14,14 +14,19 @@ const UA =
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** 图片变体 → 角色。第一张是封面，spec 是规格图。 */
+/**
+ * 图片变体 → 角色。第一张是封面，spec 是规格图。
+ *
+ * 一律取 `_l`（1000×1000）：详情页大图按 390 CSS 宽 ×3 倍屏要 ~1170px，
+ * 旧配置里第 2-4 张取的是 `_s`（80×80），放大后必然糊。
+ * fallbacks 只在该档 404 时降级，避免个别类目直接没图。
+ */
 export const IMAGE_VARIANTS = [
-  { variant: 'img1_l', role: 'cover' },
-  { variant: 'img1_m', role: 'gallery' },
-  { variant: 'img2_s', role: 'gallery' },
-  { variant: 'img3_s', role: 'gallery' },
-  { variant: 'img4_s', role: 'gallery' },
-  { variant: 'spec', role: 'spec' },
+  { variant: 'img1_l', role: 'cover', fallbacks: ['img1_m', 'img1_s'] },
+  { variant: 'img2_l', role: 'gallery', fallbacks: ['img2_m', 'img2_s'] },
+  { variant: 'img3_l', role: 'gallery', fallbacks: ['img3_m', 'img3_s'] },
+  { variant: 'img4_l', role: 'gallery', fallbacks: ['img4_m', 'img4_s'] },
+  { variant: 'spec', role: 'spec', fallbacks: [] },
 ];
 
 function magicExt(buffer) {
@@ -181,13 +186,19 @@ export function createClient(cfg, log) {
     return null;
   }
 
-  /** 类目画廊：6 个固定变体，失败不影响主流程。 */
+  /** 类目画廊：固定变体，逐档降级，失败不影响主流程。 */
   async function galleryForC3(c3) {
     if (!cfg.downloadImages) return [];
     const entries = [];
     for (const item of IMAGE_VARIANTS) {
-      const got = await downloadImage(`${UPLOAD}/item/c3/${c3}/${item.variant}`, item.role);
-      if (got) entries.push(got);
+      // 先取高清档，404 才退到下一档，避免整类目缺图
+      for (const name of [item.variant, ...(item.fallbacks || [])]) {
+        const got = await downloadImage(`${UPLOAD}/item/c3/${c3}/${name}`, item.role);
+        if (got) {
+          entries.push(got);
+          break;
+        }
+      }
     }
     return entries;
   }

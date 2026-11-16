@@ -86,9 +86,15 @@ export async function fetchItem(client, no, delayMs) {
   }
 }
 
+/** 旧版本画廊缓存的第 2-4 张是 80×80 的 `_s`，复用会让详情页继续模糊，命中就重采。 */
+function isStaleGallery(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return true;
+  return entries.some((e) => String(e?.remote || '').endsWith('_s'));
+}
+
 /** 类目画廊（按 c3 缓存到 gallery.json，跨运行复用） */
 export async function collectGallery(client, cfg, c3, cache) {
-  if (cache[c3]) return cache[c3];
+  if (cache[c3] && !isStaleGallery(cache[c3])) return cache[c3];
   const entries = await client.galleryForC3(c3);
   cache[c3] = entries;
   writeAtomic(path.join(cfg.stateDir, 'gallery.json'), cache);
@@ -146,9 +152,9 @@ export async function collectCatalog(client, cfg, log) {
     }
     scanned += siteCount;
 
-    // 画廊按 c3 复用缓存；只有开启下载且缓存缺失时才出网，避免 --no-images 把已有图片清空
-    let gallery = galleryCache[c3] || [];
-    if (rows.length > 0 && cfg.downloadImages && !galleryCache[c3]) {
+    // 画廊按 c3 复用缓存；只有开启下载且缓存缺失/过期时才出网，避免 --no-images 把已有图片清空
+    let gallery = galleryCache[c3] && !isStaleGallery(galleryCache[c3]) ? galleryCache[c3] : [];
+    if (rows.length > 0 && cfg.downloadImages && isStaleGallery(galleryCache[c3])) {
       try {
         gallery = await collectGallery(client, cfg, c3, galleryCache);
       } catch (e) {
