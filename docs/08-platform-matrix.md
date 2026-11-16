@@ -16,7 +16,7 @@
 | Vercel | 静态端 / Serverless | ⏳ | 需 `VERCEL_TOKEN`（及 `VERCEL_ORG_ID`/`PROJECT_ID`） |
 | Sealos | 容器化部署 API | ⏳ 镜像已就绪 | 直接拉 `ghcr.io/afdk1991/mixmapp:latest`；需 Sealos 账号或部署 token |
 | IGA Pages | 静态托管 | ⏳ | 需 `iga` CLI（≥1.1.0）+ 登录态或 AK/SK |
-| 腾讯云自建服务器（**生产**） | H5（`www`）+ API（`api`）双域；`cloud` 切换期 legacy | ✅ 现状 / ⏳ 新域待解析 | 现状：<https://cloud.mixm.top/>（HTTP 200，472 KB，history 深链接 200）；API `https://cloud.mixm.top/mixmapp/api/v1/healthz` 200；`deploy` 工作流 run 43434486004，H5 与 API 同一 release 原子发布。目标：`www.mixm.top` / `api.mixm.top` / `img.mixm.top`，Nginx 蓝图已就绪，只差解析与证书；切换序列见 `2026-11-14/deploy-domains/outputs/切换与回退序列.md` |
+| 腾讯云自建服务器（**生产**） | H5（`www`）+ API（`api`）双域；`cloud` 兼容入口（在用） | ✅ 现状 / ⏳ 新域待解析 | 现状：<https://cloud.mixm.top/>（HTTP 200，472 KB，history 深链接 200）；API `https://cloud.mixm.top/mixmapp/api/v1/healthz` 200；`deploy` 工作流 run 43434486004，H5 与 API 同一 release 原子发布。目标：`www.mixm.top` / `api.mixm.top` / `img.mixm.top`，Nginx 蓝图已就绪，只差解析与证书；切换序列见 `2026-11-14/deploy-domains/outputs/切换与回退序列.md` |
 
 ## 平台命名规范（本轮统一）
 
@@ -38,7 +38,7 @@
 
 ## 域名注册表（已确定）
 
-主域沿用 `mixm.top`，主入口是 `www.mixm.top`（2026-11-14 定案改版；裸域 301 到 www）。`cloud.mixm.top` 降级为切换期 legacy，不再作主入口、也不再作 API 宿主。机器可读的单一真源是 [deploy/domains.json](../deploy/domains.json)，改动后跑 `pnpm domains:check` 做门禁。
+主域沿用 `mixm.top`，主入口是 `www.mixm.top`（2026-11-14 定案改版；裸域 301 到 www）。`cloud.mixm.top` 降级为兼容入口（在用），不再作主入口、也不再作新包 API 宿主。机器可读的单一真源是 [deploy/domains.json](../deploy/domains.json)，改动后跑 `pnpm domains:check` 做门禁。
 
 | 域名 | 角色 | 状态 | 说明 |
 |---|---|---|---|
@@ -46,7 +46,7 @@
 | `mixm.top`（裸域） | 301 → `https://www.mixm.top` | ⏳ 待建解析/证书 | 只做跳转，不承载页面与 API |
 | `api.mixm.top` | **后端 API + 支付回调** | ⏳ 待建解析/证书 | 表内 sourceRows 9/10；`/mixmapp/api/v1` 与 `/api/v1` 同上游 |
 | `img.mixm.top` | 静态资源与图片 | ⏳ 待建解析/证书 | 表内 sourceRows 37/38；直出 `/var/lib/mixmapp/storage/` |
-| `cloud.mixm.top` | **legacy 双跑** | ✅ 在用（待下线） | 切换期承载已发布 APK 与存量支付回调；零流量后再下线 |
+| `cloud.mixm.top` | **兼容入口** | ✅ 在用（兼容入口） | 只承载存量 H5 与旧 APK 内嵌基址（`/mixmapp/api/v1`、`/media/`）；近两日仍有真实会话，故保留，不作新包 API 宿主 |
 | `mim.mixm.top` | 其他项目 | 未使用 | 同根域表内主机；仓库内无引用，MixmAPP 不接管 |
 | `data.mixm.top` | 其他项目 | 未使用 | 同上 |
 | `gy.mixm.top` | 其他项目 | 未使用 | 同上 |
@@ -79,7 +79,7 @@
 
 ## 主域 + 子域职责分配（2026-11-14 定案）
 
-**主域：`mixm.top`；主入口：`www.mixm.top`；裸域 `mixm.top` 301 → `https://www.mixm.top`。** 理由：主入口收敛到 www（表内 sourceRows 5/6，备注「主站常规访问入口｜官方门户网站」），H5 与 API 拆成两个域、职责单一；`cloud.mixm.top` 不再保留为主入口、也不再是 API 宿主，只在切换期作 legacy 双跑，承载已发布 APK 与存量支付回调，确认零流量后下线。`laal.top` 明确不参与；`mix.top` 是拼写域。
+**主域：`mixm.top`；主入口：`www.mixm.top`；裸域 `mixm.top` 301 → `https://www.mixm.top`。** 理由：主入口收敛到 www（表内 sourceRows 5/6，备注「主站常规访问入口｜官方门户网站」），H5 与 API 拆成两个域、职责单一；`cloud.mixm.top` 不再保留为主入口、也不再是新包 API 宿主，只作兼容入口（在用），承载存量 H5 与旧 APK 内嵌基址，近两日仍有真实会话，故不下线。`laal.top` 明确不参与；`mix.top` 是拼写域。
 
 机器可读版本在 `deploy/domains.json` 的 `domainArchitecture`（含 `primaryHost`、`rootRedirect`、`platformAssignments`、`matrix`），改动后跑 `pnpm domains:check`。
 
@@ -97,7 +97,7 @@
 | 支付与回调 | `api.mixm.top/mixmapp/api/v1/pay/notify/*` | 是 | ⏳ 待建解析/证书 | 回调域变更须同步微信/支付宝商户平台并重新验签；双跑期 cloud 同路径必须保持可用；`pay.mixm.top` 保持规划 |
 | 邮箱与验证 | — | 否 | 不分配 | 表内无 mail/smtp 主机，按「不造域名」原则不分配；事务邮件走第三方。`_dnsauth.*` / `edgeonereclaim.*` 7 条是平台回源校验，不用于邮箱 |
 
-**本轮启用 3 个主机：`www.mixm.top`、`api.mixm.top`、`img.mixm.top`；`mixm.top` 只做 301。** 判据是「xls 表内已有主机名 + 服务端能力已存在 + 不需要新业务代码」，其余 38 个保持 `planned_no_dns` 不动。`cloud.mixm.top` 标 `legacy_dual_run`，不立即删除。
+**本轮启用 3 个主机：`www.mixm.top`、`api.mixm.top`、`img.mixm.top`；`mixm.top` 只做 301。** 判据是「xls 表内已有主机名 + 服务端能力已存在 + 不需要新业务代码」，其余 38 个保持 `planned_no_dns` 不动。`cloud.mixm.top` 标 `active_legacy_compat`（兼容入口，在用）。
 
 ### 平台 × 域名 × 环境矩阵
 
@@ -107,11 +107,11 @@
 | 腾讯云自建服务器（Nginx） | `mixm.top` | 正式（301 → www） | 待建解析/证书 |
 | 腾讯云自建服务器（Nginx） | `api.mixm.top` | 正式 | 待建解析/证书（Nginx 已就绪） |
 | 腾讯云自建服务器（Nginx） | `img.mixm.top` | 正式 | 待建解析/证书（Nginx 已就绪） |
-| 腾讯云自建服务器（Nginx） | `cloud.mixm.top` | 正式（legacy 双跑） | 在用，待下线 |
+| 腾讯云自建服务器（Nginx） | `cloud.mixm.top` | 兼容入口（在用） | 在用（兼容入口） |
 | 腾讯云自建服务器（Nginx） | `test.mixm.top` / `dev.mixm.top` | 预览灰度 / 开发 | 规划未接线 |
 | GitHub Pages | `afdk1991.github.io/MixmAPP/` | 预览 | 活的（表外域名） |
 | CloudBase 静态托管 | `mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com` | 预览 | 暂停（表外域名） |
-| CloudBase 云函数 `mixmapp-api-proxy` | 回源优先 `api.mixm.top`，回退 `cloud.mixm.top` | 正式 | 待重新发布（代码已改） |
+| CloudBase 云函数 `mixmapp-api-proxy` | 回源 `api.mixm.top`（cloud 候选已于 2026-11-15 移除） | 正式 | 待重新发布（代码已改） |
 | Android（Capacitor 壳） | 旧包 `cloud.mixm.top/…`；新包 `api.mixm.top/…` | 正式 | 双基址过渡，仅 debug APK |
 | 微信小程序 / 鸿蒙 App | `api.mixm.top/mixmapp/api/v1` | 正式 | 只构建，未发布 |
 | Gitee / Cloudflare / Vercel / Sealos / IGA / EdgeOne | — | — | 缺凭据或平台限制 |

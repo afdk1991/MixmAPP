@@ -13,7 +13,7 @@
  *
  * 校验目标（防止 2026-11-13 的 `cloud.mix.top` 少一个 m 事故复发）：
  *   1. api-base.json 的 apiBase 与注册表一致（2026-11-14 起为 api.mixm.top）；
- *   2. Nginx server_name：www / api / 裸域 mixm.top 必须存在（cloud 已于 2026-11-15 退役，不再校验）；
+ *   2. Nginx server_name：www / api / 裸域 mixm.top 必须存在；cloud.mixm.top 为兼容入口（在用），同样校验；
  *   3. .env.example 的支付回调指向注册表 apiBase（api.mixm.top）；
  *   4. 功能路径内不出现禁止字符串（拼写域 / 表外域 / laal.top）；
  *   5. 规划主机不与在用/共享/验证记录重名；
@@ -83,11 +83,12 @@ function check(reg) {
     if (apiBase !== reg.apiBase) fail(`apps/mobile/api-base.json apiBase=${apiBase}，注册表=${reg.apiBase}`);
   }
 
-  // 3. Nginx server_name：主入口、API 宿主与裸域 301 必须存在（cloud 已于 2026-11-15 退役，不再校验）
+  // 3. Nginx server_name：主入口、API 宿主、裸域 301 与 cloud 兼容入口都必须存在
   const nginxTargets = [
     ['infra/nginx/www.mixm.top.conf', /server_name\s+www\.mixm\.top\s*;/],
     ['infra/nginx/api.mixm.top.conf', /server_name\s+api\.mixm\.top\s*;/],
     ['infra/nginx/mixm.top.conf', /server_name\s+mixm\.top\s*;/],
+    ['infra/nginx/cloud.mixm.top.conf', /server_name\s+cloud\.mixm\.top\s*;/],
   ];
   for (const [rel, re] of nginxTargets) {
     const content = readMaybe(rel);
