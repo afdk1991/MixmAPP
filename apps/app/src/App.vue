@@ -54,6 +54,49 @@ image {
   display: block;
 }
 
+/* ---------- 备案页脚（H5 全站注入，见 src/site-footer.ts） ---------- */
+/* 颜色全部走 --mx-* 变量，深色模式自动跟随；两个号不允许截断，窄屏换行堆叠。 */
+.mx-beian {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx $sp-2;
+  box-sizing: border-box;
+  max-width: 100%;
+  margin-top: $sp-6;
+  padding-top: $sp-3;
+  border-top: 1rpx solid $paper-3;
+  text-align: center;
+}
+
+/* 挂在 .page 外侧（如 .halo）时页面没有内边距，由页脚补左右与底部安全区 */
+.mx-beian--edge {
+  padding-left: $sp-4;
+  padding-right: $sp-4;
+  padding-bottom: calc(#{$sp-4} + env(safe-area-inset-bottom));
+}
+
+.mx-beian-link {
+  font-family: $font-mono;
+  font-size: $fs-micro;
+  line-height: 1.6;
+  letter-spacing: 0.5rpx;
+  color: $ink-3;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+@media (hover: hover) {
+  .mx-beian-link:hover {
+    color: $ink;
+  }
+}
+
+.mx-beian-link:active {
+  color: $ink;
+}
+
 /* 桌面宽屏（≥1000px）改用 mx-bar 顶部导航，隐藏 uni-app 生成的底部 tabBar，
  * 避免标签栏在宽屏中央悬浮；移动端保持原样，不受影响。 */
 @media (min-width: 1000px) {
