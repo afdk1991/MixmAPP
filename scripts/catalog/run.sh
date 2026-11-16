@@ -43,13 +43,21 @@ CLI="$APP_ROOT/scripts/catalog/cli.mjs"
 run_site() {
   local site="$1"
   local code
+  # hznzcn 有 WAF（≥2.5s/请求），单次按「每类 N 件」有界抓取，保证全分类都有商品且不拖垮对方；
+  # 需要更大覆盖时调 CATALOG_HZN_PER_CAT / CATALOG_PAGES 后用 --resume 续跑。
+  local extra=""
+  if [ "$site" = "hznzcn" ]; then
+    extra="--per-cat ${CATALOG_HZN_PER_CAT:-40}"
+  fi
   echo "$(date '+%F %T %Z') ===== [$site] sync start =====" >>"$LOG"
-  node "$CLI" sync --site "$site" >>"$LOG" 2>&1
+  # shellcheck disable=SC2086
+  node "$CLI" sync --site "$site" $extra >>"$LOG" 2>&1
   code=$?
   if [ "$code" -ne 0 ]; then
     echo "$(date '+%F %T %Z') [$site] [retry] 首次失败 code=$code，30s 后断点续跑" >>"$LOG"
     sleep 30
-    node "$CLI" sync --site "$site" --resume >>"$LOG" 2>&1
+    # shellcheck disable=SC2086
+    node "$CLI" sync --site "$site" $extra --resume >>"$LOG" 2>&1
     code=$?
   fi
   if [ "$code" -eq 0 ]; then

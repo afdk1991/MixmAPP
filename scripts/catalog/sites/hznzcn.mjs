@@ -489,12 +489,14 @@ async function collectCatalog({ http, cfg, log }) {
           if (totalReported === null && parsed.total) totalReported = parsed.total;
           for (const row of parsed.items) {
             if (seen.has(row.sourceId)) continue;
+            if (cfg.perCat > 0 && count >= cfg.perCat) break;
             seen.add(row.sourceId);
             items.push(catalogItem(row, leaf));
             count += 1;
             if (cfg.maxItems > 0 && items.length >= cfg.maxItems) break;
           }
           if (!parsed.items.length) break;
+          if (cfg.perCat > 0 && count >= cfg.perCat) break;
           if (cfg.maxItems > 0 && items.length >= cfg.maxItems) break;
         } catch (e) {
           listFailed += 1;
