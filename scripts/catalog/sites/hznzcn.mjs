@@ -118,7 +118,9 @@ function createHttp(cfg, log) {
         const res = await request(url, {
           'User-Agent': UA,
           Accept: binary
-            ? 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+            // 不要带 image/webp：alicdn 会按 Accept 把原图转码成 webp（体积变小、等于压缩）。
+            // 这里必须取源站原始 jpg/png，保留原图尺寸与原始字节。
+            ? 'image/*,*/*;q=0.8'
             : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'zh-CN,zh;q=0.9',
           Referer: referer,
@@ -567,11 +569,11 @@ async function collectDetails({ http, cfg, log, items }) {
       const local = [];
       for (const remote of parsed.images.slice(0, 6)) {
         const url = await downloadImage({ http, cfg, log }, remote);
-        if (url) {
+        if (!url) {
+          images.failed += 1;
+        } else if (!local.includes(url)) {
           local.push(url);
           images.ok += 1;
-        } else {
-          images.failed += 1;
         }
       }
       if (local.length === 0 && item.image) {
@@ -669,7 +671,9 @@ export function buildNext(item, detail) {
     description,
     packQty: null,
     images,
-    cover: images[0] || null,
+    // 无图（源图 404 或列表未给图）时沿用库表 cover 的既有占位默认值，
+    // 与 egluosi 的 mapping.mjs 保持一致，避免 NOT NULL 插入失败。
+    cover: images[0] || '#0f9d8f',
     // 价格：匿名不可见 → 全部留空，不猜
     priceLi: null,
     priceFen: 0,
@@ -951,7 +955,14 @@ export async function runSite(cfg) {
     if (!state.catalogDone) {
       const catalog = await collectCatalog({ http, cfg, log });
       state.catalogDone = true;
-      state.delistSafe = catalog.listFailed === 0 && cfg.limit === 0 && cfg.maxItems === 0;
+      // 有界采集（--per-cat / --pages / --limit / --max-items）只覆盖站点一部分商品，
+      // 不能据此判定「没抓到 = 已下架」，必须显式要求全量参数才允许下架。
+      state.delistSafe =
+        catalog.listFailed === 0 &&
+        cfg.limit === 0 &&
+        cfg.maxItems === 0 &&
+        cfg.perCat === 0 &&
+        cfg.pages === 0;
       state.catalogStats = {
         leaves: catalog.tree.leaves.length,
         scanned: catalog.scanned,
