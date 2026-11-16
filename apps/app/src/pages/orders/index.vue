@@ -247,7 +247,7 @@ onLoad((options) => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sub {
@@ -287,7 +287,7 @@ onLoad((options) => {
   font-size: 28rpx;
   letter-spacing: 1rpx;
   word-break: break-all;
-  color: $ink;
+  color: $acc-2;
 }
 
 .tk-date {
@@ -422,7 +422,7 @@ onLoad((options) => {
   width: 140rpx;
   text-align: right;
   font-size: 30rpx;
-  color: $ink-2;
+  color: $acc-4;
 }
 
 .ticket-foot {
@@ -465,7 +465,7 @@ onLoad((options) => {
 .total-v {
   font-size: 34rpx;
   font-weight: 800;
-  color: $ink;
+  color: $acc-4;
 }
 
 .address {

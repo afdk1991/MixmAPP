@@ -219,7 +219,7 @@ onPullDownRefresh(() => {
   font-weight: 800;
   line-height: $lh-tight;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .rs-lede {
@@ -285,7 +285,7 @@ onPullDownRefresh(() => {
 .rs-count {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .rs-start {
@@ -347,7 +347,7 @@ onPullDownRefresh(() => {
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sec-count {
@@ -355,7 +355,7 @@ onPullDownRefresh(() => {
   margin-left: $sp-3;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .index-list {

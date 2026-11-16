@@ -973,7 +973,7 @@ onPullDownRefresh(() => {
   min-width: 0;
   font-size: 20rpx;
   letter-spacing: $ls-label;
-  color: $on-deep-3;
+  color: $acc-on-deep-1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1022,7 +1022,7 @@ onPullDownRefresh(() => {
   font-weight: 800;
   line-height: $lh-tight;
   letter-spacing: $ls-tight;
-  color: $on-deep;
+  color: $acc-on-deep-2;
 }
 
 .hero-title--accent {
@@ -1185,7 +1185,7 @@ onPullDownRefresh(() => {
   font-size: 40rpx;
   font-weight: 800;
   line-height: 1.1;
-  color: $on-deep;
+  color: $acc-on-deep-2;
 }
 
 .stat-u {
@@ -1459,7 +1459,7 @@ onPullDownRefresh(() => {
   border-radius: $r-pill;
   font-size: 18rpx;
   letter-spacing: $ls-label;
-  color: $ink-3;
+  color: $acc-1;
 }
 
 .spot-no {
@@ -1473,7 +1473,7 @@ onPullDownRefresh(() => {
   font-size: $fs-body;
   font-weight: 600;
   line-height: 1.35;
-  color: $ink;
+  color: $acc-1;
 }
 
 .spot-foot {
@@ -1495,7 +1495,7 @@ onPullDownRefresh(() => {
 .spot-arrow {
   flex: 0 0 auto;
   font-size: $fs-body;
-  color: $brand-deep;
+  color: $acc-2;
 }
 
 /* ---------- 热门分类：可换行的 chip 条，不用横向滚动，窄屏也不会溢出 ---------- */
@@ -1536,13 +1536,13 @@ onPullDownRefresh(() => {
 .hot-name {
   font-size: $fs-meta;
   font-weight: 600;
-  color: $ink;
+  color: $acc-1;
   white-space: nowrap;
 }
 
 .hot-count {
   font-size: 20rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .hot-chip--on .hot-name,
@@ -1595,14 +1595,14 @@ onPullDownRefresh(() => {
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sec-count {
   flex: 0 0 auto;
   padding-bottom: 6rpx;
   font-size: 22rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .rule {
@@ -1702,21 +1702,21 @@ onPullDownRefresh(() => {
 
 .cat-no {
   font-size: 18rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .cat-name {
   font-size: $fs-meta;
   font-weight: 600;
   line-height: 1.25;
-  color: $ink;
+  color: $acc-1;
   overflow-wrap: break-word;
 }
 
 .cat-count {
   margin-top: auto;
   font-size: 18rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .cat-card--active .cat-no,
@@ -1880,7 +1880,7 @@ onPullDownRefresh(() => {
   background: $shell;
   border-radius: 6rpx;
   font-size: 16rpx;
-  color: $ink-3;
+  color: $acc-1;
 }
 
 .pick-cover-tag {
@@ -1893,7 +1893,7 @@ onPullDownRefresh(() => {
   background: $shell;
   border-radius: $r-pill;
   font-size: 16rpx;
-  color: $ink-3;
+  color: $acc-1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1984,7 +1984,7 @@ onPullDownRefresh(() => {
 
 .pick-cur {
   font-size: 20rpx;
-  color: $brand-deep;
+  color: $acc-4;
 }
 
 .pick-amount {
@@ -1992,7 +1992,7 @@ onPullDownRefresh(() => {
   font-size: 36rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: $ink;
+  color: $acc-4;
 }
 
 .pick-unit {
@@ -2129,7 +2129,7 @@ onPullDownRefresh(() => {
 }
 
 .pick-retry--ghost .pick-retry-text {
-  color: $ink-3;
+  color: $acc-2;
 }
 
 .catalog-note {
@@ -2200,13 +2200,13 @@ onPullDownRefresh(() => {
 
 .entry-no {
   font-size: 20rpx;
-  color: $brand-deep;
+  color: $acc-2;
 }
 
 .entry-tag {
   font-size: 16rpx;
   letter-spacing: $ls-label;
-  color: $ink-4;
+  color: $acc-1;
 }
 
 .entry-title {
@@ -2215,7 +2215,7 @@ onPullDownRefresh(() => {
   font-size: $fs-body;
   font-weight: 800;
   line-height: 1.25;
-  color: $ink;
+  color: $acc-1;
 }
 
 .entry-desc {

@@ -448,7 +448,7 @@ onUnload(() => stopTimer());
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sec-count {
@@ -456,7 +456,7 @@ onUnload(() => stopTimer());
   margin-left: $sp-3;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 /* ---------- 时间线 ---------- */

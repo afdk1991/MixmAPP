@@ -28,6 +28,38 @@ $amber: var(--mx-amber);         // 提醒
 $solid: var(--mx-solid);
 $on-solid: var(--mx-on-solid);
 
+/* ---------- 彩色前景：只给标题 / 数字 / 链接 / 标签，正文与表单仍用 ink ----------
+ * 6 个色相均为降饱和取值：浅色底、深色底两套都 >=4.5:1（见 theme.scss 注释）。
+ * 同一区块建议只用相邻 1–2 个色相，避免彩虹拼盘。
+ */
+$acc-1: var(--mx-acc-1);         // 青（品牌同源）
+$acc-2: var(--mx-acc-2);         // 靛蓝
+$acc-3: var(--mx-acc-3);         // 紫
+$acc-4: var(--mx-acc-4);         // 玫红（价格）
+$acc-5: var(--mx-acc-5);         // 琥珀
+$acc-6: var(--mx-acc-6);         // 松绿
+
+/* 标题渐变：三档同色系过渡，两端与中间取样均 >=4.5:1 */
+$grad-title: var(--mx-grad-title);
+
+/* 深场上的彩色前景（两套主题的深场都是深色，共用同一组提亮值） */
+$acc-on-deep-1: var(--mx-acc-on-deep-1);
+$acc-on-deep-2: var(--mx-acc-on-deep-2);
+$acc-on-deep-3: var(--mx-acc-on-deep-3);
+
+/* 渐变文字：color 先兜底，只有浏览器确认支持 background-clip:text 才把填充设为透明。
+ * 这样不支持时显示纯色（$acc-1），绝不会出现「渐变失败 → 透明 → 文字消失」。 */
+@mixin mx-gradient-text($grad: $grad-title, $fallback: $acc-1) {
+  color: $fallback;
+
+  @supports ((-webkit-background-clip: text) or (background-clip: text)) {
+    background-image: $grad;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
 /* ---------- 深场文字 / 深场强调：页面里原先裸写的浅绿白统一收口到这里 ---------- */
 $on-deep: var(--mx-on-deep);                            // 深场主文字
 $on-deep-2: var(--mx-on-deep-2);                        // 深场次级文字

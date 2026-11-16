@@ -33,7 +33,25 @@
   --mx-brand-deep: #0a7a70;
   --mx-brand-soft: #e2f1ee;
   --mx-signal: #b3372a;
-  --mx-amber: #a4761c;
+  /* 提醒色加深：旧值 #a4761c 在纸面仅 3.4–3.6:1，不达 AA；现值对 #fff/#f4f4f1/#ebece7 为 5.91/5.37/4.98。 */
+  --mx-amber: #8a5a10;
+
+  /* 彩色前景：只给标题 / 数字 / 链接 / 标签。
+   * 每个色相在 #fff、#f4f4f1、#ebece7 三种浅底上的对比度均 >=4.98:1。 */
+  --mx-acc-1: #0a6e66;   /* 青 */
+  --mx-acc-2: #2b4c9b;   /* 靛蓝 */
+  --mx-acc-3: #6b3fa0;   /* 紫 */
+  --mx-acc-4: #a0335a;   /* 玫红 */
+  --mx-acc-5: #8a5a10;   /* 琥珀 */
+  --mx-acc-6: #2f6b3a;   /* 松绿 */
+
+  /* 标题渐变：三档同色系（青→靛蓝→紫），三端与插值中点均 >=5.15:1 */
+  --mx-grad-title: linear-gradient(96deg, #0a6e66 0%, #2b4c9b 52%, #6b3fa0 100%);
+
+  /* 深场彩色前景：两套主题的深场都是近黑，共用同一组提亮值（对比度 >=10:1） */
+  --mx-acc-on-deep-1: #8fe9dd;
+  --mx-acc-on-deep-2: #b9c6ff;
+  --mx-acc-on-deep-3: #e3c9ff;
 
   /* 深场上的文字 / 强调 */
   --mx-on-deep: #f4f4f1;
@@ -80,6 +98,16 @@
   --mx-brand-soft: #12312c;
   --mx-signal: #e2695c;
   --mx-amber: #e0a963;
+
+  /* 深色底彩色前景：对 #171d1b / #121716 / #1b211f 均 >=8.2:1 */
+  --mx-acc-1: #6fe3d4;
+  --mx-acc-2: #9db8ff;
+  --mx-acc-3: #c9a8ff;
+  --mx-acc-4: #ff9fb8;
+  --mx-acc-5: #e8c07a;
+  --mx-acc-6: #93e0a5;
+
+  --mx-grad-title: linear-gradient(96deg, #6fe3d4 0%, #9db8ff 52%, #c9a8ff 100%);
 
   --mx-on-deep: #f4f4f1;
   --mx-on-deep-2: rgba(244, 244, 241, 0.72);
@@ -280,7 +308,7 @@ html body textarea::placeholder {
   line-height: 1.4;
   letter-spacing: $ls-label;
   text-transform: uppercase;
-  color: $ink-3;
+  color: $acc-1;
 }
 
 /* 编号式前导：用实心小方块替掉细线，识别度更高 */
@@ -289,7 +317,7 @@ html body textarea::placeholder {
   width: 10rpx;
   height: 10rpx;
   margin-right: 12rpx;
-  background: $brand;
+  background: $acc-1;
   flex-shrink: 0;
 }
 
@@ -330,7 +358,7 @@ html body textarea::placeholder {
   font-weight: 800;
   line-height: $lh-tight;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sec-title {
@@ -340,7 +368,7 @@ html body textarea::placeholder {
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 /* ---------- 按钮 ---------- */
@@ -370,7 +398,7 @@ html body textarea::placeholder {
 
   &--ghost {
     background: $shell;
-    color: $ink;
+    color: $acc-2;
     border: 1rpx solid $paper-3;
   }
 
@@ -449,7 +477,7 @@ html body textarea::placeholder {
   font-size: $fs-micro;
   line-height: 1.2;
   letter-spacing: 1rpx;
-  color: $ink-2;
+  color: $acc-1;
 }
 
 .tag--brand {
@@ -693,4 +721,20 @@ button:active,
 /* 放大系统字体后，避免长文本被裁切 */
 text {
   overflow-wrap: break-word;
+}
+
+/* ---------- 运营后台（pages/admin/index）不参与彩色标题体系 ----------
+ * admin 页根节点带 .admin-page，这里把全局 .eyebrow / .sec-title 的彩色与渐变还原，
+ * 保证运营后台维持原有的灰标 + 墨黑标题，不受前台视觉调整影响。 */
+.admin-page .eyebrow {
+  color: $ink-3;
+  background-image: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.admin-page .page-title,
+.admin-page .sec-title {
+  color: $ink;
+  background-image: none;
+  -webkit-text-fill-color: currentColor;
 }

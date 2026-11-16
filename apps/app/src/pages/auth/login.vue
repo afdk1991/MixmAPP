@@ -362,7 +362,7 @@ function oauthLogin(provider: OAuthProviderOption): void {
   font-weight: 800;
   line-height: $lh-tight;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .head .hint {

@@ -135,7 +135,7 @@ function exitApp(): void {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sub {

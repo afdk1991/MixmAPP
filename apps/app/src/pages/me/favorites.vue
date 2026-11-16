@@ -347,7 +347,7 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sub {
@@ -382,7 +382,7 @@ onShow(() => {
 
 .folder-name {
   font-size: $fs-meta;
-  color: $ink;
+  color: $acc-1;
   max-width: 320rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -395,7 +395,7 @@ onShow(() => {
 .folder-count {
   margin-left: 12rpx;
   font-size: $fs-micro;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .folder--on .folder-count {
@@ -502,7 +502,7 @@ onShow(() => {
 .fav-price {
   font-size: 32rpx;
   font-weight: 800;
-  color: $ink;
+  color: $acc-4;
 }
 
 .fav-off {

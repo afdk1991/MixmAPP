@@ -166,7 +166,7 @@ onLoad(async () => {
 .brand-env {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: $on-deep-3;
+  color: $acc-on-deep-2;
 }
 
 .brand-lede {
@@ -190,7 +190,7 @@ onLoad(async () => {
   font-size: $fs-h2;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .block .rule {

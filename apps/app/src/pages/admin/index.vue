@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page admin-page">
     <mx-bar />
 
     <!-- ---------- 深场页头 ---------- -->

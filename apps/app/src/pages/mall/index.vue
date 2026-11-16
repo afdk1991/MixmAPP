@@ -859,7 +859,7 @@ onPullDownRefresh(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .count {
@@ -867,7 +867,7 @@ onPullDownRefresh(() => {
   margin-top: 10rpx;
   font-size: $fs-meta;
   letter-spacing: $ls-label;
-  color: $ink-3;
+  color: $acc-2;
 }
 
 .head-rule {
@@ -1033,7 +1033,7 @@ onPullDownRefresh(() => {
 .chip-count {
   margin-left: 8rpx;
   font-size: $fs-micro;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 /* ---------- 商品分类入口 + 左侧抽屉（结构照源站 /b2b/ 的商品分类） ---------- */
@@ -1075,7 +1075,7 @@ onPullDownRefresh(() => {
 .cat-entry-title {
   font-size: $fs-meta;
   letter-spacing: 1rpx;
-  color: $ink;
+  color: $acc-1;
 }
 
 .cat-entry-path {
@@ -1090,7 +1090,7 @@ onPullDownRefresh(() => {
 .cat-entry-arrow {
   margin-left: 12rpx;
   font-size: 34rpx;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 .is-press {
@@ -1139,7 +1139,7 @@ onPullDownRefresh(() => {
   font-size: 40rpx;
   font-weight: 700;
   letter-spacing: 2rpx;
-  color: $ink;
+  color: $acc-1;
 }
 
 .drawer-up {
@@ -1203,7 +1203,7 @@ onPullDownRefresh(() => {
 .drawer-count {
   margin: 0 12rpx;
   font-size: $fs-micro;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 /* 源站本身 0 商品的节点：仍出现在树上（与源站一致），用「暂无」区分 */
@@ -1346,7 +1346,7 @@ onPullDownRefresh(() => {
   font-size: $fs-micro;
   letter-spacing: 2rpx;
   text-transform: uppercase;
-  color: $ink-3;
+  color: $acc-1;
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: 6rpx;
@@ -1446,7 +1446,7 @@ onPullDownRefresh(() => {
 
 .p-cur {
   font-size: 26rpx;
-  color: $ink-2;
+  color: $acc-4;
   margin-right: 2rpx;
 }
 
@@ -1454,7 +1454,7 @@ onPullDownRefresh(() => {
   font-family: $font-mono;
   font-size: 40rpx;
   font-weight: 800;
-  color: $ink;
+  color: $acc-4;
 }
 
 .p-unit {
@@ -1540,7 +1540,8 @@ onPullDownRefresh(() => {
 }
 
 .status-chip--stock .status-chip-text {
-  color: $brand-deep;
+  /* 浅色底 $brand-deep 实测 4.48 略低于 AA，改用彩色 token（5.25）。 */
+  color: $acc-1;
 }
 
 .status-chip--oos {
@@ -1552,11 +1553,12 @@ onPullDownRefresh(() => {
 }
 
 .status-chip--pending {
-  background: $brand-soft;
+  background: $paper-2;
 }
 
 .status-chip--pending .status-chip-text {
-  color: $amber;
+  /* 琥珀在 brand-soft 上仅 3.48，换纸面色底（4.98）。 */
+  color: $acc-5;
 }
 
 .status-chip--inquiry {

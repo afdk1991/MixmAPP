@@ -465,7 +465,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   font-weight: 800;
   line-height: $lh-tight;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .head .hint {
@@ -701,7 +701,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   font-size: $fs-h2;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .guest .hint {

@@ -983,7 +983,7 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .sub {
@@ -1316,7 +1316,7 @@ onShow(() => {
 .summary-v--pay {
   font-size: 36rpx;
   font-weight: 800;
-  color: $ink;
+  color: $acc-4;
 }
 
 .line-foot {
@@ -1351,7 +1351,7 @@ onShow(() => {
   width: 84rpx;
   text-align: center;
   font-size: 30rpx;
-  color: $ink;
+  color: $acc-2;
 }
 
 .subtotal {
@@ -1368,7 +1368,7 @@ onShow(() => {
 .subtotal-v {
   font-size: 30rpx;
   font-weight: 800;
-  color: $ink;
+  color: $acc-4;
 }
 
 .stock {
@@ -1391,7 +1391,7 @@ onShow(() => {
   font-size: 40rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .checkout .hint {
@@ -1566,7 +1566,7 @@ onShow(() => {
   font-size: 40rpx;
   font-weight: 800;
   line-height: 1.1;
-  color: $ink;
+  color: $acc-4;
 }
 
 .bar-btn {

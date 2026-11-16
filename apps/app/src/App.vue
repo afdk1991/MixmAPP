@@ -82,20 +82,20 @@ image {
   font-size: $fs-micro;
   line-height: 1.6;
   letter-spacing: 0.5rpx;
-  /* 页脚小字在浅色底上需满足 WCAG AA 4.5:1：$ink-3 实测 4.43 不足，改用深一档的 $ink-2。 */
-  color: $ink-2;
+  /* 页脚链接走彩色前景（靛蓝），浅/深两套 token 均 ≥ 4.5:1。 */
+  color: $acc-2;
   text-decoration: none;
   overflow-wrap: anywhere;
 }
 
 @media (hover: hover) {
   .mx-beian-link:hover {
-    color: $ink;
+    color: $acc-1;
   }
 }
 
 .mx-beian-link:active {
-  color: $ink;
+  color: $acc-1;
 }
 
 /* ---------- 右侧浮动滚动按钮组（H5 全站注入，见 src/site-scroll-buttons.ts） ---------- */

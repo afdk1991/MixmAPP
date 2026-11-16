@@ -799,12 +799,13 @@ onLoad((options) => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: 1.28;
-  color: $ink;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  /* 放在规则末尾：mixin 内含 @supports 嵌套规则，避免 Sass mixed-decls 告警 */
+  @include mx-gradient-text;
 }
 
 .subtitle {
@@ -845,7 +846,7 @@ onLoad((options) => {
   font-size: 56rpx;
   font-weight: 800;
   line-height: 1;
-  color: $ink;
+  color: $acc-4;
 }
 
 .amount--inquiry {
@@ -945,7 +946,7 @@ onLoad((options) => {
   font-size: $fs-h2;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .section-rule {
@@ -1034,7 +1035,7 @@ onLoad((options) => {
   width: 84rpx;
   text-align: center;
   font-size: 34rpx;
-  color: $ink;
+  color: $acc-2;
 }
 
 /* ---------- 金额 / 折扣 ---------- */
@@ -1054,7 +1055,7 @@ onLoad((options) => {
 .amount-value {
   font-size: 38rpx;
   font-weight: 800;
-  color: $brand-deep;
+  color: $acc-4;
 }
 
 .price-off {
@@ -1286,7 +1287,7 @@ onLoad((options) => {
   font-size: 40rpx;
   font-weight: 800;
   line-height: 1.1;
-  color: $ink;
+  color: $acc-4;
 }
 
 .bar-btn {

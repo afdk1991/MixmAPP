@@ -507,7 +507,7 @@ onShow(() => {
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0;
-  color: $on-deep;
+  color: $acc-on-deep-1;
   word-break: break-all;
 }
 
@@ -679,7 +679,7 @@ onShow(() => {
   font-size: $fs-h2;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .rule {
@@ -766,7 +766,7 @@ onShow(() => {
 }
 
 .btn-text--dark {
-  color: $ink;
+  color: $acc-2;
 }
 
 .error {
@@ -793,7 +793,7 @@ onShow(() => {
   font-size: $fs-h3;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  color: $ink;
+  color: $acc-2;
   flex-shrink: 0;
 }
 
@@ -808,7 +808,7 @@ onShow(() => {
 .link-arrow {
   margin-left: 14rpx;
   font-size: $fs-micro;
-  color: $ink-4;
+  color: $acc-2;
 }
 
 /* ---------- 显示与外观：三态分段选择 ---------- */
@@ -881,7 +881,7 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: 1.25;
-  color: $ink;
+  @include mx-gradient-text;
 }
 
 .guest-lede {
