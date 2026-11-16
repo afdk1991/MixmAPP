@@ -448,13 +448,14 @@ export function normalizeImageUrl(raw) {
 
 // ---------------------------------------------------------------- 采集
 /**
- * 列表页 URL：/hz/gallery-<catId>-grid.html（第 1 页）
- *             /hz/gallery-<catId>-<page>-grid.html（第 n 页）
+ * 列表页 URL：/hz/gallery-<catId>-<page>-grid.html（第 1 页也要带 1）
  * 实测分页上限 100 页 × 150 条/页。
+ *
+ * 注意：不带页码的 /hz/gallery-<catId>-grid.html 会返回 403 + 一段
+ * 跳回自身的 JS 重定向页，必须始终带页码。
  */
 function listUrl(cat, page) {
-  const suffix = page > 1 ? `-${page}` : '';
-  return `${SITE.origin}/hz/gallery-${cat.code}${suffix}-grid.html`;
+  return `${SITE.origin}/hz/gallery-${cat.code}-${page || 1}-grid.html`;
 }
 
 async function collectCatalog({ http, cfg, log }) {
