@@ -48,10 +48,12 @@ if (has('--help') || has('-h')) {
 
 const cfg = loadConfig(process.argv);
 const dryRun = has('--dry-run') || cfg.dryRun;
+/** 库里 c3_id 形如 `c3:007`，源站路径用的是叶子值 `007`。 */
+const leafOf = (c3Id) => String(c3Id).replace(/^c3:/, '');
 const onlyC3 = new Set(
   opt('--c3', '')
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => leafOf(s.trim()))
     .filter(Boolean)
 );
 const limit = Number(opt('--limit', '0')) || 0;
@@ -99,28 +101,28 @@ async function main() {
         group by c3_id
         order by c3_id`
     );
-    let targets = res.rows.map((r) => ({ c3: String(r.c3_id), products: r.products }));
-    if (onlyC3.size > 0) targets = targets.filter((t) => onlyC3.has(t.c3));
+    let targets = res.rows.map((r) => ({ c3Id: String(r.c3_id), leaf: leafOf(r.c3_id), products: r.products }));
+    if (onlyC3.size > 0) targets = targets.filter((t) => onlyC3.has(t.leaf));
     if (limit > 0) targets = targets.slice(0, limit);
 
     log(`[reimage] ${dryRun ? 'dry-run ' : ''}待处理 c3 ${targets.length} 个`);
 
     for (const target of targets) {
-      const c3 = target.c3;
+      const { c3Id, leaf } = target;
       const before = snapshotDir(cfg.imageDir);
       let entries = [];
       try {
-        entries = await client.galleryForC3(c3);
+        entries = await client.galleryForC3(leaf);
       } catch (e) {
-        stats.failed.push({ c3, error: e instanceof Error ? e.message : String(e) });
+        stats.failed.push({ c3: c3Id, error: e instanceof Error ? e.message : String(e) });
         stats.skipped += 1;
-        log(`[reimage] c3=${c3} 画廊失败，跳过：${e instanceof Error ? e.message : e}`);
+        log(`[reimage] c3=${c3Id} 画廊失败，跳过：${e instanceof Error ? e.message : e}`);
         continue;
       }
       const want = desiredFields(entries);
       if (want.images.length === 0) {
         stats.skipped += 1;
-        log(`[reimage] c3=${c3} 未取到任何图片，跳过（不覆盖库内已有图片）`);
+        log(`[reimage] c3=${c3Id} 未取到任何图片，跳过（不覆盖库内已有图片）`);
         continue;
       }
 
@@ -144,7 +146,7 @@ async function main() {
         `select id, images, cover, spec_image
            from products
           where id like 'egl-%' and c3_id = $1`,
-        [c3]
+        [c3Id]
       );
       const stale = rows.rows.filter((r) => {
         const imagesSame = JSON.stringify(r.images || []) === JSON.stringify(want.images);
@@ -157,11 +159,11 @@ async function main() {
       stats.unchanged += rows.rowCount - stale.length;
 
       if (stale.length === 0) {
-        log(`[reimage] c3=${c3} 已是最新（${rows.rowCount} 件，${Math.round(bytes / 1024)}KB）`);
+        log(`[reimage] c3=${c3Id} 已是最新（${rows.rowCount} 件，${Math.round(bytes / 1024)}KB）`);
         continue;
       }
       if (dryRun) {
-        log(`[reimage] c3=${c3} 将更新 ${stale.length}/${rows.rowCount} 件（${Math.round(bytes / 1024)}KB）`);
+        log(`[reimage] c3=${c3Id} 将更新 ${stale.length}/${rows.rowCount} 件（${Math.round(bytes / 1024)}KB）`);
         continue;
       }
 
@@ -175,9 +177,9 @@ async function main() {
             and (images is distinct from $1::jsonb
                  or ($2 is not null and cover is distinct from $2)
                  or ($3 is not null and spec_image is distinct from $3))`,
-        [JSON.stringify(want.images), want.cover, want.specImage, c3]
+        [JSON.stringify(want.images), want.cover, want.specImage, c3Id]
       );
-      log(`[reimage] c3=${c3} 更新 ${updated.rowCount} 件（新增图片 ${added} 个，${Math.round(bytes / 1024)}KB）`);
+      log(`[reimage] c3=${c3Id} 更新 ${updated.rowCount} 件（新增图片 ${added} 个，${Math.round(bytes / 1024)}KB）`);
     }
 
     log(
