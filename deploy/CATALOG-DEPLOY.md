@@ -410,3 +410,109 @@ LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
 7. **nginx 生产配置的合并**：`infra/nginx/cloud.mixm.top.conf` 是蓝本，生产 `/etc/nginx/conf.d/cloud.mixm.top.conf` 需人工合并 location 段（勿整文件覆盖，避免破坏 TLS/certbot）。
 8. **systemd `ReadWritePaths`**：仓库 `infra/systemd/mixmapp-api.service:23` 未含 `/var/lib/mixmapp`（不在 deploy-lead 边界，未改）；本方案图片由 root 脚本同步，通常无需改，若改走 API 写盘则需补。
 9. **生产 admin 面未配 `ADMIN_TOKEN`**：`POST /admin/mall/import` 返回 404，HTTP 灌库通道不可用；本清单已改为「数据文件随包 + 内嵌只读目录源」，无需 ADMIN_TOKEN。若将来要走 HTTP 导入，需用户授权配置该令牌并把 nginx `client_max_body_size` 提到 64m 以上。
+
+---
+
+## 11. hznzcn 手动同步（非定时，按需执行）
+
+### 11.1 策略
+
+| 源 | 触发方式 | 说明 |
+|---|---|---|
+| `egluosi` | 定时，每周日 00:00（Asia/Shanghai） | 唯一进 crontab 的源，`/opt/mixmapp/catalog-sync/run.sh` |
+| `hznzcn` | **仅手动** | 已从定时摘除；不进 `SITES` 默认值，手动跑也不会顺带跑 egluosi |
+
+服务器实际生效值（不是仓库文件）：
+
+```bash
+ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 \
+  "crontab -l | grep catalog-sync; grep -n '^SITES=' /opt/mixmapp/catalog-sync/run.sh"
+# 期望：
+#   0 0 * * 0 /opt/mixmapp/catalog-sync/run.sh
+#   SITES=${CATALOG_SITES:-"egluosi"}
+```
+
+> 生产机上的 `/opt/mixmapp/catalog-sync/run.sh` 是**独立副本**（不是 release 里的文件）。改完仓库
+> `scripts/catalog/run.sh` 后要单独 `scp` 覆盖它；每次覆盖前先备份（安装脚本已保留 `run.sh.bak.<时间戳>`）。
+
+### 11.2 为什么必须本地跑
+
+生产机 IP 已被 hznzcn 源站 WAF 封（列表/详情直连返回连接重置或 403/444），在服务器上跑必然失败。
+所以手动同步的链路固定为：
+
+**本机采集（2.5s/请求限速） → SSH 隧道写生产 PG → 图片打包推送 `img.mixm.top`**
+
+### 11.3 可直接粘贴执行的命令（本机 Git Bash）
+
+```bash
+cd /f/合并项目/MixmAPP
+
+# ① 另开一个窗口保持隧道（Ctrl+C 结束）；15433 可换任意空闲端口
+ssh -i ~/.ssh/mixmapp_deploy -N -L 15433:127.0.0.1:5432 root@115.159.159.11
+
+# ② 取生产库连接串并把端口改成隧道口（凭据只放环境变量，不要写进文件/提交）
+export DATABASE_URL_LOCAL="$(ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 \
+  'grep -m1 ^DATABASE_URL_LOCAL= /etc/mixmapp/api.env' | cut -d= -f2- \
+  | sed -E 's#@([^/:@]+):[0-9]+/#@127.0.0.1:15433/#')"
+
+# ③ 采集 + 幂等写库（这一条就是手动入口；等价于 pnpm catalog:sync:hznzcn）
+node scripts/catalog/cli.mjs sync --site hznzcn --resume --per-cat 40 --delay-ms 2500 --storage-dir storage
+```
+
+> `package.json` 里的 `pnpm catalog:sync:hznzcn` 已内置 `--site hznzcn --resume --per-cat 40 --delay-ms 2500`，
+> 配好 `DATABASE_URL_LOCAL` 后直接 `pnpm catalog:sync:hznzcn` 即可，不会再跑 egluosi。
+
+参数含义与注意事项：
+
+| 参数 | 作用 | 注意 |
+|---|---|---|
+| `--site hznzcn` | 走 `sites/hznzcn.mjs` 独立适配器 | **不会执行 egluosi 的采集/入库**，两源彻底解耦 |
+| `--resume` | 48h 内未完成的运行从断点继续 | 没有可续跑的 state 时会自动清 state 重跑，可安全常带 |
+| `--per-cat 40` | 每个二级叶子最多 40 件（全分类有界覆盖） | 有界运行 ⇒ `delistSafe=false`，**永不下架任何商品** |
+| `--delay-ms 2500` | 请求间隔；适配器本身也强制 ≥2500ms | 不要再调小，WAF 会封 |
+| `--storage-dir storage` | 图片落到仓库 `storage/products/` | 下一步统一推送生产 |
+| `--no-images` | 只写字段不下载图片（可选，调试用） | 正式同步不要带 |
+
+幂等：新增走 `on conflict (source_key) do nothing`，已存在按字段 diff 只更新真正变化的列；
+hznzcn 的 `source_key` 前缀是 `hzn:`、id 前缀 `hzn-`，与 egluosi 的 `sku:` / `egl-*` 不重叠，
+**重跑不会产生重复行，也不会改 egluosi 的任何字段**。
+
+### 11.4 图片推送
+
+```bash
+# 只把新图打过去（tar 里带路径，便于增量比对）
+tar -czf /tmp/hzn-images.tgz -C storage products
+scp -i ~/.ssh/mixmapp_deploy /tmp/hzn-images.tgz root@115.159.159.11:/tmp/
+ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 \
+  "tar -xzf /tmp/hzn-images.tgz -C /var/lib/mixmapp/storage --skip-old-files && \
+   chown -R mixmapp:mixmapp /var/lib/mixmapp/storage/products && \
+   find /var/lib/mixmapp/storage/products -type f | wc -l"
+# 抽检（应 200 + image/*）
+curl -sS -o /dev/null -w 'HTTP %{http_code} %{content_type}\n' \
+  "https://cloud.mixm.top/media/products/<sha1>.jpg"
+```
+
+### 11.5 试跑与验证（不写库、不碰 egluosi）
+
+```bash
+# 小范围 dry-run：只抓 2 个叶子、最多 6 件，不写 products / 流水 / runs
+export DATABASE_URL_LOCAL="…同上…"
+node scripts/catalog/cli.mjs sync --site hznzcn --dry-run \
+  --limit 2 --max-items 6 --no-images \
+  --state-dir .tmp/hzn-dry --storage-dir .tmp/hzn-dry-storage
+
+# 前后对比：egluosi 仍是 15037，hzn 仍是 426，无重复 source_key
+node .tmp/count-sources.mjs before
+```
+
+dry-run 报告里应看到 `"dryRun": true`、`"delistSafe": false`，且 `stats.added` 不会落库。
+正式跑完再执行一次 `node .tmp/count-sources.mjs after`，`sku:` 数量与 `last_synced` 必须与跑前一致。
+
+### 11.6 回退
+
+| 场景 | 回退方式 |
+|---|---|
+| 想把 hznzcn 临时加回定时 | `CATALOG_SITES="egluosi hznzcn" /opt/mixmapp/catalog-sync/run.sh`（一次性），或改回 `run.sh.bak.<时间戳>` |
+| 定时脚本改坏 | `cd /opt/mixmapp/catalog-sync && cp -p run.sh.bak.<时间戳> run.sh && bash -n run.sh` |
+| 手动同步写错数据 | 采集只 upsert 不删除；按 `source_key like 'hzn:%'` 精确回删本次 run 新增行，或从 §3 的 DB 备份恢复（高危，需授权） |
+| 图片推错/多推 | 图片只增不覆盖（`--skip-old-files`），按 sha1 文件名精确删除多余文件即可，不影响 egluosi 的 872 张 |

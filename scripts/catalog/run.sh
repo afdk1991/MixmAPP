@@ -1,7 +1,9 @@
 #!/bin/bash
 # 商城货源同步入口（生产：每周日 00:00 Asia/Shanghai）
-# - 依次跑 egluosi、hznzcn 两个货源站，各自独立：状态文件、锁、日志、失败重试互不影响
-# - 任一源失败只影响自己，另一个照常跑；全部结束才汇总退出码
+# - 定时只跑 egluosi（历史主源）。hznzcn 已从定时摘除，改为按需手动同步，
+#   手动入口见 deploy/CATALOG-DEPLOY.md「hznzcn 手动同步」一节
+# - 可用 CATALOG_SITES 覆盖站点列表（默认仅 egluosi；排障时才会临时加源）
+# - 每个源独立：状态文件、锁、日志、失败重试互不影响；全部结束才汇总退出码
 # - 加载生产 API 环境变量（DATABASE_URL_LOCAL 等）
 # - flock 防重入；单源失败 30s 后 --resume 断点续跑一次
 # - 全部输出追加到 $STATE_DIR/sync.log（超过 5MB 轮转一份）
@@ -18,8 +20,8 @@ export SYNC_STATE_DIR="$STATE_DIR"
 LOG="$STATE_DIR/sync.log"
 mkdir -p "$STATE_DIR/reports"
 
-# 可用 CATALOG_SITES 覆盖（例如只跑一个源做排障）
-SITES=${CATALOG_SITES:-"egluosi hznzcn"}
+# 定时默认只跑 egluosi；hznzcn 不在定时内（手动同步，避免误触发全量）
+SITES=${CATALOG_SITES:-"egluosi"}
 
 if [ -f "$LOG" ] && [ "$(stat -c%s "$LOG")" -gt 5242880 ]; then
   mv -f "$LOG" "$LOG.1"
@@ -43,8 +45,9 @@ CLI="$APP_ROOT/scripts/catalog/cli.mjs"
 run_site() {
   local site="$1"
   local code
-  # hznzcn 有 WAF（≥2.5s/请求），单次按「每类 N 件」有界抓取，保证全分类都有商品且不拖垮对方；
-  # 需要更大覆盖时调 CATALOG_HZN_PER_CAT / CATALOG_PAGES 后用 --resume 续跑。
+  # 仅当有人用 CATALOG_SITES=hznzcn 临时覆盖时才会走到这里：
+  # hznzcn 有 WAF（≥2.5s/请求），按「每类 N 件」有界抓取，保证全分类都有商品且不拖垮对方。
+  # 日常手动同步请直接用部署文档里的 cli 命令（本地采集 + SSH 隧道），不要用本脚本。
   local extra=""
   if [ "$site" = "hznzcn" ]; then
     extra="--per-cat ${CATALOG_HZN_PER_CAT:-40}"

@@ -1,12 +1,14 @@
-# catalog 采集器（egluosi B2B）
+# catalog 采集器（egluosi / hznzcn 双货源站）
 
 把 `https://eg.egluosi.com/b2b` 的目录树、类目商品、规格筛选项、商品详情、类目画廊图
 抓下来，按 `source_key` 幂等写入 `products`，变更写字段级流水。
+第二个源 `https://www.hznzcn.com/` 走独立适配器（`sites/hznzcn.mjs`），共用入库/图片/断点续跑。
 
 ## 怎么跑
 
 ```bash
-pnpm catalog:sync                      # 全量抓取 → 比对 → 入库
+pnpm catalog:sync                      # 全量抓取 → 比对 → 入库（egluosi）
+pnpm catalog:sync --site hznzcn --per-cat 40   # 只跑 hznzcn（有界全分类覆盖）
 pnpm catalog:sync --dry-run            # 只对账不写库（不碰 products / 流水 / runs 表）
 pnpm catalog:sync --resume             # 断点续跑上一次未完成的运行
 pnpm catalog:sync --limit 3            # 只处理前 3 个三级类目（调试）
@@ -18,8 +20,19 @@ pnpm catalog:inspect --item-no 764393 --no-db   # 不读库，只看源站映射
 pnpm catalog:inspect --show-mapping    # 附打印字段映射表
 ```
 
-常用参数：`--base-url` `--concurrency` `--delay-ms` `--list-delay-ms`
+常用参数：`--base-url` `--concurrency` `--delay-ms` `--list-delay-ms` `--pages` `--per-cat`
 `--state-dir` `--storage-dir`。`node scripts/catalog/cli.mjs --help` 有完整列表。
+
+## 定时与手动
+
+- **定时只跑 egluosi**：生产 `run.sh` 的 `SITES` 默认值就是 `egluosi`，每周日 00:00 只同步主源。
+- **hznzcn 不做定时，只按需手动**：它是独立适配器（`--site hznzcn`），状态文件
+  `hznzcn-state.json`、快照 `hznzcn-*.json` 与 egluosi 完全分开；`source_key` 前缀 `hzn:`，
+  id 前缀 `hzn-`，不会覆盖或撞号 egluosi 的 15,037 条。
+- 生产机 IP 被源站 WAF 封，手动同步必须**本地采集 + SSH 隧道写库 + 图片推送**，
+  完整可粘贴命令见 [`deploy/CATALOG-DEPLOY.md`](../../deploy/CATALOG-DEPLOY.md)「11. hznzcn 手动同步」。
+- 手动有界运行（带 `--per-cat` / `--max-items` / `--limit` / `--pages`）时 `delistSafe=false`，
+  **永远不会下架任何商品**；新增走 `on conflict (source_key) do nothing`，重跑不产生重复行。
 
 生产机上（库连接在 `/etc/mixmapp/api.env`）：
 
@@ -97,6 +110,7 @@ mapping.mjs   字段映射与派生规则（改口径只看这里）
 collect.mjs   目录树 / 列表 / 筛选项 / 详情 / 画廊 取数
 store.mjs     唯一碰库模块：runs 记账、upsert、流水、下架标记
 util.mjs      writeAtomic / readJson / rotateLog
-cli.mjs       入口：sync / inspect
-run.sh        生产 cron 入口（flock + 轮转 + 失败续跑 + webhook）
+cli.mjs       入口：sync / inspect（--site 分流到对应适配器）
+sites/hznzcn.mjs  hznzcn 适配器：拓扑解析、字段映射、WAF 限速、图片原图
+run.sh        生产 cron 入口（默认只跑 egluosi；flock + 轮转 + 失败续跑 + webhook）
 ```

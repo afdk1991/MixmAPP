@@ -25,6 +25,8 @@ const SKIP = new Set([
   // 与 .gitignore 的 /.screenshots/、/2026-*-*/ 对齐：本地验证截图目录与按日期归档的
   // 临时产物都不入库，也不该参与仓库规则检查（否则 188 处红全是在扫这些临时脚本）。
   '.screenshots',
+  // .tmp/ 同样是 .gitignore 排除的临时调试脚本目录（并行会话共用），不属于仓库源码。
+  '.tmp',
 ]);
 // .gitignore 写的是 /2026-*-*/，即顶层「2026-xx-xx」日期归档目录；用正则表达同一语义。
 const DATE_ARCHIVE_DIR = /^20\d{2}-\d{2}-\d{2}$/;
