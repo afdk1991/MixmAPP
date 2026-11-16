@@ -82,7 +82,8 @@ image {
   font-size: $fs-micro;
   line-height: 1.6;
   letter-spacing: 0.5rpx;
-  color: $ink-3;
+  /* 页脚小字在浅色底上需满足 WCAG AA 4.5:1：$ink-3 实测 4.43 不足，改用深一档的 $ink-2。 */
+  color: $ink-2;
   text-decoration: none;
   overflow-wrap: anywhere;
 }
