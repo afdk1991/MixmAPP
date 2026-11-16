@@ -238,18 +238,81 @@
         </view>
       </view>
     </block>
+
+    <!-- ---------- 显示与外观：三态主题切换（登录/未登录都可见） ---------- -->
+    <view class="sec">
+      <view class="sec-head">
+        <text class="eyebrow">APPEARANCE</text>
+        <text class="sec-title">显示与外观</text>
+      </view>
+      <view class="rule" />
+      <view class="theme-opts" role="radiogroup" aria-label="主题模式">
+        <view
+          v-for="opt in THEME_OPTIONS"
+          :key="opt.key"
+          class="theme-opt"
+          :class="{ 'theme-opt--on': themePref === opt.key }"
+          hover-class="is-press"
+          role="radio"
+          :aria-checked="themePref === opt.key ? 'true' : 'false'"
+          @tap="chooseTheme(opt.key)"
+        >
+          <text class="theme-opt-label">{{ opt.label }}</text>
+        </view>
+      </view>
+      <text class="hint theme-hint mt">{{ themeHint }}</text>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { OAuthProviderId } from '@mixmapp/contracts';
 import { session, logout, refreshProfile } from '../../stores/session';
 import { meApi, ApiError } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
+import {
+  getSystemTheme,
+  getThemePref,
+  setThemePref,
+  subscribeSystemTheme,
+  type ThemeMode,
+  type ThemePref,
+} from '../../theme';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
+
+/* 主题三态：默认「跟随系统」，与历史行为一致；手动选择由 theme.ts 持久化。 */
+const THEME_OPTIONS: Array<{ key: ThemePref; label: string }> = [
+  { key: 'auto', label: '跟随系统' },
+  { key: 'light', label: '浅色' },
+  { key: 'dark', label: '深色' },
+];
+const themePref = ref<ThemePref>(getThemePref());
+const systemTheme = ref<ThemeMode>(getSystemTheme());
+const themeHint = computed(() => {
+  if (themePref.value === 'light') return '始终使用浅色，不再跟随系统。';
+  if (themePref.value === 'dark') return '始终使用深色，不再跟随系统。';
+  return systemTheme.value === 'dark' ? '跟随系统 · 当前系统为深色。' : '跟随系统 · 当前系统为浅色。';
+});
+function chooseTheme(next: ThemePref): void {
+  setThemePref(next);
+  themePref.value = next;
+}
+let stopSystemTheme = (): void => {};
+
+onMounted(() => {
+  themePref.value = getThemePref();
+  systemTheme.value = getSystemTheme();
+  stopSystemTheme = subscribeSystemTheme((next) => {
+    systemTheme.value = next;
+  });
+});
+
+onUnmounted(() => {
+  stopSystemTheme();
+});
 
 const user = computed(() => session.user);
 /** 手机号脱敏：138****8000，未绑定时不展示占位，避免通行证上出现「未绑定」这种后台口径。 */
@@ -746,6 +809,50 @@ onShow(() => {
   margin-left: 14rpx;
   font-size: $fs-micro;
   color: $ink-4;
+}
+
+/* ---------- 显示与外观：三态分段选择 ---------- */
+.theme-opts {
+  display: flex;
+  gap: 12rpx;
+  margin-top: $sp-3;
+}
+
+.theme-opt {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+  background: $shell;
+  transition: transform 0.16s ease, opacity 0.16s ease;
+}
+
+/* 选中态沿用全站的实心反白按钮：浅色墨黑底浅字、深色浅底深字，两套主题都 >=10:1 */
+.theme-opt--on {
+  background: $solid;
+  border-color: $solid;
+}
+
+.theme-opt-label {
+  font-size: $fs-meta;
+  line-height: 1;
+  color: $ink-2;
+}
+
+.theme-opt--on .theme-opt-label {
+  font-weight: 600;
+  color: $on-solid;
+}
+
+/* 说明文案：默认 .hint 用的 ink-3 在浅色纸面上只有 4.43:1，低于 AA；
+ * 这里单独提到 ink-2（浅色 11.7:1 / 深色 10.8:1），不影响全站其它 hint。 */
+.theme-hint {
+  color: $ink-2;
 }
 
 /* ---------- 退出 ---------- */

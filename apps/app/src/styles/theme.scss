@@ -52,45 +52,59 @@
   --mx-sk-sheen: #f6f6f2;
 }
 
-/* 深色主题：暖石墨底，不是纯黑；品牌青保持原色，保证「青字压深底」的对比度 */
+/* 深色令牌：暖石墨底，不是纯黑；品牌青保持原色，保证「青字压深底」的对比度。
+ * 抽成 mixin 供两条通道共用（取值只维护这一份）：
+ *   ① 跟随系统：系统深色、且用户没有手动选浅色；
+ *   ② 手动深色：无视系统设置，直接命中。
+ * 手动浅色时 ① 会被 :not([data-mx-theme='light']) 排除，回落到 :root 的浅色值。 */
+@mixin mx-dark-tokens {
+  color-scheme: dark;
+
+  --mx-paper: #121716;
+  --mx-paper-2: #1b211f;
+  --mx-paper-3: #2b3330;
+  --mx-shell: #171d1b;
+  --mx-shell-fade: rgba(23, 29, 27, 0);
+
+  --mx-ink: #eceee9;
+  --mx-ink-2: #c9cfca;
+  --mx-ink-3: #a2aaa5;
+  --mx-ink-4: #868e89;
+
+  --mx-deep: #080b0a;
+  --mx-deep-2: #0e1413;
+  --mx-deep-3: #16201d;
+
+  --mx-brand: #0f9d8f;
+  --mx-brand-deep: #6ee3d4;
+  --mx-brand-soft: #12312c;
+  --mx-signal: #e2695c;
+  --mx-amber: #e0a963;
+
+  --mx-on-deep: #f4f4f1;
+  --mx-on-deep-2: rgba(244, 244, 241, 0.72);
+  --mx-on-deep-3: rgba(244, 244, 241, 0.46);
+  --mx-on-deep-line: rgba(244, 244, 241, 0.18);
+  --mx-brand-on-deep: #8fe9dd;
+  --mx-amber-on-deep: #e0a963;
+
+  --mx-solid: #eceee9;
+  --mx-on-solid: #0f1413;
+
+  --mx-sk-base: #1b211f;
+  --mx-sk-sheen: #242c29;
+}
+
+/* ① 跟随系统（默认）：系统深色时生效 */
 @media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-
-    --mx-paper: #121716;
-    --mx-paper-2: #1b211f;
-    --mx-paper-3: #2b3330;
-    --mx-shell: #171d1b;
-    --mx-shell-fade: rgba(23, 29, 27, 0);
-
-    --mx-ink: #eceee9;
-    --mx-ink-2: #c9cfca;
-    --mx-ink-3: #a2aaa5;
-    --mx-ink-4: #868e89;
-
-    --mx-deep: #080b0a;
-    --mx-deep-2: #0e1413;
-    --mx-deep-3: #16201d;
-
-    --mx-brand: #0f9d8f;
-    --mx-brand-deep: #6ee3d4;
-    --mx-brand-soft: #12312c;
-    --mx-signal: #e2695c;
-    --mx-amber: #e0a963;
-
-    --mx-on-deep: #f4f4f1;
-    --mx-on-deep-2: rgba(244, 244, 241, 0.72);
-    --mx-on-deep-3: rgba(244, 244, 241, 0.46);
-    --mx-on-deep-line: rgba(244, 244, 241, 0.18);
-    --mx-brand-on-deep: #8fe9dd;
-    --mx-amber-on-deep: #e0a963;
-
-    --mx-solid: #eceee9;
-    --mx-on-solid: #0f1413;
-
-    --mx-sk-base: #1b211f;
-    --mx-sk-sheen: #242c29;
+  :root:not([data-mx-theme='light']) {
+    @include mx-dark-tokens;
   }
+}
+
+/* ② 手动深色：随时生效，且不再受系统深浅色切换影响 */
+:root[data-mx-theme='dark'] {
+  @include mx-dark-tokens;
 }
 
 /* 根节点铺满主题底色：页面内容短于视口、或单页 body 透明（uni-app 非首层页面）时，
@@ -129,13 +143,22 @@ html {
 }
 
 @media (prefers-color-scheme: dark) {
-  .uni-tabbar {
+  :root:not([data-mx-theme='light']) .uni-tabbar {
     background-color: var(--mx-shell) !important;
   }
 
-  .uni-tabbar-border {
+  :root:not([data-mx-theme='light']) .uni-tabbar-border {
     background-color: var(--mx-paper-3) !important;
   }
+}
+
+/* 手动深色：系统浅色时也要覆盖 tabBar（与令牌同样的双通道） */
+:root[data-mx-theme='dark'] .uni-tabbar {
+  background-color: var(--mx-shell) !important;
+}
+
+:root[data-mx-theme='dark'] .uni-tabbar-border {
+  background-color: var(--mx-paper-3) !important;
 }
 
 /* 第四个 tab 的文案是「星际联邦通行证」（7 字），11px 在系统字体放大 1.3x 后约 14.3px，

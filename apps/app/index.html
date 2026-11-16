@@ -7,6 +7,18 @@
     <meta name="description" content="MixmAPP — 一个账号跑通所有端" />
     <title>MixmAPP</title>
     <link rel="icon" href="/static/logo.png" />
+    <script>
+      /* 首屏防闪白：在 CSS/JS 生效前同步读取主题偏好并打标（key 与 src/theme.ts 一致）。
+       * light / dark 写 data-mx-theme；auto 不写属性，交给 prefers-color-scheme 跟随系统。 */
+      (function () {
+        try {
+          var pref = localStorage.getItem('mixmapp:theme');
+          if (pref === 'light' || pref === 'dark') {
+            document.documentElement.setAttribute('data-mx-theme', pref);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"><!--app-html--></div>
