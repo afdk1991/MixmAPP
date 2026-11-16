@@ -23,7 +23,8 @@ import {
   normalizeBrand,
 } from './mapping.mjs';
 import { applyChanges, markRunFinished, markRunStarted, readProductByKey } from './store.mjs';
-import { readJson, rotateLog, writeAtomic } from './util.mjs';
+import { acquireLock, createLogger, newRunId, pruneRunLogs, readJson, rotateLog, writeAtomic } from './util.mjs';
+import { runSite as runHznzcnSync } from './sites/hznzcn.mjs';
 
 const cfg = loadConfig(process.argv);
 
@@ -37,83 +38,9 @@ rotateLog(cfg.logFile, cfg.logMaxBytes);
 
 const stateFile = path.join(cfg.stateDir, 'state.json');
 
-/** 同时写标准输出与「本次运行日志」，run.sh 另有一份 sync.log。 */
-function createLogger(runId) {
-  const file = path.join(cfg.reportDir, `${runId}.log`);
-  let stream = null;
-  try {
-    stream = fs.createWriteStream(file, { flags: 'a' });
-  } catch {
-    /* 日志文件不可写时只打标准输出 */
-  }
-  return {
-    file,
-    log(msg) {
-      const line = `${new Date().toISOString()} ${msg}`;
-      console.log(line);
-      if (stream) stream.write(`${line}\n`);
-    },
-    close() {
-      if (stream) stream.end();
-    },
-  };
-}
-
-function pruneRunLogs(keep = 30) {
-  try {
-    const files = fs
-      .readdirSync(cfg.reportDir)
-      .filter((f) => f.endsWith('.log'))
-      .map((f) => path.join(cfg.reportDir, f))
-      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-    for (const f of files.slice(keep)) fs.unlinkSync(f);
-  } catch {
-    /* 清理失败忽略 */
-  }
-}
-
-/** 防重入：run.lock 记录 pid，进程已死则接管。 */
-function acquireLock() {
-  const lock = path.join(cfg.stateDir, 'run.lock');
-  const payload = JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const fd = fs.openSync(lock, 'wx');
-      fs.writeSync(fd, payload);
-      fs.closeSync(fd);
-      return () => {
-        try {
-          fs.unlinkSync(lock);
-        } catch {
-          /* 已被清理 */
-        }
-      };
-    } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      const prev = readJson(lock, null);
-      const pid = prev && Number(prev.pid);
-      const alive = pid ? (() => {
-        try {
-          process.kill(pid, 0);
-          return true;
-        } catch {
-          return false;
-        }
-      })() : false;
-      if (alive) throw new Error(`已有采集任务在运行（pid=${pid}），本次退出`);
-      fs.unlinkSync(lock);
-    }
-  }
-  throw new Error('无法获取 run.lock');
-}
-
-function newRunId() {
-  return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-}
-
 // ------------------------------------------------------------------ sync
 async function runSync() {
-  const release = acquireLock();
+  const release = acquireLock(cfg.stateDir);
   let state = cfg.resume ? readJson(stateFile, null) : null;
   const resumable =
     state && state.phase !== 'done' && Date.now() - Date.parse(state.startedAt) < 48 * 3600 * 1000;
@@ -127,9 +54,9 @@ async function runSync() {
     writeAtomic(stateFile, state);
   }
 
-  const logger = createLogger(state.runId);
+  const logger = createLogger(cfg.reportDir, state.runId);
   const log = logger.log;
-  pruneRunLogs();
+  pruneRunLogs(cfg.reportDir);
   log(`===== catalog sync ${cfg.dryRun ? '(dry-run)' : ''} run=${state.runId} =====`);
   if (resumable) log(`[sync] 断点续跑 ${state.runId}（phase=${state.phase}）`);
 
@@ -314,7 +241,7 @@ async function findTargets(client, log) {
 
 async function runInspect() {
   const runId = `inspect-${newRunId()}`;
-  const logger = createLogger(runId);
+  const logger = createLogger(cfg.reportDir, runId);
   const log = logger.log;
   const client = createClient(cfg, log);
   let exitCode = 0;
@@ -437,7 +364,9 @@ async function runInspect() {
 
 // ------------------------------------------------------------------ main
 const command = cfg.command;
-const runner = command === 'inspect' ? runInspect : command === 'sync' ? runSync : null;
+// 站点适配层：egluosi 走既有 sync；hznzcn 走自己的采集/映射，共用 ingest 入库
+const runSyncForSite = cfg.site === 'hznzcn' ? () => runHznzcnSync(cfg) : runSync;
+const runner = command === 'inspect' ? runInspect : command === 'sync' ? runSyncForSite : null;
 
 if (!runner) {
   console.error(`未知命令：${command}\n\n${usage()}`);

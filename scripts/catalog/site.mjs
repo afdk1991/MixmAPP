@@ -29,7 +29,7 @@ export const IMAGE_VARIANTS = [
   { variant: 'spec', role: 'spec', fallbacks: [] },
 ];
 
-function magicExt(buffer) {
+export function magicExt(buffer) {
   if (buffer.length < 4) return null;
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpg';
   if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'png';
@@ -39,7 +39,7 @@ function magicExt(buffer) {
 }
 
 /** 1×1 占位图（PNG 头里宽高都是 1）直接丢弃，不落盘也不入库。 */
-function isPlaceholder(buffer) {
+export function isPlaceholder(buffer) {
   if (buffer.length < 200) return true;
   if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
     return buffer.readUInt32BE(16) <= 1 && buffer.readUInt32BE(20) <= 1;

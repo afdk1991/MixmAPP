@@ -58,6 +58,7 @@ export function loadConfig(argv = process.argv) {
   return {
     command,
     help: has('--help') || has('-h'),
+    site: value('--site', env.CATALOG_SITE || 'egluosi'),
     baseUrl: value('--base-url', env.CATALOG_BASE_URL || 'https://eg.egluosi.com').replace(/\/+$/, ''),
     concurrency: number('--concurrency', Number(env.CATALOG_CONCURRENCY) || 1),
     delayMs: number('--delay-ms', Number(env.DETAIL_DELAY_MS) || 250, { min: 0 }),
@@ -70,6 +71,8 @@ export function loadConfig(argv = process.argv) {
     resume: has('--resume'),
     filtersOnly: has('--filters-only'),
     limit: number('--limit', 0, { min: 0 }),
+    pages: number('--pages', Number(env.CATALOG_PAGES) || 0, { min: 0 }),
+    maxItems: number('--max-items', Number(env.CATALOG_MAX_ITEMS) || 0, { min: 0 }),
     itemNo: value('--item-no', ''),
     brand: value('--brand', ''),
     spec: value('--spec', ''),
@@ -87,15 +90,18 @@ export function loadConfig(argv = process.argv) {
 
 export function usage() {
   return [
-    'catalog 采集器（egluosi B2B）',
+    'catalog 采集器（egluosi / hznzcn 双货源站）',
     '',
     '  pnpm catalog:sync     [选项]   全量抓取 → 比对 → 幂等入库',
     '  pnpm catalog:inspect  [选项]   只读对账：单件/按品牌规格查源站，不写库',
     '',
+    '  --site <name>        货源站：egluosi（默认）| hznzcn',
     '  --base-url <url>     站点基址（默认 https://eg.egluosi.com）',
     '  --concurrency <n>    详情并发（默认 1）',
-    '  --delay-ms <n>       详情请求间隔毫秒（默认 250）',
-    '  --list-delay-ms <n>  列表请求间隔毫秒（默认 400）',
+    '  --delay-ms <n>       详情请求间隔毫秒（默认 250；hznzcn 强制 ≥2500）',
+    '  --list-delay-ms <n>  列表请求间隔毫秒（默认 400；hznzcn 强制 ≥2500）',
+    '  --pages <n>          每个叶子分类抓前 n 页（hznzcn 默认 1 页）',
+    '  --max-items <n>      本次最多入库 n 件（0 = 不限）',
     '  --no-images          不下载图片',
     '  --no-filters         不抓规格筛选项',
     '  --filters-only       只抓目录树与筛选项',

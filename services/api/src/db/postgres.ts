@@ -797,7 +797,7 @@ export class PgStore implements Store {
         const res = await this.pool.query(
           `select id, code, name, level, product_count
              from catalog_categories
-            where source = 'egluosi' and is_active
+            where source in ('egluosi', 'hznzcn') and is_active
               ${opts?.includeEmpty ? '' : 'and product_count > 0'}
               and ${parentId ? 'parent_id = $1' : 'level = 1'}
             order by sort_no asc, code asc`,
