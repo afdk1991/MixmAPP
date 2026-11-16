@@ -170,13 +170,13 @@ async function main() {
       const updated = await pool.query(
         `update products
             set images = $1::jsonb,
-                cover = coalesce($2, cover),
-                spec_image = coalesce($3, spec_image)
+                cover = coalesce($2::text, cover),
+                spec_image = coalesce($3::text, spec_image)
           where id like 'egl-%'
             and c3_id = $4
             and (images is distinct from $1::jsonb
-                 or ($2 is not null and cover is distinct from $2)
-                 or ($3 is not null and spec_image is distinct from $3))`,
+                 or ($2::text is not null and cover is distinct from $2::text)
+                 or ($3::text is not null and spec_image is distinct from $3::text))`,
         [JSON.stringify(want.images), want.cover, want.specImage, c3Id]
       );
       log(`[reimage] c3=${c3Id} 更新 ${updated.rowCount} 件（新增图片 ${added} 个，${Math.round(bytes / 1024)}KB）`);
