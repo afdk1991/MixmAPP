@@ -11,21 +11,31 @@
 
 | 场景 | 版本形态 | 说明 |
 |---|---|---|
-| 基线（全平台 / 全渠道） | `V0.0.0` | 2026-11-14 强制重置，release / preview / dev 都从这一点起算 |
-| 正式发布递增 | `V0.0.0` → `V0.0.1` | 只递增第三段，不跳号 |
-| 预览期 | `0.0.0-preview`、`0.0.0-preview.1`、`.2`…… | `channel=preview`，后缀计数独立 |
-| 开发期 | `0.0.0-dev`、`0.0.0-dev.1`、`.2`…… | `channel=dev`，后缀计数独立 |
-| 三段基线 | 不随后缀计数变化 | 预览 / 开发只动后缀，不动 `X.Y.Z` |
+| 基线（全平台 / 全渠道） | `V0.0.0` | 2026-11-14 强制重置，release / preview / test / gray 都从这一点起算 |
+| 正式版（`channel=release`） | `V0.0.0`、`V0.0.1`…… | 无后缀，只递增第三段，不跳号 |
+| 预览版（`channel=preview`） | `0.0.0-preview`、`0.0.0-preview.1`、`.2`…… | 后缀用通道名 `preview`，计数独立 |
+| 测试版（`channel=test`） | `0.0.0-test`、`0.0.0-test.1`、`.2`…… | 后缀用通道名 `test`，计数独立 |
+| 灰度版（`channel=gray`） | `0.0.0-gray`、`0.0.0-gray.1`、`.2`…… | 后缀用通道名 `gray`，计数独立 |
+| 三段基线 | 不随后缀计数变化 | 预览 / 测试 / 灰度只动后缀，不动 `X.Y.Z` |
 | npm 包版本 | `X.Y.Z` | 就是三段号本身，不再做截断映射 |
 | Android / uni-app `versionCode` | 整数 | `versionCode = 1 + major*10000 + minor*100 + patch`（`0.0.0 → 1`、`0.0.1 → 2`） |
+
+**四个通道总览**：
+
+| 通道 | 展示号形态 | 后缀 |
+|---|---|---|
+| `release` 正式 | `V0.0.0` | 无 |
+| `preview` 预览 | `V0.0.0-preview[.N]` | `-preview` |
+| `test` 测试 | `V0.0.0-test[.N]` | `-test` |
+| `gray` 灰度 | `V0.0.0-gray[.N]` | `-gray` |
 
 三条硬约束：
 
 1. **发布前不得占用正式版本号**——没真正对外发布，`version.json` 的 `released` 里不能出现该号，仓库里也不能存在同名 git tag。
-2. **渠道必须可区分**——预览 / 开发一律带 `-preview[.N]` / `-dev[.N]`；正式发布态不带任何后缀。
+2. **渠道必须可区分**——预览 / 测试 / 灰度分别带 `-preview[.N]` / `-test[.N]` / `-gray[.N]`；正式发布态不带任何后缀。
 3. **与 README 同步**——README 顶部的版本块由脚本生成，手改会被 `version:check` 判红。
 
-> **强制重置态（2026-11-14）**：`version.json` 为 `version: "0.0.0"`、`channel: "release"`、`released: []`、`counters: { preview: 0, dev: 0 }`。此时 release 展示 `0.0.0`、preview 展示 `0.0.0-preview`、dev 展示 `0.0.0-dev`；**下一个号才是递增后的值**（`0.0.0-preview.1` / `0.0.0-dev.1` / release 的 `0.0.1`）。
+> **强制重置态（2026-11-14）**：`version.json` 为 `version: "0.0.0"`、`channel: "release"`、`released: []`、`counters: { preview: 0, test: 0, gray: 0 }`。此时 release 展示 `V0.0.0`、preview 展示 `V0.0.0-preview`、test 展示 `V0.0.0-test`、gray 展示 `V0.0.0-gray`；**下一个号才是递增后的值**（`0.0.0-preview.1` / `0.0.0-test.1` / `0.0.0-gray.1` / release 的 `0.0.1`）。
 
 ---
 
@@ -36,18 +46,19 @@
 ```json
 {
   "version": "0.0.0",        // 当前三段工作号
-  "channel": "release",      // release | preview | dev
+  "channel": "release",      // release | preview | test | gray
   "released": [],            // 已正式发布的三段号，只增不减
   "counters": {              // 非正式通道的后缀计数器，各自独立
     "preview": 0,
-    "dev": 0
+    "test": 0,
+    "gray": 0
   }
 }
 ```
 
-- 展示号：`release` → `version`；`preview` / `dev` → `version-channel`，计数 > 0 时追加 `.N`。
+- 展示号：`release` → `version`（无后缀）；`preview` / `test` / `gray` → `version-channel`，计数 > 0 时追加 `.N`。
 - `released` 只用于记录「哪些号真正对外发过」与 tag 校验；它不影响当前构建的展示号。
-- `version` 是唯一递增位：release 走第三段，preview / dev 走后缀计数。
+- `version` 是唯一递增位：release 走第三段，preview / test / gray 走各自后缀计数。
 - `build.gradle` 构建期直接解析根 `version.json` 计算 `versionName` / `versionCode`，不写字面量。
 
 ---
@@ -59,8 +70,9 @@ pnpm version:show           # 打印状态（含展示号 / versionCode）
 pnpm version:check          # 一致性门禁（CI 用）
 pnpm version:sync           # 同步到 7 个包 / .env.example / config.ts / install/server.mjs / README / manifest / version.ts
 pnpm version:bump           # release：第三段 +1（0.0.0 → 0.0.1）
-pnpm version:bump:preview   # preview：后缀计数 +1（0.0.0-preview → 0.0.0-preview.1）
-pnpm version:bump:dev       # dev：后缀计数 +1（0.0.0-dev → 0.0.0-dev.1）
+pnpm version:bump:preview   # 预览：后缀计数 +1（0.0.0-preview → 0.0.0-preview.1）
+pnpm version:bump:test      # 测试：后缀计数 +1（0.0.0-test → 0.0.0-test.1）
+pnpm version:bump:gray      # 灰度：后缀计数 +1（0.0.0-gray → 0.0.0-gray.1）
 pnpm version:release        # 正式发布：把当前号登记进 released（不改号），提示打 tag
 ```
 
@@ -113,9 +125,9 @@ git push origin main v0.0.1     # 推送 tag 才会触发部署
 | API | `APP_VERSION` 环境变量 / `config.ts` 默认值 | `0.0.0` |
 | CloudBase 云函数 | `package.json.version` | `0.0.0` |
 | 安装包 / 桌面壳 | 无桌面端（Tauri/Electron）工程；安装包命名取展示号 | `mixmapp-install-0.0.0.tar.gz` |
-| 渠道 preview / dev | `version.json.channel` + `counters[channel]` | `0.0.0-preview` / `0.0.0-dev` |
+| 渠道 preview / test / gray | `version.json.channel` + `counters[channel]` | `0.0.0-preview` / `0.0.0-test` / `0.0.0-gray` |
 
-> iOS / App Store 注意：`CFBundleShortVersionString` 只接受三段数字，当前版本号本就三段，无适配负担。preview / dev 带后缀的展示号只用于内部构建，不提交商店。
+> iOS / App Store 注意：`CFBundleShortVersionString` 只接受三段数字，当前版本号本就三段，无适配负担。preview / test / gray 带后缀的展示号只用于内部构建，不提交商店。
 
 ---
 

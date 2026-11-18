@@ -13,7 +13,7 @@ concurrency:
 # 商品数据随版本发布（默认关闭）：
 #   DEPLOY_CATALOG=1  才上传数据包 / 落位 / 配置目录源 env / 增强验收
 #   SITE_BASE_URL      验收目标站点根，默认 https://www.mixm.top（双跑期可显式设 cloud）
-#   EXPECT_VERSION     可选，healthz.version 精确期望值（缺省要求非 preview）
+#   EXPECT_VERSION     可选，healthz.version 精确期望值（缺省要求非 preview/test/gray 后缀）
 #
 # 致命断点（务必注意）：.gitignore 排除了 tools/egluosi-importer/source/catalog.json、
 #   source/images/、storage/、release/，因此 CI checkout 默认【没有】商品数据。
@@ -128,7 +128,7 @@ jobs:
 
       # 版本号唯一事实源：version.json。线上 /healthz 与 /meta 的 version 由 api.env 的
       # APP_VERSION 决定；不显式下发就会沿用旧号，页面显示与产物版本脱节。
-      # 规则与 android.yml 一致：三段式，release 取 version，preview/dev 追加 -<channel>[.N]。
+      # 规则与 android.yml 一致：三段式，release 取 version（无后缀），preview/test/gray 追加 -<channel>[.N]。
       - name: 读取版本（version.json 单一事实源）
         id: version
         run: |

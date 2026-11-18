@@ -33,7 +33,8 @@
     "version:sync": "node scripts/version.mjs sync",
     "version:bump": "node scripts/version.mjs bump release",
     "version:bump:preview": "node scripts/version.mjs bump preview",
-    "version:bump:dev": "node scripts/version.mjs bump dev",
+    "version:bump:test": "node scripts/version.mjs bump test",
+    "version:bump:gray": "node scripts/version.mjs bump gray",
     "version:release": "node scripts/version.mjs release",
     "domains:show": "node scripts/domains.mjs show",
     "domains:check": "node scripts/domains.mjs check"

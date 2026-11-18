@@ -5,8 +5,8 @@
  * 规约（详见 docs/19-versioning.md）：
  * - 三段式版本：X.Y.Z，基线 = 0.0.0（2026-11-14 全平台 / 全渠道强制重置）
  * - release 递增第三段：0.0.0 → 0.0.1
- * - preview 用 0.0.0-preview.N、dev 用 0.0.0-dev.N，后缀计数各自独立
- *   计数为 0 时展示裸后缀（0.0.0-preview / 0.0.0-dev），即当前强制重置态
+ * - preview / test / gray 分别用 0.0.0-preview.N / 0.0.0-test.N / 0.0.0-gray.N，后缀计数各自独立
+ *   计数为 0 时展示裸后缀（0.0.0-preview / 0.0.0-test / 0.0.0-gray），即当前强制重置态
  * - 发布前不得占用正式版本号：没有真正对外发布，就不能把该号写进 released，也不能打 tag
  * - 正式发布态下展示层取「最新已发布正式号」，version 仅表示下一个待发布工作号
  * - npm 包版本就是三段号本身；Android versionCode = 1 + major*10000 + minor*100 + patch
@@ -16,8 +16,10 @@
  *   node scripts/version.mjs show            打印当前版本（含展示形式 / versionCode）
  *   node scripts/version.mjs check           校验全部版本位是否一致（CI 门禁用）
  *   node scripts/version.mjs sync            把 version.json 同步到各处
- *   node scripts/version.mjs bump [channel]  递增：release 升第三段；preview/dev 升各自后缀计数
+ *   node scripts/version.mjs bump [channel]  递增：release 升第三段；preview/test/gray 升各自后缀计数
  *   node scripts/version.mjs release         正式发布：把当前号登记进 released，并提示打 tag
+ *
+ * 通道枚举：release（正式，无后缀）、preview（预览）、test（测试）、gray（灰度）
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -28,7 +30,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION_FILE = join(root, 'version.json');
 /** 三段式版本 X.Y.Z（每段非负整数、无前导零） */
 const SEMVER3 = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const CHANNELS = ['release', 'preview', 'dev'];
+const CHANNELS = ['release', 'preview', 'test', 'gray'];
 
 const PKG_FILES = [
   'package.json',
@@ -92,15 +94,15 @@ function loadState() {
     fail(`version.json version 不是合法三段式 X.Y.Z：${state.version}`);
   }
   if (!CHANNELS.includes(state.channel)) {
-    fail(`version.json channel 只能是 release / preview / dev：${state.channel}`);
+    fail(`version.json channel 只能是 release / preview / test / gray：${state.channel}`);
   }
   if (!Array.isArray(state.released)) fail('version.json released 必须是数组');
   for (const version of state.released) {
     if (!SEMVER3.test(version)) fail(`version.json released 含非法三段号：${version}`);
   }
   const counters = state.counters ?? {};
-  const normalized = { preview: 0, dev: 0 };
-  for (const channel of ['preview', 'dev']) {
+  const normalized = { preview: 0, test: 0, gray: 0 };
+  for (const channel of ['preview', 'test', 'gray']) {
     const value = counters[channel] ?? 0;
     if (!Number.isInteger(value) || value < 0) {
       fail(`version.json counters.${channel} 必须是 >= 0 的整数：${value}`);
@@ -125,7 +127,7 @@ function baseVersion(state) {
   return state.version;
 }
 
-/** 非正式通道的后缀：计数 0 → -preview / -dev，计数 N → -preview.N / -dev.N */
+/** 非正式通道的后缀：计数 0 → -preview/-test/-gray，计数 N → -preview.N/-test.N/-gray.N */
 function channelTag(state) {
   if (state.channel === 'release') return '';
   const n = state.counters[state.channel] ?? 0;
@@ -176,7 +178,7 @@ function renderReadmeBlock(state) {
     BEGIN,
     `当前构建版本：**V${display}**（${state.channel === 'release' ? '正式发布版本' : `${state.channel} 通道`}）`,
     `已发布版本：${released}`,
-    '版本规约：三段式，基线 `0.0.0`；release 递增第三段（`0.0.0 → 0.0.1`）；preview / dev 为 `0.0.0-preview.N` / `0.0.0-dev.N`，后缀计数各自独立；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)',
+    '版本规约：三段式，基线 `0.0.0`；release 递增第三段（`0.0.0 → 0.0.1`，无后缀）；preview / test / gray 分别为 `0.0.0-preview.N` / `0.0.0-test.N` / `0.0.0-gray.N`（计数 0 时省略 `.N`），后缀计数各自独立；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)',
     END,
   ].join('\n');
 }
@@ -413,25 +415,25 @@ function show() {
   console.info(`version.json      : ${state.version}`);
   console.info(`channel           : ${state.channel}`);
   console.info(`released          : ${state.released.length ? state.released.join(', ') : '(无)'}`);
-  console.info(`counters          : preview=${state.counters.preview} dev=${state.counters.dev}`);
+  console.info(`counters          : preview=${state.counters.preview} test=${state.counters.test} gray=${state.counters.gray}`);
   console.info(`displayVersion    : ${display}`);
   console.info(`buildVersion      : ${built}`);
   console.info(`versionCode       : ${code}`);
 }
 
-/** 递增：release 升第三段；preview / dev 升各自后缀计数 */
+/** 递增：release 升第三段；preview / test / gray 升各自后缀计数 */
 function bump(requested) {
   const state = loadState();
   const channel = requested ?? 'release';
   if (!CHANNELS.includes(channel)) {
-    fail(`bump 只接受 release / preview / dev：${channel}`);
+    fail(`bump 只接受 release / preview / test / gray：${channel}`);
   }
 
   if (channel === 'release') {
     const previous = state.version;
     state.version = bumpPatch(previous);
     state.channel = 'release';
-    state.counters = { preview: 0, dev: 0 };
+    state.counters = { preview: 0, test: 0, gray: 0 };
     saveState(state);
     const { display, code } = sync(state);
     console.info(`✓ release 递增第三段：${previous} → ${state.version}（展示 ${display}，versionCode ${code}）`);
@@ -465,7 +467,7 @@ function release() {
   }
 
   state.released.push(version);
-  state.counters = { preview: 0, dev: 0 };
+  state.counters = { preview: 0, test: 0, gray: 0 };
   state.channel = 'release';
   saveState(state);
   const { display, code } = sync(state);
@@ -496,6 +498,6 @@ switch (command) {
     release();
     break;
   default:
-    console.error('用法：node scripts/version.mjs <show|check|sync|bump [release|preview|dev]|release>');
+    console.error('用法：node scripts/version.mjs <show|check|sync|bump [release|preview|test|gray]|release>');
     process.exit(1);
 }

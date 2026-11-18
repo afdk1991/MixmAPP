@@ -25,7 +25,7 @@
  *
  * 「壳内版本常量」闸门只在 --check 生效：注入模式由 sync:android 内部调用，不新增失败条件，
  * 保持既有注入行为不变。CI 中 --check 正好位于 sync:android 之后、gradlew 之前，能拦住
- * 旧渠道产物（assets/public/assets/version.*.js 仍是 -preview / -dev 后缀号）随 cap sync 打进 APK。
+ * 旧渠道产物（assets/public/assets/version.*.js 仍是 -preview / -test / -gray 后缀号）随 cap sync 打进 APK。
  *
  * 边界：本脚本只探测壳内产物本身。壳内 origin 是 https://localhost（androidScheme: https），
  * 旧版 Capacitor 还可能是 capacitor://localhost；这两个源是否被服务端 CORS 白名单放行，
@@ -82,8 +82,8 @@ function upsertGlobal(html, name, value) {
 /**
  * 与 scripts/version.mjs 的 displayVersion() 保持一致（前端 version.ts / version.*.js
  * 由该函数生成，裸号、不带 V 前缀）：
- *   release            → `${version}`（三段号）
- *   preview / dev      → `${version}-${channel}`，计数 > 0 时追加 `.N`
+ *   release                    → `${version}`（三段号，无后缀）
+ *   preview / test / gray      → `${version}-${channel}`，计数 > 0 时追加 `.N`
  */
 function displayVersionOf(state) {
   const base = String(state.version ?? '0.0.0');
@@ -126,7 +126,7 @@ function shellVersionChecks() {
       .filter((file) => /^version.*\.js$/i.test(file))
       .map((file) => {
         const src = readFileSync(join(versionAssetsDir, file), 'utf8');
-        const m = /["'](\d+\.\d+\.\d+(?:-(?:preview|dev)(?:\.\d+)?)?)["']/.exec(src);
+        const m = /["'](\d+\.\d+\.\d+(?:-(?:preview|test|gray|dev)(?:\.\d+)?)?)["']/.exec(src);
         return { file, value: m ? m[1] : '(未解析出版本号)' };
       });
   }
@@ -144,9 +144,9 @@ function shellVersionChecks() {
   }
 
   const desc = mismatched.map((f) => `${f.file} 为 "${f.value}"`).join('、');
-  const stale = mismatched.some((f) => /preview|dev/i.test(f.value));
+  const stale = mismatched.some((f) => /preview|test|gray|dev/i.test(f.value));
   const hint = stale
-    ? '壳内仍是旧通道产物（preview / dev），需先跑 build:h5 → sync:android 全链重建'
+    ? '壳内仍是旧通道产物（preview / test / gray / dev），需先跑 build:h5 → sync:android 全链重建'
     : '壳内 H5 产物与 version.json 不同步，需先跑 build:h5 → sync:android 全链重建';
   add('error', name, false, `${desc}，期望 "${expected}"；${hint}`);
   return checks;

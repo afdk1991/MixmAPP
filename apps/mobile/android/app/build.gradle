@@ -21,7 +21,7 @@ if (!releaseKeyPassword) releaseKeyPassword = localKeystoreProps.getProperty('ke
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 
 // ── 版本号：唯一事实源是仓库根 version.json（由 scripts/version.mjs 维护）─────
-// 三段式版本 X.Y.Z，基线 0.0.0；release 递增第三段，preview/dev 用 <base>-<channel>[.N]。
+// 三段式版本 X.Y.Z，基线 0.0.0；release 递增第三段（无后缀），preview/test/gray 用 <base>-<channel>[.N]。
 // versionCode = 1 + major*10000 + minor*100 + patch（0.0.0 → 1，单调递增，Play 要求）。
 def mixmVersionFile = rootProject.file('../../../version.json')
 if (!mixmVersionFile.exists()) {

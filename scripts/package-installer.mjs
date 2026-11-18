@@ -23,8 +23,8 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skipBuild = process.argv.includes('--skip-build');
 const version = (() => {
   const v = JSON.parse(fs.readFileSync(path.join(repo, 'version.json'), 'utf8'));
-  // 与 scripts/version.mjs 的 displayVersion() 同口径：三段式，release 取当前号，
-  // preview / dev 追加 -<channel>，计数 > 0 时再加 .N。
+  // 与 scripts/version.mjs 的 displayVersion() 同口径：三段式，release 取当前号（无后缀），
+  // preview / test / gray 追加 -<channel>，计数 > 0 时再加 .N。
   const base = String(v.version ?? '0.0.0');
   if (v.channel && v.channel !== 'release') {
     const n = Number((v.counters ?? {})[v.channel] ?? 0);

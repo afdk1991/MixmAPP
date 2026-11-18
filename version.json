@@ -4,6 +4,7 @@
   "released": [],
   "counters": {
     "preview": 0,
-    "dev": 0
+    "test": 0,
+    "gray": 0
   }
 }
