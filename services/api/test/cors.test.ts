@@ -12,6 +12,10 @@ const BUILTIN = [
   'http://127.0.0.1',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://cloud.mixm.top',
+  'https://www.mixm.top',
+  'https://mixm.top',
+  'https://api.mixm.top',
 ];
 
 describe('CORS 白名单', () => {
@@ -31,6 +35,8 @@ describe('CORS 白名单', () => {
     for (const origin of BUILTIN) expect(cfg.corsOrigins).toContain(origin);
     expect(cfg.corsOrigins).toContain('https://www.mixm.top');
     expect(cfg.corsOrigins.filter((x) => x === 'https://www.mixm.top')).toHaveLength(1);
+    // 自有壳域名即使 env 白名单漏配也由内置兜底并入。
+    expect(cfg.corsOrigins).toContain('https://cloud.mixm.top');
     expect(cfg.corsOrigins).not.toContain('https://evil.example');
   });
 

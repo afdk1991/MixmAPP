@@ -54,6 +54,11 @@ const BUILTIN_CORS_ORIGINS = [
   'http://127.0.0.1',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  // 自有域名族：H5 壳与 API 同站族，避免线上漏配 CORS_ORIGINS 导致预检被拒、商城离线。
+  'https://cloud.mixm.top',
+  'https://www.mixm.top',
+  'https://mixm.top',
+  'https://api.mixm.top',
 ];
 
 const bool = (key: string, fallback = false): boolean => {
@@ -451,8 +456,11 @@ export function loadConfig(): Config {
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean),
+        // 壳自身来源（PUBLIC_BASE_URL 的 origin）自动入白名单：
+        // 即使 env 漏配，H5 壳同源族也能通过预检，不会整站离线。
+        publicOrigin,
         ...BUILTIN_CORS_ORIGINS,
-      ]),
+      ].filter(Boolean)),
     ],
     sms: {
       provider: str('SMS_PROVIDER', 'console') === 'aliyun' ? 'aliyun' : 'console',
