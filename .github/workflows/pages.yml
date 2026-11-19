@@ -1,14 +1,15 @@
 name: Pages
 
-# GitHub Pages 直接挂在 MixmAPP 主仓库上（项目名 = MixmAPP），发布单文件 H5 产物
+# 外部托管发布已暂停：项目收敛到腾讯云服务器（deploy.yml），不再随 push 自动发布到 GitHub Pages。
+# 仅保留 workflow_dispatch 手动入口；如需恢复自动发布，取消下方 push 段注释即可。
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/app/**'
-      - 'packages/**'
-      - 'scripts/build-h5-single.mjs'
-      - '.github/workflows/pages.yml'
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'apps/app/**'
+  #     - 'packages/**'
+  #     - 'scripts/build-h5-single.mjs'
+  #     - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:

@@ -256,6 +256,32 @@ suite('PostgreSQL 驱动（真实库）', () => {
     expect(await store.mall.orders.itemsByOrder(orderId)).toHaveLength(1);
   });
 
+  it('下单幂等键：claim 唯一约束，attach 后重试返回同一单号，release 后可重新占用', async () => {
+    const user = await store.users.findByEmail(email);
+    const userId = user?.id as string;
+    const key = `pg-idem-${stamp}`;
+    const orderNo = `PGO${stamp}-1`;
+
+    const first = await store.mall.orderRequests.claim(userId, key);
+    expect(first.claimed).toBe(true);
+    expect(first.orderNo).toBeNull();
+
+    // 未附着前重复占用：唯一约束拦截，返回未附着
+    const dup = await store.mall.orderRequests.claim(userId, key);
+    expect(dup.claimed).toBe(false);
+    expect(dup.orderNo).toBeNull();
+
+    await store.mall.orderRequests.attach(userId, key, orderNo);
+    const attached = await store.mall.orderRequests.claim(userId, key);
+    expect(attached.claimed).toBe(false);
+    expect(attached.orderNo).toBe(orderNo);
+
+    await store.mall.orderRequests.release(userId, key);
+    const afterRelease = await store.mall.orderRequests.claim(userId, key);
+    expect(afterRelease.claimed).toBe(true);
+    await store.mall.orderRequests.release(userId, key);
+  });
+
   /**
    * 回归守卫：PgStore 的关键词搜索是拼 SQL 字符串实现的（translate 译表做全半角归一）。
    * 译表的半角一侧含单引号，一旦漏转义，整条 SQL 语法错误 → 线上任意文本关键词 500；

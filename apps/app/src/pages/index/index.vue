@@ -524,14 +524,16 @@ import {
 /**
  * 版本文案由构建期 APP_VERSION 驱动，不写死版本号。
  * 初始版本 0.0.0 属于仓库占位值，展开口反而像未完成品，这里只保留「正式发布」。
+ * 用函数宽化入参为 string，避免与版本字面量窄类型做无重叠比较。
  */
+const isBaselineVersion = (v: string) => v === '0.0.0';
 const releaseLabel = computed(() =>
-  APP_VERSION && APP_VERSION !== '0.0.0' ? `版本 ${APP_VERSION} · 正式发布` : '正式发布',
+  APP_VERSION && !isBaselineVersion(APP_VERSION) ? `版本 ${APP_VERSION} · 正式发布` : '正式发布',
 );
 
 const version = ref(APP_VERSION);
 /** 通行证卡里的版本行：仅在拿到真实发版号时展示，0.0.0 直接隐藏。 */
-const versionLabel = computed(() => (version.value && version.value !== '0.0.0' ? version.value : ''));
+const versionLabel = computed(() => (version.value && !isBaselineVersion(version.value) ? version.value : ''));
 const env = ref('unknown');
 /** 环境值来自接口，页面只展示用户能懂的中文，不直接暴露 production/development 这类内部值。 */
 const envLabel = computed(() => {

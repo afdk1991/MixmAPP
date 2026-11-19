@@ -9,7 +9,7 @@
 >  内自洽，不依赖任何外部旧仓。
 
 <!-- version:begin -->
-当前构建版本：**V0.0.0**（正式发布版本）
+当前构建版本：**V0.0.1**（正式发布版本）
 已发布版本：无
 版本规约：三段式，基线 `0.0.0`；release 递增第三段（`0.0.0 → 0.0.1`，无后缀）；preview / test / gray 分别为 `0.0.0-preview.N` / `0.0.0-test.N` / `0.0.0-gray.N`（计数 0 时省略 `.N`），后缀计数各自独立；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
 <!-- version:end -->

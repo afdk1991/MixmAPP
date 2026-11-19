@@ -1,12 +1,13 @@
 name: Image
 
-# GitHub Packages（ghcr.io）发布：每次推 main 出一份 sha 镜像 + latest，并用真实容器做启动冒烟
+# 外部镜像仓库发布已暂停：项目收敛到腾讯云服务器（deploy.yml），不再随 push 自动推送 ghcr 镜像。
+# 仅保留 workflow_dispatch 手动入口；如需恢复，取消下方 push 段注释即可。
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+  # push:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '**.md'
   workflow_dispatch:
 
 permissions:
