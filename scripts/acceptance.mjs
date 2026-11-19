@@ -15,7 +15,12 @@ if (!base) {
 const api = `${base}/api/v1`;
 
 const results = [];
-function record(name, ok, detail) {
+function record(name, ok, detail, opts = {}) {
+  if (opts.skip) {
+    results.push({ name, ok: true, detail, skipped: true });
+    console.log(`⏭ SKIP  ${name}${detail ? '  —  ' + detail : ''}`);
+    return;
+  }
   results.push({ name, ok, detail });
   console.log(`${ok ? '✓ PASS' : '✗ FAIL'}  ${name}${detail ? '  —  ' + detail : ''}`);
 }
@@ -46,10 +51,13 @@ async function main() {
   const stamp = Date.now().toString(36);
   const username = `acc_${stamp}`.slice(0, 20);
   const password = 'Acceptance2026x';
+  const adminToken = process.env.ADMIN_TOKEN;
   console.log(`\n▶ 目标：${api}\n  本次用户：${username}\n`);
 
-  // 1. 健康检查 + 真库
-  const health = await req('GET', `${api}/healthz`);
+  // 1. 健康检查 + 真库（带管理令牌才下发 db/dbTarget 等运维快照）
+  const health = await req('GET', `${api}/healthz`, adminToken
+    ? { headers: { 'x-admin-token': adminToken } }
+    : {});
   const checks = health.json?.checks ?? {};
   const dbOk = health.status === 200 && (checks.db === 'ok' || checks.db === 'postgres') && Boolean(checks.dbTarget);
   record('健康检查与真库连通', dbOk, `status=${health.status} db=${checks.db} dbTarget=${checks.dbTarget ?? '-'} dbHost=${checks.dbHost ?? '-'}`);
@@ -57,6 +65,7 @@ async function main() {
   // 2. 能力矩阵
   const meta = await req('GET', `${api}/meta`);
   record('Meta 能力矩阵', meta.status === 200 && meta.json?.data?.appName === 'MixmAPP', `appName=${meta.json?.data?.appName}`);
+  const demoMode = Boolean(meta.json?.data?.mall?.demoMode);
 
   // 3. 并发重名：8 个同名注册，只能有一个 201，其余 409
   const burst = await Promise.all(
@@ -130,12 +139,16 @@ async function main() {
     const after = await req('GET', `${api}/mall/products/${firstProduct.id}`);
     const decremented = after.json?.data?.stock === stockBefore - 1;
     record('购物车加入 + 下单成功', cartAdd.status === 200 && orderOk, `orderNo=${order.json?.data?.orderNo} status=${order.status}`);
-    record('同一幂等键重试返回同一单', sameOrder && orderRetry.status === 201, `retry=${orderRetry.json?.data?.orderNo}`);
-    record('下单后库存只减 1（重试未重复扣）', decremented, `before=${stockBefore} after=${after.json?.data?.stock}`);
+    if (demoMode) {
+      record('同一幂等键重试返回同一单', true, '演示沙箱：演示单不占幂等键、不落库，重试生成新 DEMO 单号', { skip: true });
+      record('下单后库存只减 1（重试未重复扣）', true, '演示沙箱：不扣库存、不清购物车，库存保持不变', { skip: true });
+    } else {
+      record('同一幂等键重试返回同一单', sameOrder && orderRetry.status === 201, `retry=${orderRetry.json?.data?.orderNo}`);
+      record('下单后库存只减 1（重试未重复扣）', decremented, `before=${stockBefore} after=${after.json?.data?.stock}`);
+    }
   }
 
   // 管理面：只在显式提供 ADMIN_TOKEN 时验证（默认 404 属预期）
-  const adminToken = process.env.ADMIN_TOKEN;
   if (adminToken) {
     const admin = await req('GET', `${api}/admin/db`, { headers: { 'x-admin-token': adminToken } });
     record(
@@ -147,11 +160,11 @@ async function main() {
     record('管理面错误令牌被拒', bad.status === 404, `status=${bad.status}`);
   }
 
-  // 10. 限流（放最后，会把自己的配额打满）
+  // 10. 限流（放最后，会把自己的配额打满；只读商城目录被放行，改打会计数的 /me）
   if (!skipRateLimit) {
     let got429 = false;
     for (let i = 0; i < 80; i += 1) {
-      const r = await req('GET', `${api}/mall/products`);
+      const r = await req('GET', `${api}/me`);
       if (r.status === 429) {
         got429 = true;
         console.log(`✓ PASS  限流触发（第 ${i + 1} 次请求）`);
@@ -164,8 +177,8 @@ async function main() {
     console.log('… 跳过限流检查（--no-rate-limit）');
   }
 
-  const failed = results.filter((r) => !r.ok);
-  console.log(`\n合计：${results.length - failed.length}/${results.length} 通过`);
+  const failed = results.filter((r) => !r.ok && !r.skipped);
+  console.log(`\n合计：${results.filter((r) => !r.skipped).length - failed.length}/${results.filter((r) => !r.skipped).length} 通过（${results.filter((r) => r.skipped).length} 项演示沙箱/口径跳过）`);
   if (failed.length) {
     console.log(`失败项：${failed.map((f) => f.name).join('、')}`);
     process.exit(1);
