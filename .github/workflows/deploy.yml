@@ -3,7 +3,7 @@ name: deploy
 on:
   push:
     branches: [main]
-    tags: ['v*']
+  # tag 是不可变历史快照，不触发生产部署，避免旧版本包覆盖线上版本号。
   workflow_dispatch:
 
 concurrency:
