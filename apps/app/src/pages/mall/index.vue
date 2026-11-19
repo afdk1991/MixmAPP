@@ -327,7 +327,7 @@ import {
 import { PAGE_SIZE_OPTIONS as PAGE_SIZE_WHITELIST } from '@mixmapp/contracts';
 import { mallApi, productCover, coverTint, placeholderArt } from '../../api/client';
 import { ROUTES } from '../../routes';
-import { goTo } from '../../navigation';
+import { goTo, consumeTabQuery } from '../../navigation';
 
 /**
  * 每页条数可选档位（源站列表分页口径）：与 services/api 的 productQuerySchema 共用同一份白名单，
@@ -820,6 +820,10 @@ onLoad((options) => {
 });
 
 onShow(() => {
+  // switchTab 不带 query：首页经临时通道转交的关键词/分类在这里一次性取回。
+  const tq = consumeTabQuery(ROUTES.mall);
+  if (tq.keyword) keyword.value = tq.keyword.trim();
+  if (tq.category) pendingCategory = tq.category.trim();
   void loadLevelOne();
   refresh();
 });
