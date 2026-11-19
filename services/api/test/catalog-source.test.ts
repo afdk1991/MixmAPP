@@ -22,7 +22,7 @@ function cfg(mode: 'auto' | 'off' | 'force', file: string = fixture): Config {
   return {
     ...testConfig,
     adminToken: 'test-admin',
-    mall: { catalogSource: { mode, file }, sourceStockMode: 'off' },
+    mall: { catalogSource: { mode, file }, sourceStockMode: 'off', demoMode: false },
   };
 }
 

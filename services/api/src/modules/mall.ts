@@ -43,10 +43,19 @@ export type ImportCategoryCount = { code: string; name: string; count: number };
 export type CategoryNode = { id: string; code: string; name: string; level: number; count: number };
 
 /**
- * 演示分类码（精选/生活/数码/穿戴）：来自 db/demo-seed.ts 与 infra/sql/0002_mall.sql 的示例商品。
+ * 演示分类码（精选/生活/数码/穿戴/家居/个护/食品/运动）：来自 db/demo-seed.ts 与 infra/sql/0002_mall.sql 的示例商品。
  * 公开类目列表不下发这一组，避免正式目录里混进演示分类。
  */
-const DEMO_CATEGORY_CODES = new Set(['featured', 'life', 'digital', 'wear']);
+const DEMO_CATEGORY_CODES = new Set([
+  'featured',
+  'life',
+  'digital',
+  'wear',
+  'home',
+  'beauty',
+  'food',
+  'sports',
+]);
 
 /** 默认收藏夹名称（0019）：懒创建时使用，与迁移里 name 的 1–40 字符约束一致 */
 const DEFAULT_FAVORITE_FOLDER_NAME = '默认收藏夹';
@@ -876,6 +885,11 @@ export class MallService {
   }
 
   async createOrder(userId: string, input: OrderCreateInput, idempotencyKey?: string): Promise<OrderDto> {
+    // 演示沙箱：只做流程校验与明细/金额预览，不写订单表、不扣库存、不调支付、不占幂等键。
+    // 即使前端绕过确认弹窗，后端这一层也不会产生真实下单，作为防误提交的兜底。
+    if (this.config.mall.demoMode) {
+      return this.placeDemoOrder(userId, input);
+    }
     // 幂等：先抢占键再落单，重试拿回同一张订单，不会重复扣库存
     if (idempotencyKey) {
       const claim = await this.store.mall.orderRequests.claim(userId, idempotencyKey);
@@ -893,6 +907,158 @@ export class MallService {
       }
     }
     return this.placeOrder(userId, input);
+  }
+
+  /**
+   * 演示沙箱下单：与真实下单同口径做地址 / 配送 / 可售 / 数量 / 金额校验，
+   * 但不写订单表、不扣库存、不清购物车、不调支付；返回一份预览订单（`demo=true`）。
+   * 订单号以 `DEMO-` 开头，后端不落库，因此也不会出现在「我的订单」里。
+   */
+  private async placeDemoOrder(userId: string, input: OrderCreateInput): Promise<OrderDto> {
+    let receiverName = input.receiverName;
+    let receiverPhone = input.receiverPhone;
+    let addressText = input.address;
+    let addressId: string | null = null;
+    if (input.addressId) {
+      const saved = await this.store.mall.addresses.findById(userId, input.addressId);
+      if (!saved) throw AppError.notFound('收货地址不存在，请重新选择');
+      const reach = checkReachability({ ...saved, deliveryMethod: input.deliveryMethod });
+      if (!reach.reachable) {
+        throw new AppError('BAD_REQUEST', reach.reason ?? '该收货地址暂不可达，请更换地址');
+      }
+      receiverName = saved.receiverName;
+      receiverPhone = saved.receiverPhone;
+      addressText = `${saved.province}${saved.city}${saved.district}${saved.detail}`;
+      addressId = saved.id;
+    }
+    if (input.deliveryMethod) {
+      assertDeliverySelection(input.deliveryMethod, input.deliverySlot ?? '');
+    }
+
+    const skippedLines: SkippedCartLineDto[] = [];
+    const requested: Array<{
+      productId: string;
+      quantity: number;
+      packUnit?: string;
+      packQty?: number;
+    }> = [];
+    if (input.items) {
+      requested.push(...input.items);
+    } else {
+      const cartItems = await this.store.mall.carts.listByUser(userId);
+      for (const item of cartItems) {
+        const product = await this.store.mall.products.findById(item.productId);
+        if (!product) {
+          skippedLines.push({
+            productId: item.productId,
+            title: '已下架商品',
+            lineStatus: 'X',
+            reason: '商品已下架，无法下单',
+          });
+          continue;
+        }
+        const status = this.cartLineStatus(product);
+        if (status !== 'A') {
+          const text = CART_LINE_STATUS_TEXT[status];
+          skippedLines.push({
+            productId: product.id,
+            title: product.title,
+            lineStatus: status,
+            reason: `${text.label}：${text.hint}`,
+          });
+          continue;
+        }
+        requested.push({
+          productId: item.productId,
+          quantity: item.quantity,
+          ...(item.packUnit ? { packUnit: item.packUnit } : {}),
+          ...(item.packQty != null ? { packQty: item.packQty } : {}),
+        });
+      }
+    }
+    if (requested.length === 0) {
+      const detail = skippedLines.length
+        ? `：${skippedLines.map((line) => `${line.title}（${line.reason}）`).join('；')}`
+        : '';
+      throw AppError.conflict(`没有可结算的商品${detail}`);
+    }
+
+    const lines: Array<{
+      product: ProductRecord;
+      quantity: number;
+      packUnit?: string;
+      packQty?: number;
+    }> = [];
+    const merged = new Map<string, (typeof lines)[number]>();
+    for (const line of requested) {
+      const product = await this.store.mall.products.findById(line.productId);
+      if (!product) throw AppError.notFound(`商品不存在或已下架：${line.productId}`);
+      this.assertOrderable(product);
+      const quantity = this.resolveQuantity(product, line.quantity, line.packUnit, line.packQty);
+      const prev = merged.get(product.id);
+      if (prev) prev.quantity += quantity;
+      else {
+        const entry = {
+          product,
+          quantity,
+          ...(line.packUnit ? { packUnit: line.packUnit } : {}),
+          ...(line.packQty != null ? { packQty: line.packQty } : {}),
+        };
+        merged.set(product.id, entry);
+        lines.push(entry);
+      }
+    }
+    for (const line of lines) {
+      if (line.product.maxOrderQty != null && line.product.maxOrderQty > 0 && line.quantity > line.product.maxOrderQty) {
+        throw AppError.conflict(`单个商品数量超出上限：${line.product.title}`);
+      }
+    }
+
+    const tiers = await this.store.mall.manjianTiers.listEnabled();
+    const pricing = this.buildPricing(
+      lines.map((line) => this.lineDiscounts(line.product, line.quantity)),
+      tiers,
+    );
+
+    const order: OrderRecord = {
+      id: this.ids.next().id,
+      orderNo: `DEMO-${Date.now().toString(36).toUpperCase()}${this.ids.next().snowflake.slice(-6)}`,
+      userId,
+      status: 'pending',
+      totalFen: pricing.payableFen,
+      subtotalFen: pricing.subtotalFen,
+      mallDiscountFen: pricing.mallDiscountFen,
+      tejiaDiscountFen: pricing.tejiaDiscountFen,
+      manjianDiscountFen: pricing.manjianDiscountFen,
+      discountTotalFen: pricing.discountTotalFen,
+      receiverName,
+      receiverPhone,
+      address: addressText,
+      remark: input.remark ?? null,
+      addressId,
+      deliveryMethod: input.deliveryMethod ?? null,
+      deliverySlot: input.deliverySlot ?? null,
+      createdAt: new Date(),
+      paidAt: null,
+    };
+    const items: OrderItemRecord[] = lines.map((line) => ({
+      id: this.ids.next().id,
+      orderId: order.id,
+      productId: line.product.id,
+      title: line.product.title,
+      priceFen: line.product.priceFen,
+      quantity: line.quantity,
+      subtotalFen: lineTotalFen(line.product, line.quantity),
+      packUnit: line.packUnit ?? null,
+      packQty: line.packQty ?? null,
+      priceLi: line.product.priceLi ?? null,
+      stockUnconfirmed: this.inferredScarce(line.product),
+      lineStatus: 'A',
+    }));
+
+    const dto = this.toOrderDto(order, items, skippedLines);
+    dto.demo = true;
+    return dto;
   }
 
   private async placeOrder(userId: string, input: OrderCreateInput): Promise<OrderDto> {

@@ -18,7 +18,7 @@
     </view>
 
     <block v-else-if="product">
-      <view class="hero" :style="heroTint ? { background: heroTint } : {}">
+      <view class="hero" :style="heroStyle">
         <image
           v-if="mainImage && !isBroken(mainImage)"
           class="hero-img"
@@ -293,7 +293,7 @@ import {
   unitPriceText,
   yuanText,
 } from '../../api/mall';
-import { mallApi, mediaUrl, productCover, coverTint } from '../../api/client';
+import { mallApi, mediaUrl, productCover, coverTint, placeholderArt } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 
@@ -340,10 +340,25 @@ const images = computed(() => {
   const cover = productCover({ cover: item.cover });
   return cover ? [cover] : [];
 });
-/** 无实物图时的占位底色（后端 cover 存的品牌色）。 */
-const heroTint = computed(() =>
-  product.value ? coverTint({ images: product.value.images, cover: product.value.cover }) : '',
-);
+/** 无实物图时：矢量高清占位封面（SVG data URI），兜底底色取 cover 品牌色。 */
+const heroStyle = computed(() => {
+  if (!product.value) return {};
+  const art = placeholderArt({
+    images: product.value.images,
+    cover: product.value.cover,
+    category: product.value.category,
+  });
+  const tint = coverTint({ images: product.value.images, cover: product.value.cover });
+  if (art) {
+    return {
+      backgroundImage: `url("${art}")`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundColor: tint || '#0f9d8f',
+    };
+  }
+  return tint ? { background: tint } : {};
+});
 const mainImage = computed(() => activeImage.value || images.value[0] || '');
 const specs = computed(() => (product.value ? specEntries(product.value.specs) : []));
 const crumbs = computed(() => (product.value ? breadcrumbLabel(product.value.categoryPath) : ''));
@@ -818,7 +833,7 @@ onLoad((options) => {
   white-space: pre-line;
   word-break: break-all;
   overflow-wrap: anywhere;
-  color: $ink-3;
+  color: $acc-6;
 }
 
 .price-row {
@@ -977,7 +992,7 @@ onLoad((options) => {
 .spec-value {
   flex: 1;
   font-size: 28rpx;
-  color: $ink;
+  color: $acc-2;
   word-break: break-all;
 }
 

@@ -162,6 +162,65 @@ export function coverTint(product: { images?: string[] | null; cover?: string | 
   return isTint(product.cover) ? String(product.cover).trim() : '';
 }
 
+/* ---------- 本地矢量高清占位图 ----------
+ * 无真实商品图时，按 cover 色值 / 类目派生一张 1024×1024 的 SVG 矢量封面。
+ * 矢量在任意分辨率下都不失真（高清 / 超高清缩放不糊），离线可用、不依赖外部图库。
+ * 后续接入 AI 生成 / 免费可商用图库 / 用户原图时，只要把真实地址写进 images[0]，
+ * 本占位会被 productCover 自动让位，无需改页面。 */
+
+function parseHex(hex: string): [number, number, number] | null {
+  const m = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(hex.trim());
+  if (!m || m[1] == null) return null;
+  let h: string = m[1];
+  if (h.length === 3 || h.length === 4) {
+    h = h
+      .split('')
+      .map((c) => `${c}${c}`)
+      .join('');
+  }
+  const n = parseInt(h.slice(0, 6), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function shade(hex: string, amt: number): string {
+  const rgb = parseHex(hex);
+  if (!rgb) return hex;
+  const target = amt < 0 ? 0 : 255;
+  const p = Math.abs(amt) / 100;
+  const out = rgb.map((v: number) => Math.round(v + (target - v) * p));
+  return `#${out.map((v: number) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** 类目 → 占位主色（自有演示商品无 cover 图时按类目取色）。 */
+const CATEGORY_PLACEHOLDER: Record<string, string> = {
+  featured: '#0f9d8f',
+  life: '#334155',
+  digital: '#0b1220',
+  wear: '#1f2937',
+  home: '#0e7490',
+  beauty: '#a21caf',
+  food: '#92400e',
+  sports: '#16a34a',
+};
+
+/**
+ * 无图商品的矢量占位封面（data URI SVG）。
+ * 有真实图时返回空串，由调用方走 <image> 真实图路径。
+ */
+export function placeholderArt(product: {
+  images?: string[] | null;
+  cover?: string | null;
+  category?: string | null;
+}): string {
+  if (productCover(product)) return '';
+  const tint = coverTint(product);
+  const base = tint || CATEGORY_PLACEHOLDER[product.category ?? ''] || '#0f9d8f';
+  const top = shade(base, 18);
+  const bottom = shade(base, -22);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/></linearGradient></defs><rect width="1024" height="1024" fill="url(#g)"/><circle cx="760" cy="260" r="360" fill="rgba(255,255,255,0.10)"/><circle cx="760" cy="260" r="240" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2"/><circle cx="240" cy="800" r="300" fill="rgba(255,255,255,0.07)"/><path d="M0 760 L1024 360" stroke="rgba(255,255,255,0.10)" stroke-width="2"/></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly code: string,
@@ -400,9 +459,27 @@ export const metaApi = {
       env: string;
       ids: { strategies: string[]; current: string };
       thirdParty: Record<string, string>;
+      mall?: { demoMode?: boolean };
       serverTime: string;
     }>('/meta', { auth: false }),
 };
+
+/**
+ * 演示沙箱标记缓存：后端 `MALL_DEMO_MODE` 控制。
+ * true = 下单只做流程预览，不产生真实订单 / 扣款；false = 真实链路。
+ * meta 未下发时默认 true（保守，防误提交）。
+ */
+let demoModeCache: boolean | null = null;
+
+/** 读取演示沙箱标记；先取缓存，缺省按演示模式处理。 */
+export function isDemoOrderMode(): boolean {
+  return demoModeCache ?? true;
+}
+
+/** 由 meta 响应回填演示标记。 */
+export function applyMetaFlags(meta: { mall?: { demoMode?: boolean } } | null | undefined): void {
+  demoModeCache = meta?.mall?.demoMode !== false;
+}
 
 export type DbStatusDto = {
   target: 'cloudbase' | 'server';

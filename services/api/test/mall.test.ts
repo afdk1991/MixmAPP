@@ -1129,4 +1129,37 @@ describe('首页运营位（home/ggs、home/rcs）', () => {
     expect(relaxed.statusCode).toBe(200);
     expect((relaxed.json().data as unknown[]).length).toBeLessThanOrEqual(6);
   });
+
+  it('演示沙箱下单：返回 demo 预览单，不扣库存、不清车、不落订单', async () => {
+    const ctx = await makeApp({ config: { mall: { demoMode: true } } });
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'mix-demo-1', title: '演示礼盒', stock: 5, priceFen: 9900 }));
+    const token = await register(app, '13800003104');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/cart',
+      headers: auth(token),
+      payload: { productId: 'mix-demo-1', quantity: 2 },
+    });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/orders',
+      headers: auth(token),
+      payload: { receiverName: '李四', receiverPhone: '13800003104', address: '浙江省宁波市鄞州区演示路 2 号' },
+    });
+    expect(created.statusCode).toBe(201);
+    const order = created.json().data;
+    expect(order.demo).toBe(true);
+    expect(order.orderNo).toMatch(/^DEMO-/);
+    expect(order.totalFen).toBe(19800);
+
+    // 库存未扣、购物车未清、订单列表为空（后端不落库）
+    expect((await ctx.store.mall.products.findById('mix-demo-1'))?.stock).toBe(5);
+    const cartAfter = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    expect(cartAfter.json().data.items).toHaveLength(1);
+    const orders = await app.inject({ method: 'GET', url: '/api/v1/mall/orders', headers: auth(token) });
+    expect(orders.json().data).toHaveLength(0);
+  });
 });

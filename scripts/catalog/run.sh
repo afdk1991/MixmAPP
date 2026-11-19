@@ -1,7 +1,9 @@
 #!/bin/bash
-# 商城货源同步入口（生产：每周日 00:00 Asia/Shanghai）
+# 商城货源同步入口（生产：每日 02:30 Asia/Shanghai，无人值守累积全量）
 # - 定时只跑 egluosi（历史主源）。hznzcn 已从定时摘除，改为按需手动同步，
 #   手动入口见 deploy/CATALOG-DEPLOY.md「hznzcn 手动同步」一节
+# - 默认全量全分类覆盖（limit/pages/perCat/maxItems 均为 0 = 不限）；
+#   续跑按 source_key 幂等 upsert，已抓过的商品按字段 diff 只更新变化列，断点续跑不重复
 # - 可用 CATALOG_SITES 覆盖站点列表（默认仅 egluosi；排障时才会临时加源）
 # - 每个源独立：状态文件、锁、日志、失败重试互不影响；全部结束才汇总退出码
 # - 加载生产 API 环境变量（DATABASE_URL_LOCAL 等）

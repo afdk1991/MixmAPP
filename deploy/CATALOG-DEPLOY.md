@@ -419,7 +419,7 @@ LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
 
 | 源 | 触发方式 | 说明 |
 |---|---|---|
-| `egluosi` | 定时，每周日 00:00（Asia/Shanghai） | 唯一进 crontab 的源，`/opt/mixmapp/catalog-sync/run.sh` |
+| `egluosi` | 定时，每日 02:30（Asia/Shanghai） | 唯一进 crontab 的源，`/opt/mixmapp/catalog-sync/run.sh`，默认全量全分类幂等累积 |
 | `hznzcn` | **仅手动** | 已从定时摘除；不进 `SITES` 默认值，手动跑也不会顺带跑 egluosi |
 
 服务器实际生效值（不是仓库文件）：
@@ -428,7 +428,7 @@ LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
 ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 \
   "crontab -l | grep catalog-sync; grep -n '^SITES=' /opt/mixmapp/catalog-sync/run.sh"
 # 期望：
-#   0 0 * * 0 /opt/mixmapp/catalog-sync/run.sh
+#   30 2 * * * /opt/mixmapp/catalog-sync/run.sh
 #   SITES=${CATALOG_SITES:-"egluosi"}
 ```
 

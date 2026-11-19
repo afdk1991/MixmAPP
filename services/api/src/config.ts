@@ -189,6 +189,14 @@ export type Config = {
       file: string;
     };
     /**
+     * MALL_DEMO_MODE：演示沙箱总闸。
+     * - on / 未设置（默认）：下单只做流程校验与明细/金额预览，不写真实订单、不扣库存、不调支付；
+     *   响应带 `demo: true`，订单号以 DEMO- 开头。
+     * - off：走真实下单链路（写库、扣库存、幂等占位）。
+     * 测试环境默认 off，保证既有测试对空库与库存扣减的断言可预测。
+     */
+    demoMode: boolean;
+    /**
      * MALL_SOURCE_STOCK_GATE：库存拦截总闸（唯一真源，只由本文件的这一处读取）
      * - `false` / `off`：一律不按源站库存拦截（旧放行行为）
      * - `true` / 未设置（默认）：分级判定 —— 明确停售/下架/无货才拦，
@@ -546,6 +554,14 @@ export function loadConfig(): Config {
         if (raw === 'strict') return 'strict';
         if (raw === 'false' || raw === '0' || raw === 'off' || raw === 'no') return 'off';
         return 'tier';
+      })(),
+      /**
+       * 演示沙箱：测试环境默认 off（库存/订单断言需要真实链路）；
+       * 其余环境默认 on，避免演示站误产生真实订单与扣库存。
+       */
+      demoMode: ((): boolean => {
+        const raw = str('MALL_DEMO_MODE', env === 'test' ? 'off' : 'on').trim().toLowerCase();
+        return !['false', '0', 'off', 'no'].includes(raw);
       })(),
     },
     orderTtlMinutes: num('ORDER_TTL_MINUTES', 30),

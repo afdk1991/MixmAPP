@@ -255,7 +255,7 @@ onLoad((options) => {
   margin-top: 10rpx;
   font-size: 26rpx;
   letter-spacing: 2rpx;
-  color: $ink-3;
+  color: $acc-6;
 }
 
 /* ---------- 票据 ---------- */
@@ -403,7 +403,7 @@ onLoad((options) => {
   flex: 1;
   font-size: 30rpx;
   line-height: 1.35;
-  color: $ink;
+  color: $acc-2;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

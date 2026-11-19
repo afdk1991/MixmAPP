@@ -23,6 +23,7 @@ export async function metaRoutes(app: FastifyInstance): Promise<void> {
         current: app.cfg.ids.strategy,
       },
       thirdParty: capabilitySnapshot(app.cfg),
+      mall: { demoMode: app.cfg.mall.demoMode },
       catalogSource: await app.catalog.status(),
       serverTime: new Date().toISOString(),
     },

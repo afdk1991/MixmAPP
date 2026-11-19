@@ -499,7 +499,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
-import { metaApi, mallApi, homeApi, productCover, coverTint, ApiError } from '../../api/client';
+import { metaApi, mallApi, homeApi, productCover, coverTint, ApiError, applyMetaFlags } from '../../api/client';
 import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
@@ -895,6 +895,7 @@ async function loadMeta(): Promise<void> {
   error.value = '';
   try {
     const meta = await metaApi.get();
+    applyMetaFlags(meta);
     // 版本以构建期 APP_VERSION（正式发布）为准，不被服务端 meta.version 覆盖成旧版串。
     env.value = meta.env;
     online.value = true;

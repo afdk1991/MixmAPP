@@ -325,7 +325,7 @@ import {
   yuanText,
 } from '../../api/mall';
 import { PAGE_SIZE_OPTIONS as PAGE_SIZE_WHITELIST } from '@mixmapp/contracts';
-import { mallApi, productCover, coverTint } from '../../api/client';
+import { mallApi, productCover, coverTint, placeholderArt } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 
@@ -724,9 +724,18 @@ function coverOf(product: MallProductDto): string {
   return productCover(product);
 }
 
-/** 无图自有商品（cover 存的是色值）的占位底色。 */
+/** 无图自有商品：矢量高清占位封面（SVG data URI），兜底底色取 cover 色值。 */
 function tintOf(product: MallProductDto): Record<string, string> {
+  const art = placeholderArt(product);
   const tint = coverTint(product);
+  if (art) {
+    return {
+      backgroundImage: `url("${art}")`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundColor: tint || '#0f9d8f',
+    };
+  }
   return tint ? { background: tint } : {};
 }
 
@@ -1279,13 +1288,27 @@ onPullDownRefresh(() => {
 }
 
 .card {
+  position: relative;
   width: 48.6%;
   margin-bottom: $sp-4;
   background: $shell;
   border: 1rpx solid $paper-3;
   border-radius: $r-card;
   overflow: hidden;
+  box-shadow: $shadow-card;
   transition: transform 0.16s ease;
+}
+
+/* 卡片顶部彩色细条：青→靛蓝→紫，与标题渐变同源，作为彩色体系的描边装饰 */
+.card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4rpx;
+  background: $grad-title;
+  z-index: 4;
 }
 
 /* ---------- 平板 / 折叠屏展开态：商品网格三栏 ---------- */
@@ -1332,7 +1355,8 @@ onPullDownRefresh(() => {
   width: 210rpx;
   height: 210rpx;
   border-radius: 50%;
-  border: 1rpx solid $paper-3;
+  border: 1rpx solid $acc-3;
+  opacity: 0.35;
   top: 46rpx;
   left: 50%;
   margin-left: -105rpx;
@@ -1408,7 +1432,7 @@ onPullDownRefresh(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: 1.4;
-  color: $ink;
+  color: $acc-2;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -1421,7 +1445,7 @@ onPullDownRefresh(() => {
   display: block;
   margin-top: 6rpx;
   font-size: $fs-micro;
-  color: $ink-3;
+  color: $acc-6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

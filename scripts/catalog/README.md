@@ -25,10 +25,10 @@ pnpm catalog:inspect --show-mapping    # 附打印字段映射表
 
 ## 定时与手动
 
-- **定时只跑 egluosi**：生产 `run.sh` 的 `SITES` 默认值就是 `egluosi`，每周日 00:00 只同步主源。
+- **定时只跑 egluosi**：生产 `run.sh` 的 `SITES` 默认值就是 `egluosi`，**每日 02:30（Asia/Shanghai）** 无人值守续抓，默认全量全分类覆盖，按 `source_key` 幂等累积。
 - **hznzcn 不做定时，只按需手动**：它是独立适配器（`--site hznzcn`），状态文件
   `hznzcn-state.json`、快照 `hznzcn-*.json` 与 egluosi 完全分开；`source_key` 前缀 `hzn:`，
-  id 前缀 `hzn-`，不会覆盖或撞号 egluosi 的 15,037 条。
+  id 前缀 `hzn-`，不会覆盖或撞号 egluosi 的既有商品。
 - 生产机 IP 被源站 WAF 封，手动同步必须**本地采集 + SSH 隧道写库 + 图片推送**，
   完整可粘贴命令见 [`deploy/CATALOG-DEPLOY.md`](../../deploy/CATALOG-DEPLOY.md)「11. hznzcn 手动同步」。
 - 手动有界运行（带 `--per-cat` / `--max-items` / `--limit` / `--pages`）时 `delistSafe=false`，

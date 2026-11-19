@@ -364,7 +364,7 @@ import {
   STOCK_UNCONFIRMED_NOTICE,
   unitPriceText,
 } from '../../api/mall';
-import { mallApi, mediaUrl, productCover, coverTint } from '../../api/client';
+import { mallApi, mediaUrl, productCover, coverTint, isDemoOrderMode } from '../../api/client';
 import { addressApi } from '../../api/address';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
@@ -913,6 +913,24 @@ async function submitOrder(): Promise<void> {
     return;
   }
   if (submitting.value) return;
+
+  // 防误提交：无论演示还是真实链路，提交前都二次确认。
+  // 演示模式明确告知「不产生真实订单 / 不扣库存 / 不支付」；真实链路提示库存将扣减。
+  const demo = isDemoOrderMode();
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: demo ? '演示环境 · 预览订单' : '确认提交订单',
+      content: demo
+        ? '当前为演示模式：仅走下单流程预览，不会生成真实订单、不扣减库存、不发起支付。'
+        : '提交后将扣减库存并生成真实订单，确认继续？',
+      confirmText: demo ? '生成预览单' : '确认提交',
+      cancelText: '再看看',
+      success: (res) => resolve(Boolean(res.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+  if (!confirmed) return;
+
   submitting.value = true;
   try {
     const order = await mallApi.createOrder({
@@ -935,6 +953,16 @@ async function submitOrder(): Promise<void> {
         ...(line.packQty != null ? { packQty: line.packQty } : {}),
       })),
     });
+    // 演示沙箱订单：后端未落库、未扣库存、未清购物车，只回显预览单号，不跳「我的订单」。
+    if (order.demo) {
+      uni.showModal({
+        title: '演示订单已生成',
+        content: `单号 ${order.orderNo}\n仅作流程预览，未写入真实订单。`,
+        showCancel: false,
+        confirmText: '知道了',
+      });
+      return;
+    }
     checkoutVisible.value = false;
     // 失效行留在购物车：清空勾选，返回本页时由 onShow 重新拉取
     selectedIds.value = new Set();
@@ -991,7 +1019,7 @@ onShow(() => {
   margin-top: 10rpx;
   font-size: 26rpx;
   letter-spacing: 2rpx;
-  color: $ink-3;
+  color: $acc-6;
 }
 
 .list {
@@ -1153,7 +1181,7 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: 1.35;
-  color: $ink;
+  color: $acc-2;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

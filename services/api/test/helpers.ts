@@ -42,9 +42,13 @@ export async function makeApp(
     oauth?: Partial<Record<OAuthProviderName, OAuthProvider>>;
     onekey?: OneKeyProvider;
     providerRegistry?: ProviderRegistry;
+    config?: { mall?: { demoMode?: boolean } };
   } = {},
 ) {
   const store = new MemoryStore();
+  const config = options.config?.mall
+    ? { ...testConfig, mall: { ...testConfig.mall, ...options.config.mall } }
+    : testConfig;
   const oauth: Partial<Record<OAuthProviderName, OAuthProvider>> = {
     wechat: options.oauth?.wechat ?? new FakeOAuth('wechat', { openId: 'wx-open-1', unionId: 'un-1', nickname: '微信测试', avatarUrl: null }),
     qq: options.oauth?.qq ?? new FakeOAuth('qq', { openId: 'qq-open-1', unionId: null, nickname: 'QQ测试', avatarUrl: null }),
@@ -53,7 +57,7 @@ export async function makeApp(
     ...options.oauth,
   };
   const app = await buildApp({
-    config: testConfig,
+    config,
     store,
     oauth,
     ...(options.onekey ? { onekey: options.onekey } : {}),

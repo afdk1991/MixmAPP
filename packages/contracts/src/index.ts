@@ -797,6 +797,8 @@ export type OrderDto = {
   cancelReason?: string | null;
   /** 取消方：user / system / admin（未取消为 null） */
   cancelledBy?: OrderCancelledBy | null;
+  /** 演示沙箱订单：仅流程预览，未落库、未扣库存、未调支付；订单号以 DEMO- 开头 */
+  demo?: boolean;
   createdAt: string;
 };
 
