@@ -82,6 +82,9 @@ jobs:
           cp -a out/api/. release/
           cp -a infra release/infra
           cp -a scripts release/scripts
+          # version.json 必须随包发布：远端原子发布脚本从产物内 version.json 回退解析版本号，
+          # 缺了它在 env 文件旧 APP_VERSION 未被覆盖时会一直沿用旧版本号。
+          cp -a version.json release/version.json
           tar -czf api-${{ github.sha }}.tar.gz -C release .
 
       - name: 打包 H5 产物

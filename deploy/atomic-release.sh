@@ -21,6 +21,11 @@ STORAGE_DIR=${STORAGE_DIR:-/var/lib/mixmapp/storage}
 # 发布成功后校验目录源是否接管（需 api.env 已配好两个 MALL_CATALOG_* 变量）
 VERIFY_CATALOG=${VERIFY_CATALOG:-0}
 
+# 在 source api.env 之前先捕获外部显式传入的 APP_VERSION。
+# 下面 source 会把 env 文件里的旧 APP_VERSION 灌进环境，若不先存下来，旧号会覆盖传入号，
+# 导致线上 /healthz 一直报旧版本。
+INLINE_APP_VERSION=${APP_VERSION:-}
+
 # 迁移与重启都需要 api.env 里的 DATABASE_URL；systemd 的 EnvironmentFile 不会自动
 # 出现在当前 shell，所以这里显式加载一次。
 if [ -f "$ENV_FILE" ]; then
@@ -130,7 +135,10 @@ ln -sfn "$RELEASE" "$APP_DIR/current"
 # 口径与 scripts/version.mjs 一致：三段式基线；release 取 version，
 # preview/dev 取 version-channel，计数 > 0 时追加 .N。
 # 只覆盖 APP_VERSION 这一行，其余运维配置不动；解析不出就保留原值并告警。
-if [ -z "${APP_VERSION:-}" ]; then
+if [ -n "${INLINE_APP_VERSION:-}" ]; then
+  APP_VERSION="$INLINE_APP_VERSION"
+else
+  APP_VERSION=""
   for f in "$RELEASE/version.json" "$APP_DIR/current/version.json"; do
     if [ -f "$f" ]; then
       APP_VERSION=$(node -e 'const v=require(process.argv[1]);const base=String(v.version??"0.0.0");const ch=String(v.channel??"release");if(ch==="release"){process.stdout.write(base)}else{const n=Number((v.counters??{})[ch]??0);process.stdout.write(base+"-"+ch+(n>0?"."+n:""))}' "$f" 2>/dev/null || true)
