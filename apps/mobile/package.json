@@ -1,6 +1,6 @@
 {
   "name": "@mixmapp/mobile",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "MixmAPP 原生壳（Capacitor）：装载 apps/app 的 H5 产物，产出 Android APK/AAB",
   "scripts": {

@@ -1,7 +1,9 @@
 {
-  "version": "0.0.1",
+  "version": "0.0.2",
   "channel": "release",
-  "released": [],
+  "released": [
+    "0.0.1"
+  ],
   "counters": {
     "preview": 0,
     "test": 0,

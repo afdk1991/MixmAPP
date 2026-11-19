@@ -214,7 +214,7 @@ function buildEnvFile(cfg) {
     '# MixmAPP 运行配置（由安装向导生成，权限 600，请勿提交到仓库）',
     'NODE_ENV=production',
     'APP_NAME=MixmAPP',
-    'APP_VERSION=0.0.1',
+    'APP_VERSION=0.0.2',
     'HOST=127.0.0.1',
     `PORT=${cfg.apiPort}`,
     `PUBLIC_BASE_URL=${cfg.publicBase}`,

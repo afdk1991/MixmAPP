@@ -2,8 +2,8 @@
   "name": "MixmAPP",
   "appid": "__UNI__MIXMAPP",
   "description": "MixmAPP 一码多端应用",
-  "versionName": "0.0.1",
-  "versionCode": "2",
+  "versionName": "0.0.2",
+  "versionCode": "3",
   "transformPx": false,
   "app-plus": {
     "usingComponents": true,

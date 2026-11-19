@@ -425,7 +425,7 @@ export function loadConfig(): Config {
   return {
     env,
     appName: str('APP_NAME', 'MixmAPP'),
-    version: str('APP_VERSION', '0.0.1'),
+    version: str('APP_VERSION', '0.0.2'),
     host: str('HOST', '0.0.0.0'),
     port: num('PORT', 8080),
     publicBaseUrl,
