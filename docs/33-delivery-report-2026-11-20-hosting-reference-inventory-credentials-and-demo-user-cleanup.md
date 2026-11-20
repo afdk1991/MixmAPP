@@ -107,6 +107,42 @@ CloudBase 静态托管 6 个入口，按 Prefix Rewrite 分两类（沿用 32 �
 
 接入方式：凭证申请到位后，在服务器 `/etc/mixmapp/api.env`（600 root root）或 CloudBase 环境变量落值，切换对应 `*_PROVIDER` 开关即可；代码骨架与安全回退已就位。
 
+### 3.5 个人开发者（无营业执照）准入矩阵（2026-11-20 复核）
+
+复核口径：通读 `services/api/src/adapters/` 下 `map / ai / storage / push / sms / oauth-generic / oauth / pay / onekey`，个人可自助渠道的适配器均为**完整实现、无空桩**；缺凭证时抛 `PROVIDER_DISABLED` 或回退 `dev / console / local`，登录页不渲染未启用渠道。门禁：lint ✓、typecheck 全包 Done、test 169 passed / 8 skipped。
+
+#### A. 个人可自助申请，代码已就位，填 Key 即开通（无执照门槛）
+
+| 能力 | 平台与个人准入 | 代码实现 | 落地 env |
+| --- | --- | --- | --- |
+| GitHub 登录 | GitHub OAuth Apps，个人账号可建 | `oauth-generic` 配置化端点 + 字段映射 | `OAUTH_GITHUB_CLIENT_ID/SECRET` |
+| Gitee 登录 | Gitee 开放应用，个人可注册 | 同上 | `OAUTH_GITEE_CLIENT_ID/SECRET` |
+| Google / Facebook | 个人账号，需域名验证与网络条件 | 同上 | `OAUTH_GOOGLE/FACEBOOK_*` |
+| 微博 / 抖音 / 华为 / QQ | 各开放平台个人开发者注册，审核松紧不一 | 同上 | 对应 `OAUTH_*` |
+| Apple 登录 | Apple 开发者账号，个人可购 **$99/年** | `oauth.ts` ES256 私钥换 client secret | `OAUTH_APPLE_CLIENT_ID/TEAM_ID/KEY_ID/PRIVATE_KEY` |
+| 地图定位 | 高德 Web 服务 Key，个人免费申请 | `AmapProvider` 逆地理 + 路径规划完整 | `MAP_PROVIDER=amap`、`AMAP_KEY` |
+| AI | 豆包方舟 / OpenAI 兼容协议，个人实名领 Key | `OpenAiCompatProvider`（含用量回传） | `AI_PROVIDER`、`AI_API_KEY`、`AI_MODEL` |
+| 对象存储 | COS / OSS / R2 / MinIO（S3 兼容），个人实名开通有额度 | `S3Storage` SigV4 query 预签名 PUT | `STORAGE_PROVIDER=s3`、`S3_ENDPOINT/REGION/BUCKET/ACCESS_KEY_ID/SECRET_ACCESS_KEY/PUBLIC_BASE_URL` |
+| 推送 | 极光免费版 / FCM（Google 账号） | `JPushProvider` REST v3、`FcmProvider` HTTP v1 | `PUSH_PROVIDER=jpush/fcm`、`JPUSH_*` / `FCM_*` |
+
+#### B. 纯个人（无执照）受限或不可闭环，需个体工商户 / 企业资质
+
+| 能力 | 政策事实（2026-11 检索） |
+| --- | --- |
+| 微信支付商户 | 普通商户主体限个体工商户 / 企业 / 政府 / 事业 / 社会组织；纯个人只能经服务商进件"小微 / 个人卖家"，且个人卖家需电商经营满 6 个月、累计收入超 20 万元，**无法自助开通普通商户号**。 |
+| 支付宝收单 | 手机网站支付个人账号名义可签，但需提供营业执照且 ICP 备案主体与账号一致；无执照则收款额度受限（单笔 ≤2000、单日 ≤20000）。 |
+| 国内短信 | 个人认证无法通过签名实名制报备，须企业资质或他用企业授权；个人仅可改用免签名的号码认证产品。 |
+| 一键登录 / 本机号码认证 | 运营商商务签约 + 次数套餐（三网百万次套包 3 万元档），面向企业；未签约每 AppID 每日限 1000 次。 |
+| 企业微信 / 钉钉 / 飞书登录 | 需企业组织主体，个人无法创建组织。 |
+| 微信扫码 / 公众号授权 | 开放平台可个人认证，但需开发者资质认证（软著 + 手持身份证）审核通过；公众号网页授权仅已认证服务号可用，个人订阅号不支持。 |
+
+#### C. 与资质无关的数据 / 并行线阻塞
+
+- 无图商品约 3817 个待补图（#35，需原图包 / 图库授权，离线脚本已入库可重跑）。
+- hznzcn 女装迁移线待并行会话收口后评估源码入库与生产导入（#34）。
+
+> 政策来源：微信支付商户主体规则 `pay.weixin.qq.com/doc/v3/merchant/4012071573`；支付宝手机网站支付条件 `opendocs.alipay.com/b/03ah67`、`ideservice.alipay.com/cms/site/0j3pig`；阿里云短信个人资质公告 `help.aliyun.com/zh/sms/product-overview/announcement-on-sms-not-supporting-application-for-personal-use-qualification`；移动号码认证 `dev.10086.cn/numIdentific`；微信开放平台应用审核规范 `developers.weixin.qq.com/doc/oplatform/Website_App/operation.html`。
+
 ## 4. hznzcn 女装迁移线盘点（#31）
 
 - 隔离口径：`.gitignore:41-43` 注释说明并整目录忽略 `tools/hznzcn-importer/`（含生产库增量导入器、SSH 隧道直连逻辑、WAF cookie jar、图片 / 游标 / 状态产物）。
@@ -160,7 +196,7 @@ CloudBase 静态托管 6 个入口，按 Prefix Rewrite 分两类（沿用 32 �
 | 项 | 现状 | 待决定 / 待提供 |
 | --- | --- | --- |
 | ~~桶根候选残留~~ | **已删除闭环**（2026-11-20）：94 个无引用对象清理完毕，剩余 18 个为根兜底 + 他项目子目录 | 无；历史外链 / 旧缓存命中不影响当前在线壳 |
-| 第三方真实凭证 | 代码骨架 + 安全回退就位，线上全空值安全态 | 按 3.4 清单在各平台申请后落 env |
+| 第三方真实凭证 | 代码骨架 + 安全回退就位，线上全空值安全态；按 3.5 分 A 类个人可自助 / B 类需个体户或企业资质 | A 类在个人平台领 Key 落 env 即开；B 类需先办执照或改走合规收款 / 认证方案 |
 | hznzcn 迁移线 | 整目录隔离在途 | 收口后评估源码入库范围与是否执行生产导入 |
 | 商品原图 / 图库授权 | 线上仍有无图商品与变体 404 | 待原图包或高清图库授权；离线修复脚本已入库可重跑 |
 
