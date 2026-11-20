@@ -153,6 +153,7 @@ CloudBase 静态托管 6 个入口，按 Prefix Rewrite 分两类（沿用 32 �
 
 ## 7. 提交与产物
 
+- 提交 `76f4574` docs(delivery-report): 桶根逐子域引用清单、凭据接入点复核、hznzcn 盘点与演示账号清理（1 file，+159）。
 - 本轮仓库侧无源码改动：凭据复核为线上 / 只读审计，账号清理在 CVM 库内执行，hznzcn 保持 gitignore 隔离；产物为本报告与服务器备份 / 清单。
 - 服务器产物：`/var/lib/mixmapp/backups/pre-user-cleanup-20261120-204603.dump`、`pre-user-cleanup-20261120-204603.users.csv`。
 - 版本：工作号 0.0.2（release）；线上 `db=ok`、`demoMode=on`；基线 169 passed / 8 skipped、typecheck 全包 Done。
