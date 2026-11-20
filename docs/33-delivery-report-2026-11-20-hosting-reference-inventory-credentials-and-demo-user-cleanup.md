@@ -143,6 +143,33 @@ CloudBase 静态托管 6 个入口，按 Prefix Rewrite 分两类（沿用 32 �
 
 > 政策来源：微信支付商户主体规则 `pay.weixin.qq.com/doc/v3/merchant/4012071573`；支付宝手机网站支付条件 `opendocs.alipay.com/b/03ah67`、`ideservice.alipay.com/cms/site/0j3pig`；阿里云短信个人资质公告 `help.aliyun.com/zh/sms/product-overview/announcement-on-sms-not-supporting-application-for-personal-use-qualification`；移动号码认证 `dev.10086.cn/numIdentific`；微信开放平台应用审核规范 `developers.weixin.qq.com/doc/oplatform/Website_App/operation.html`。
 
+### 3.6 前后端端点覆盖对照（2026-11-20 审计）
+
+**已闭环（前端页面 ↔ 后端路由一一对应）：**
+
+- 认证：密码 / 短信 / 邮箱 / 用户名 / 游客注册登录、OAuth 发起-回调-换码、刷新、登出、一键登录。
+- 账号：资料读取、用户名绑定、OAuth 绑定 / 解绑。
+- 商城：商品列表 / 详情 / 类目树 / 规格，购物车增删改清空，下单，订单列表 / 详情 / 取消，收藏夹 CRUD / 复制 / 设默认，首页广告位与推荐分类。
+- 地址：地址簿 CRUD / 设默认 / 可达性校验 / 配送方式。
+- 元信息：`/meta` 能力快照与演示标记、健康检查。
+- 管理面：DB 落点读取 / 切换、超时订单清扫（admin token）。
+
+**后端已实现、前端暂未接入口（按归属分类）：**
+
+| 后端端点 | 能力 | 未接归属 |
+| --- | --- | --- |
+| `POST /me/bind/email` | 邮箱补绑 | 产品增强：账号绑定完善 UI 未规划；后端契约稳定，接入不依赖外部凭证 |
+| `POST /me/bind/phone` | 手机补绑（前端封装已有，无表单） | 同上 |
+| `POST /me/push-token`、`/me/push-test` | 设备推送注册与测试 | 凭证阻塞：`push=dev`，待极光 / FCM 凭证 + 端侧 SDK |
+| `POST /map/regeo`、`/map/route` | 定位逆地理 / 路径规划 | 凭证阻塞：待高德 Key；前端无地图选点页 |
+| `POST /storage/presign`、`PUT /storage/upload` | 对象存储预签名上传 | 凭证 / 产品增强：待 S3 凭证；前端无上传入口（头像 / 图片） |
+| `POST /pay/orders`、`GET /pay/orders/:no` | 支付发起 / 查询 | 资质阻塞（B 类商户资质）；演示沙箱模式不调支付 |
+| `POST /ai/chat` | 通用 AI 对话 | 凭证阻塞：待 AI Key；前端无对话页 |
+| `/admin/merges*`、`/admin/oauth/providers*`、`/admin/mall/import` | 账号合并、OAuth 渠道管理、批量导入 | 后台进阶工具，未做管理 UI |
+| `/ai/research`（调研模块） | 调研任务 | 后端未实现；research 前端 mock 驱动，待 AI 能力落地 |
+
+**结论**：线上用户主链路（浏览 → 加购 → 沙箱下单 → 订单 / 收藏 / 地址）前后端对齐完整，**无阻塞性代码缺口**；未接端点均挂在外部凭证、商户资质、后台工具或后续产品页面上，与 3.5 的 A / B / C 分层一致。本轮审计未改业务代码，门禁基线仍为 lint ✓、typecheck 全包 Done、test 169 passed / 8 skipped。
+
 ## 4. hznzcn 女装迁移线盘点（#31）
 
 - 隔离口径：`.gitignore:41-43` 注释说明并整目录忽略 `tools/hznzcn-importer/`（含生产库增量导入器、SSH 隧道直连逻辑、WAF cookie jar、图片 / 游标 / 状态产物）。
