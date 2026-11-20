@@ -1083,18 +1083,16 @@ onPullDownRefresh(() => {
   height: 40rpx;
 }
 
-/* 无现成图标的入口（订单）：等宽字形兜底，尺寸/圆角与图标位对齐 */
+/* 无现成图标的入口（订单）：等宽字形兜底，中性灰、无底色块，与其余图标位同尺寸同重量 */
 .quick-icon-glyph {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: $brand-soft;
-  border-radius: $r-control;
   font-size: 28rpx;
   font-weight: 600;
-  color: $brand-deep;
+  color: $ink-3;
 }
 
 .quick-label {
@@ -1366,7 +1364,8 @@ onPullDownRefresh(() => {
   color: $ink-4;
 }
 
-/* 区块标题与「首页精选」同级：纯色墨黑、不带渐变彩字，避免落地页营销感 */
+/* 区块标题与「首页精选」同级：纯色墨黑、不带渐变彩字，避免落地页营销感。
+ * 全局 theme.scss 的 .sec-title 带渐变文字，这里在首页作用域内显式中和，不影响其他页面。 */
 .sec-title {
   display: block;
   margin-top: $sp-1;
@@ -1376,6 +1375,10 @@ onPullDownRefresh(() => {
   line-height: 1.2;
   letter-spacing: $ls-tight;
   color: $ink;
+  background-image: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: $ink;
 }
 
 .sec-count {
