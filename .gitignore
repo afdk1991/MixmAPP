@@ -35,6 +35,12 @@ release/
 # 抓取/导入产出的可再生产物（跑 tools/egluosi-importer/crawl.mjs 可重建）
 tools/egluosi-importer/source/catalog.json
 tools/egluosi-importer/source/images/
+# 离线修复脚本落的原文件备份（可重跑重建，不入库）
+tools/egluosi-importer/source/*.bak
+
+# hznzcn 女装导入为并行数据迁移线：含生产库增量导入器、SSH 隧道直连逻辑、
+# WAF cookie jar、图片/游标/状态产物；收口前整目录不入库，后续逐文件评估。
+tools/hznzcn-importer/
 
 # 本地化后的商品图（运行时媒体目录，按抓取重建）
 storage/
