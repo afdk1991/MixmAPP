@@ -1,6 +1,8 @@
 <template>
   <view class="page page--wide mx-ime-pad">
     <mx-bar />
+    <!-- 壳层下拉刷新：顶部下拉越过阈值松手后，复用下方同一套分类 + 首屏商品加载 -->
+    <mx-pull-refresh :refreshing="shellRefreshing" :scroll-top="pageScrollTop" @refresh="onShellRefresh">
     <view class="head">
       <view class="head-top">
         <view class="head-title">
@@ -243,6 +245,7 @@
         <text v-else class="mono foot-note">上拉加载更多 · 价格以服务端实时数据为准</text>
       </view>
     </view>
+    </mx-pull-refresh>
 
     <!-- 商品分类抽屉：左侧滑出，标题「商品分类」+ 列表图标，逐级下钻、可返回上一级 -->
     <view v-if="drawerOpen" class="drawer-mask" @tap="closeDrawer" />
@@ -305,7 +308,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
+import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue';
 import type { MallCategoryNodeDto, MallProductDto, MallSpecOptionsDto } from '../../api/mall';
 import {
   breadcrumbLabel,
@@ -837,10 +841,29 @@ onReachBottom(() => {
 
 /** 原生下拉刷新：分类与第一页商品同时重取，两者都落定后收起指示器 */
 onPullDownRefresh(() => {
+  console.info('[mixmapp] onPullDownRefresh 已触发（uni 原生钩子）');
   void Promise.allSettled([loadLevelOne(), fetchPage(true)]).then(() =>
     uni.stopPullDownRefresh(),
   );
 });
+
+/** 页面滚动距离：交给壳层下拉刷新判断是否在顶部（跨端不取 document） */
+const pageScrollTop = ref(0);
+onPageScroll(({ scrollTop }) => {
+  pageScrollTop.value = scrollTop;
+});
+
+/** 壳层下拉刷新状态：组件回调后真实重跑分类与首屏商品，全部落定后复位收起指示环 */
+const shellRefreshing = ref(false);
+
+function onShellRefresh(): void {
+  if (shellRefreshing.value) return;
+  console.info('[mixmapp] onPullDownRefresh 已触发（壳层手势）');
+  shellRefreshing.value = true;
+  void Promise.allSettled([loadLevelOne(), fetchPage(true)]).finally(() => {
+    shellRefreshing.value = false;
+  });
+}
 </script>
 
 <style scoped lang="scss">

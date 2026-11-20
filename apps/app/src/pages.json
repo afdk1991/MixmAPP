@@ -6,7 +6,7 @@
         "navigationBarTitleText": "MixmAPP",
         "navigationStyle": "custom",
         "backgroundColorTop": "#08110F",
-        "enablePullDownRefresh": true,
+        "enablePullDownRefresh": false,
         "backgroundTextStyle": "dark"
       }
     },
@@ -34,7 +34,7 @@
       "path": "pages/mall/index",
       "style": {
         "navigationBarTitleText": "MixmAPP",
-        "enablePullDownRefresh": true,
+        "enablePullDownRefresh": false,
         "backgroundTextStyle": "dark"
       }
     },

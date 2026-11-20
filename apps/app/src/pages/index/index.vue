@@ -4,6 +4,8 @@
       <!-- 桌面端顶部导航（移动端不渲染，仍走底部 tabBar） -->
       <mx-bar desktop-only hide-back />
 
+      <!-- 壳层下拉刷新：顶部下拉越过阈值松手后，复用下方同一套加载逻辑 -->
+      <mx-pull-refresh :refreshing="shellRefreshing" :scroll-top="pageScrollTop" @refresh="onShellRefresh">
       <!-- 48px App 头部行：左侧品牌标（logo 自带字标，不再重复写标题）+ 右侧购物车图标位；
            不放版本徽标，也不暴露 6 ENDS / AUTO / OFFLINE 这类内部运行指标 -->
       <view class="home-head">
@@ -410,13 +412,14 @@
           <text class="foot-line foot-line--dim mono">{{ releaseLabel }}</text>
         </view>
       </view>
+      </mx-pull-refresh>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll, onPullDownRefresh } from '@dcloudio/uni-app';
 import { metaApi, mallApi, homeApi, productCover, coverTint, ApiError, applyMetaFlags, applyMetaThirdParty } from '../../api/client';
 import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
@@ -424,6 +427,7 @@ import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
+import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue';
 import type { MallCategoryDto, MallProductDto } from '../../api/mall';
 import { PAGE_SIZE_OPTIONS } from '@mixmapp/contracts';
 import type { HomeAdDto, HomeAdTarget, HomeRecommendedCategoryDto } from '@mixmapp/contracts';
@@ -830,8 +834,27 @@ onLoad(() => {
 
 /** 原生下拉刷新：同时刷新运行环境与精选目录，两者都落定后收起指示器 */
 onPullDownRefresh(() => {
+  console.info('[mixmapp] onPullDownRefresh 已触发（uni 原生钩子）');
   void Promise.allSettled([loadMeta(), loadMall(), loadHome()]).then(() => uni.stopPullDownRefresh());
 });
+
+/** 页面滚动距离：交给壳层下拉刷新判断是否在顶部（跨端不取 document） */
+const pageScrollTop = ref(0);
+onPageScroll(({ scrollTop }) => {
+  pageScrollTop.value = scrollTop;
+});
+
+/** 壳层下拉刷新状态：组件回调后真实重跑同一套加载，全部落定后复位收起指示环 */
+const shellRefreshing = ref(false);
+
+function onShellRefresh(): void {
+  if (shellRefreshing.value) return;
+  console.info('[mixmapp] onPullDownRefresh 已触发（壳层手势）');
+  shellRefreshing.value = true;
+  void Promise.allSettled([loadMeta(), loadMall(), loadHome()]).finally(() => {
+    shellRefreshing.value = false;
+  });
+}
 </script>
 
 <style scoped lang="scss">
