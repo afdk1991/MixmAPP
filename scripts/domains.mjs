@@ -115,8 +115,6 @@ function check(reg) {
     'infra/nginx/mixm.top.conf',
     'infra/nginx/img.mixm.top.conf',
     'infra/systemd/mixmapp-api.service',
-    'cloudbase/functions/mixmapp-api-proxy/index.js',
-    'cloudbase/functions/mixmapp-api-proxy/package.json',
     'deploy/catalog-verify.mjs',
     'deploy/atomic-release.sh',
     'deploy/catalog-import.sh',

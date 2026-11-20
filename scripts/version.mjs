@@ -39,8 +39,6 @@ const PKG_FILES = [
   'services/api/package.json',
   'packages/contracts/package.json',
   'packages/ids/package.json',
-  // CloudBase 云函数独立部署包（不在 pnpm workspace 内，但版本号同样纳管）
-  'cloudbase/functions/mixmapp-api-proxy/package.json',
 ];
 
 const ENV_FILE = '.env.example';

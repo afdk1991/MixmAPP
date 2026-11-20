@@ -113,7 +113,6 @@
         "`.env.example` L8 `PUBLIC_BASE_URL` 生产值",
         "`.env.example` L79 / L83 支付回调",
         "`infra/nginx/api.mixm.top.conf` → `server_name`",
-        "`cloudbase/functions/mixmapp-api-proxy/index.js` → `hostHeader` / `sni`",
         "`deploy/domains.json` → `apiBase` / `notifyBase`",
         "`.github/workflows/android.yml` → `MIXMAPP_API_BASE` 默认值"
       ],
@@ -2076,7 +2075,6 @@
       { "platform": "腾讯云自建服务器（Nginx）", "domain": "dev.mixm.top", "environment": "开发", "status": "planned_no_dns" },
       { "platform": "GitHub Pages", "domain": "afdk1991.github.io/MixmAPP/", "environment": "预览", "status": "active_outside_table" },
       { "platform": "CloudBase 静态托管", "domain": "mixmapp-cs-1-d5g815slocb5a611a.webapps.tcloudbase.com", "environment": "预览", "status": "suspended_outside_table" },
-      { "platform": "CloudBase 云函数 mixmapp-api-proxy", "domain": "(回源 api.mixm.top；cloud 候选已于 2026-11-15 移除)", "environment": "正式", "status": "reconfigured" },
       { "platform": "Android（Capacitor 壳）", "domain": "存量旧 APK → cloud.mixm.top/mixmapp/api/v1（兼容入口在线，仍可达）；新包 → api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "api_only" },
       { "platform": "微信小程序", "domain": "api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "build_only_not_published" },
       { "platform": "鸿蒙 App", "domain": "api.mixm.top/mixmapp/api/v1", "environment": "正式", "status": "build_only_not_published" },
