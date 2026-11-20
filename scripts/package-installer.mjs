@@ -61,24 +61,36 @@ if (!skipBuild) {
 }
 
 console.log('[pkg] 收集 API 生产依赖（pnpm deploy --prod）');
+// deploy 目标用「相对 repo 根」的路径，避免 pnpm 9 在 Windows 把绝对路径拼到
+// workspace 子包目录（services/api/release/...）；deployDir 同时作为最终打包根。
 const deployDir = path.join(stage, 'pkg-api');
-run(pnpm, ['--filter', '@mixmapp/api', 'deploy', '--prod', deployDir]);
+const deployArg = path.relative(repo, deployDir).split(path.sep).join('/');
+run(pnpm, ['--filter', '@mixmapp/api', 'deploy', '--prod', deployArg]);
 
-console.log('[pkg] 组装 stage');
-copy('infra', 'infra');
-copy('install', 'install');
-fs.mkdirSync(path.join(stage, 'scripts'), { recursive: true });
-fs.copyFileSync(path.join(repo, 'scripts/install.sh'), path.join(stage, 'scripts/install.sh'));
-fs.cpSync(path.join(deployDir, 'dist'), path.join(stage, 'dist'), { recursive: true });
-fs.cpSync(path.join(deployDir, 'node_modules'), path.join(stage, 'node_modules'), { recursive: true });
+// 直接把 deployDir 当作发布根，其余文件往里放，最后 tar deployDir。
+// 关键：绝不 fs.cpSync(deployDir/node_modules) —— pnpm deploy 产出的 node_modules
+// 含大量符号链接，Windows 上 recursive cpSync 跟随链接会让 Node 进程原生崩溃
+// （无 JS 异常、exit 127，2026-11-19 实测）。以 deployDir 为根打包即可零复制。
+// 另外本环境 Node 22 的 fs.cpSync(recursive) 连普通目录复制都会原生崩溃（127），
+// 因此目录复制统一走 shell `cp -r`（已实测正常），文件复制仍用 fs.copyFileSync。
+console.log('[pkg] 组装发布包（以 deploy 产物为根）');
+const cpDir = (src, dst) => execFileSync('cp', ['-r', src, dst], { cwd: repo, stdio: 'inherit', shell: true });
+cpDir('infra', path.join(deployDir, 'infra'));
+cpDir('install', path.join(deployDir, 'install'));
+fs.mkdirSync(path.join(deployDir, 'scripts'), { recursive: true });
+fs.copyFileSync(path.join(repo, 'scripts/install.sh'), path.join(deployDir, 'scripts/install.sh'));
 
 const h5 = path.join(repo, 'release/mixmapp-h5-single.html');
 if (!fs.existsSync(h5)) throw new Error('缺少 release/mixmapp-h5-single.html，先跑 build:h5:single');
-fs.copyFileSync(h5, path.join(stage, 'index.html'));
+fs.copyFileSync(h5, path.join(deployDir, 'index.html'));
 
 // tar（Windows 10+ 自带 bsdtar，Linux 自带 GNU tar，两条路径都能压出同一份包）
+// --force-local：GNU tar 在 Windows 上会把 `F:\...` 绝对路径当成「远程主机:路径」
+// 去调 rsh，报 "Cannot connect to F: resolve failed" 并以 127/128 退出（2026-11-19 实测）。
+// 强制本地文件后绝对路径可正常使用；bsdtar 忽略该选项，不影响跨平台。
 if (fs.existsSync(outFile)) fs.rmSync(outFile);
-run('tar', ['-czf', outFile, '-C', stage, '.']);
+console.log('[pkg] 打包 tar（--force-local）');
+run('tar', ['--force-local', '-czf', outFile, '-C', deployDir, '.']);
 fs.rmSync(stage, { recursive: true, force: true });
 
 const size = (fs.statSync(outFile).size / 1024 / 1024).toFixed(1);
