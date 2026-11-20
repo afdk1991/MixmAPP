@@ -31,14 +31,19 @@ dump.stderr.on('data', (chunk) => {
   stderr += String(chunk);
 });
 
+// close / error 监听必须在 spawn 后立即注册：进程可能在 pipeline 完成前就退出，
+// 若等到 await pipeline 之后再挂 close，会错过已触发的 close 事件，导致 TLA 永远挂起。
+const closed = new Promise((resolve) => dump.on('close', resolve));
+const spawnError = new Promise((_, reject) => dump.on('error', reject));
+
 try {
-  await pipeline(dump.stdout, createGzip({ level: 9 }), createWriteStream(file));
+  await Promise.race([pipeline(dump.stdout, createGzip({ level: 9 }), createWriteStream(file)), spawnError]);
 } catch (error) {
   console.error(`✗ 备份失败：${error instanceof Error ? error.message : error}`);
   process.exit(1);
 }
 
-const code = await new Promise((res) => dump.on('close', res));
+const code = await closed;
 if (code !== 0) {
   console.error(`✗ pg_dump 退出码 ${code}: ${stderr.slice(0, 500)}`);
   process.exit(1);

@@ -49,8 +49,10 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
+          # api.env 属 root 且 600，备份以 SSH 对应用户（root）直接读取，不再降权到 mixmapp；
+          # 备份包落到持久目录 /var/lib/mixmapp/backups，不写进随版本切换的 release 目录。
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
-            'sudo -u mixmapp bash -lc "cd /opt/mixmapp/current && set -a && . /etc/mixmapp/api.env && set +a && node scripts/backup.mjs"'
+            'cd /opt/mixmapp/current && set -a && . /etc/mixmapp/api.env && set +a && BACKUP_DIR=/var/lib/mixmapp/backups node scripts/backup.mjs'
       - name: 无凭据时跳过
         if: env.SSH_READY != 'true'
         run: echo "SKIP 未配置 DEPLOY_SSH_KEY_B64，未执行备份"
