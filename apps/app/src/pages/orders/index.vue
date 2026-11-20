@@ -80,6 +80,15 @@
         </view>
         <view v-else class="action-row">
           <view
+            v-if="order.status === 'pending'"
+            class="btn btn--deep btn--sm pay-btn"
+            :class="{ 'btn--disabled': paying === order.orderNo }"
+            hover-class="is-press"
+            @tap="pay(order)"
+          >
+            {{ paying === order.orderNo ? '发起中…' : '去支付' }}
+          </view>
+          <view
             v-if="canCancel(order)"
             class="btn btn--ghost btn--sm cancel-btn"
             :class="{ 'btn--disabled': cancelling === order.orderNo }"
@@ -103,7 +112,7 @@
 import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import type { OrderDto } from '@mixmapp/contracts';
-import { mallApi } from '../../api/client';
+import { mallApi, integrationsApi, providerState } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 
@@ -113,6 +122,8 @@ const error = ref('');
 const highlight = ref('');
 /** 正在取消的订单号：防止重复点击 + 按钮态提示 */
 const cancelling = ref('');
+/** 正在发起支付的订单号 */
+const paying = ref('');
 
 function price(fen: number): string {
   return (fen / 100).toFixed(2);
@@ -191,6 +202,38 @@ async function doCancel(order: OrderDto): Promise<void> {
     uni.showToast({ title: e instanceof Error ? e.message : '取消失败', icon: 'none' });
   } finally {
     cancelling.value = '';
+  }
+}
+
+/** 发起支付：未配置商户时后端返回 dev 占位参数，不真实扣款；live 模式待端侧 SDK 调起。 */
+async function pay(order: OrderDto): Promise<void> {
+  if (paying.value) return;
+  paying.value = order.orderNo;
+  try {
+    const channel = providerState('alipay') !== 'off' ? 'alipay' : 'wechat';
+    const res = await integrationsApi.pay.createOrder({
+      channel,
+      amountFen: order.totalFen,
+      subject: `订单 ${order.orderNo}`,
+      outTradeNo: order.orderNo,
+    });
+    if (res.mode === 'dev') {
+      uni.showModal({
+        title: '开发态下单',
+        content: `已生成占位支付单 ${res.outTradeNo}，未真实扣款。配置商户凭证后由端侧 SDK 调起支付。`,
+        showCancel: false,
+      });
+    } else {
+      uni.showModal({
+        title: '支付单已创建',
+        content: `商户订单号 ${res.outTradeNo}，待端侧支付 SDK 调起。`,
+        showCancel: false,
+      });
+    }
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '支付发起失败', icon: 'none' });
+  } finally {
+    paying.value = '';
   }
 }
 
@@ -483,6 +526,11 @@ onLoad((options) => {
   justify-content: flex-end;
   align-items: center;
   padding-bottom: $sp-4;
+}
+
+.pay-btn {
+  min-width: 180rpx;
+  margin-right: $sp-2;
 }
 
 .cancel-btn {

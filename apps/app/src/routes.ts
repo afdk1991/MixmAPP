@@ -22,4 +22,5 @@ export const ROUTES = {
   admin: '/pages/admin/index',
   research: '/pages/research/index',
   researchDetail: '/pages/research/detail',
+  assistant: '/pages/assistant/index',
 } as const;

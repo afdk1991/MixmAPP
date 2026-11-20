@@ -162,18 +162,20 @@ CloudBase 静态托管 6 个入口，按 Prefix Rewrite 分两类（沿用 32 �
 | `POST /me/bind/oauth`、`/me/push-token`、`/me/push-test` | meApi 封装对齐契约（linkOAuth / pushToken / pushTest） |
 | `/admin/merges*`、`/admin/oauth/providers*`、`/admin/mall/import` | 管理后台新增：OAuth 渠道注册表（状态 / 缺失配置 / 启停）、账号合并审计（候选 / 记录 / 回滚）、目录导入面板 |
 | `/map/*`、`/storage/presign`、`/pay/orders`、`/ai/chat` | integrationsApi 封装就位；`/meta` 第三方快照回填前端，`providerLive()` 按快照判定入口显隐 |
+| `POST /ai/chat` | 新增智能助手对话页（`pages/assistant/index`）：消息流 + 发送，dev 回显可演示；「我的」页按快照挂入口 |
+| `POST /pay/orders` | 待支付订单接「去支付」发起 createOrder；dev 返回占位参数弹窗、不扣款；live 调起待端侧支付 SDK |
+| `POST /map/regeo` | 地址表单接「定位填充」：getLocation → 逆地理回填省市区；定位或地图不可用时静默回退手填 |
 
 **仍未挂页面交互入口（约束归属，非代码缺口）：**
 
 | 能力 | 约束 |
 | --- | --- |
-| 地图选点 / 路径规划 | 待高德 Key + 端侧地图组件 / 定位权限；dev 回退仅返回坐标占位 |
-| 头像 / 图片上传 | 待 S3 凭证 + 文件选择控件；local 直传走 presign.url 二进制 PUT |
-| 收银台支付调起 | B 类商户资质；沙箱模式不产生真实待支付订单，调起需端侧支付 SDK |
-| 通用 AI 对话页 | 待 AI Key；独立对话页属后续产品页 |
-| 调研 `/ai/research` | 后端研究编排未实现；research 前端保持 mock 演示态 |
+| 地图路径规划 / 选点组件 | 待高德 Key + 端侧地图组件；当前仅定位逆地理回填骨架 |
+| 头像 / 图片上传控件 | 封装就位（presign）；跨端纯二进制 PUT 上传待端侧文件适配，H5/App 行为需分别验证 |
+| 收银台 live 调起 | B 类商户资质 + 端侧支付 SDK；沙箱模式不产生真实待支付订单 |
+| 调研 `/ai/research` | 后端研究编排（多源检索 + 引用）未实现；research 前端保持 mock 演示态兜底 |
 
-**结论**：主链路 + 账号完善 + 管理进阶前后端对齐，离线可闭环的代码已全部落地；剩余入口挂在外部凭证、商户资质、端侧 SDK 或后续产品规划上，与 3.5 的 A / B / C 分层一致。门禁：lint ✓、typecheck 全包 Done、test 169 passed / 8 skipped（177）。
+**结论**：主链路 + 账号完善 + 管理进阶 + 对话 / 支付 / 定位骨架前后端对齐，离线可闭环的代码已全部落地；剩余入口挂在外部凭证、商户资质、端侧 SDK 或后续产品规划上，与 3.5 的 A / B / C 分层一致。门禁：lint ✓、typecheck 全包 Done、test 169 passed / 8 skipped（177）。
 
 ## 4. hznzcn 女装迁移线盘点（#31）
 

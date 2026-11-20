@@ -65,6 +65,10 @@
     {
       "path": "pages/research/detail",
       "style": { "navigationBarTitleText": "MixmAPP", "navigationStyle": "custom" }
+    },
+    {
+      "path": "pages/assistant/index",
+      "style": { "navigationBarTitleText": "MixmAPP" }
     }
   ],
   "globalStyle": {

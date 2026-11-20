@@ -287,6 +287,11 @@
           <text class="link-desc">收藏的商品 · 分类整理</text>
           <text class="link-arrow mono">→</text>
         </view>
+        <view v-if="aiLive" class="link-row" hover-class="is-press" @tap="go(ROUTES.assistant)">
+          <text class="link-title">智能助手</text>
+          <text class="link-desc">通用 AI 对话（开发态回显）</text>
+          <text class="link-arrow mono">→</text>
+        </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
           <text class="link-title">隐私政策与权限说明</text>
           <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>
@@ -374,7 +379,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { OAuthProviderId } from '@mixmapp/contracts';
 import { session, logout, refreshProfile, applySession } from '../../stores/session';
-import { meApi, authApi, ApiError } from '../../api/client';
+import { meApi, authApi, ApiError, providerLive } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import {
@@ -404,6 +409,9 @@ function chooseTheme(next: ThemePref): void {
   setThemePref(next);
   themePref.value = next;
 }
+
+/** AI 能力已装配（含 dev 回退）才展示助手入口；off 时隐藏。 */
+const aiLive = computed(() => providerLive('ai'));
 let stopSystemTheme = (): void => {};
 
 onMounted(() => {

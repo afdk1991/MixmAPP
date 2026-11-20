@@ -213,6 +213,16 @@
             placeholder="手机号"
             placeholder-class="field-ph"
           />
+          <view class="loc-row">
+            <view
+              class="btn btn--ghost loc-btn"
+              :class="{ 'btn--disabled': locating }"
+              hover-class="is-press"
+              @tap="fillByLocation"
+            >
+              <text class="form-btn-text">{{ locating ? '定位中…' : '定位填充省市区' }}</text>
+            </view>
+          </view>
           <input
             v-model="addrForm.province"
             class="field field--gap"
@@ -364,7 +374,7 @@ import {
   STOCK_UNCONFIRMED_NOTICE,
   unitPriceText,
 } from '../../api/mall';
-import { mallApi, mediaUrl, productCover, coverTint, isDemoOrderMode } from '../../api/client';
+import { mallApi, mediaUrl, productCover, coverTint, isDemoOrderMode, integrationsApi } from '../../api/client';
 import { addressApi } from '../../api/address';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
@@ -490,6 +500,7 @@ const addressBlockReason = ref('');
 const addressEditing = ref(false);
 const editingId = ref('');
 const savingAddress = ref(false);
+const locating = ref(false);
 const addrForm = ref({
   receiverName: '',
   receiverPhone: '',
@@ -737,6 +748,31 @@ function editAddress(item: AddressDto): void {
 }
 
 /** 新增/编辑共用保存入口：字段校验与后端 schema 保持一致。 */
+/** 定位填充：取当前坐标 → 逆地理回填省市区；定位或地图未配置时提示手动填写，不阻断。 */
+async function fillByLocation(): Promise<void> {
+  if (locating.value) return;
+  locating.value = true;
+  try {
+    const loc = await new Promise<{ longitude: number; latitude: number }>((resolve, reject) => {
+      uni.getLocation({
+        type: 'gcj02',
+        success: (res) => resolve({ longitude: res.longitude, latitude: res.latitude }),
+        fail: reject,
+      });
+    });
+    const geo = await integrationsApi.map.regeo(loc.longitude, loc.latitude);
+    addrForm.value.province = geo.province;
+    addrForm.value.city = geo.city;
+    addrForm.value.district = geo.district;
+    if (geo.address && !addrForm.value.detail) addrForm.value.detail = geo.address;
+    uni.showToast({ title: '已填充定位区域', icon: 'none' });
+  } catch {
+    uni.showToast({ title: '定位不可用，请手动填写', icon: 'none' });
+  } finally {
+    locating.value = false;
+  }
+}
+
 async function saveAddress(): Promise<void> {
   if (savingAddress.value) return;
   const value = addrForm.value;
@@ -1543,6 +1579,16 @@ onShow(() => {
 
 .hint--warn {
   color: $amber;
+}
+
+.loc-row {
+  display: flex;
+  margin-top: $sp-2;
+}
+
+.loc-btn {
+  height: 76rpx;
+  padding: 0 28rpx;
 }
 
 .form-actions {
