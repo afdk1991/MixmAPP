@@ -113,6 +113,6 @@ CloudBase 静态托管共 6 个入口，按 PathRewrite 前缀分两类：
 ## 7. 提交与产物
 
 - 提交 `8adde60` chore(docs/env): `.env.example` 对齐 config 全量凭据键，Mim 审计快照归档脱离编号序列，清空撞号豁免（5 files，+37/-15）。
-- 提交 `<proxy-cleanup>` chore(cloudbase): 删除 proxy 云函数与 `/mixmapp` 路由，移除仓库源码及版本纳管 / 域名校验 / 域名表条目。
+- 提交 `e839426` chore(cloudbase): 删除 proxy 云函数与 `/mixmapp` 路由，移除仓库源码及版本纳管 / 域名校验 / 域名表条目（7 files，+15/-70）。
 - 版本：工作号 0.0.2（release）；线上 version=0.0.2、db=ok；验收 16/16。
 - 部署：本轮为 CloudBase 旧代理下线与仓库清理，不触发 CVM 重新发布；生产 API 直连 `api.mixm.top`，未受影响。
