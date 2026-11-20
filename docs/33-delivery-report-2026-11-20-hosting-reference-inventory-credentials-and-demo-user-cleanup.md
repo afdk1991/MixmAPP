@@ -167,6 +167,7 @@ CloudBase 静态托管 6 个入口，按 Prefix Rewrite 分两类（沿用 32 �
 ## 7. 提交与产物
 
 - 提交 `76f4574` docs(delivery-report): 桶根逐子域引用清单、凭据接入点复核、hznzcn 盘点与演示账号清理（1 file，+159）。
+- 提交 `3a2ce11` docs: 33 号报告回填桶根残留清理执行与复核记录（1 file，+24/-10）。
 - 桶根残留清理（外部云资源，2026-11-20 拍板后执行）：删除 `assets/`、`static/`、`download/` 三目录与 `privacy.html`，共 94 个对象；复核剩余 18 个（根兜底 2 + 他项目子目录 16），四共用壳与他项目子域在线 200。
 - 本轮仓库侧无源码改动：凭据复核为线上 / 只读审计，账号清理在 CVM 库内执行，桶根清理在 CloudBase 托管侧执行，hznzcn 保持 gitignore 隔离；产物为本报告与服务器备份 / 清单。
 - 服务器产物：`/var/lib/mixmapp/backups/pre-user-cleanup-20261120-204603.dump`、`pre-user-cleanup-20261120-204603.users.csv`。
