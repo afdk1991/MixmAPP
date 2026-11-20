@@ -111,6 +111,96 @@
         </view>
       </view>
 
+      <!-- ---------- OAuth 渠道注册表 ---------- -->
+      <view class="section">
+        <view class="sec-head">
+          <view class="sec-head-l">
+            <text class="eyebrow">OAUTH</text>
+            <text class="sec-title">登录渠道注册表</text>
+          </view>
+        </view>
+        <text class="hint">全量渠道状态、缺失配置与运行时开关；缺凭证渠道不可启用，C 类渠道不开放。</text>
+        <view class="btn-row">
+          <button class="btn btn--ghost" :loading="oauthLoading" @click="loadOauth">读取渠道</button>
+        </view>
+        <view v-if="oauthSummary" class="row">
+          <text class="k">渠道总数</text>
+          <text class="v">{{ oauthSummary.total }} · 就绪 {{ oauthSummary.ready.length }}</text>
+        </view>
+        <view v-for="p in oauthProviders" :key="p.key" class="prov-row">
+          <view class="prov-main">
+            <text class="prov-name">{{ p.name }}</text>
+            <text class="prov-meta mono">{{ p.key }} · {{ PROVIDER_STATUS_TEXT[p.status] }}</text>
+            <text v-if="p.reason" class="prov-reason">{{ p.reason }}</text>
+          </view>
+          <button
+            v-if="p.status !== 'unavailable'"
+            class="prov-toggle"
+            :class="{ 'prov-toggle--on': p.enabled }"
+            @click="toggleProvider(p)"
+          >
+            <text class="prov-toggle-text">{{ p.enabled ? '停用' : '启用' }}</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- ---------- 账号合并审计 ---------- -->
+      <view class="section">
+        <view class="sec-head">
+          <view class="sec-head-l">
+            <text class="eyebrow">MERGES</text>
+            <text class="sec-title">账号合并审计</text>
+          </view>
+        </view>
+        <text class="hint">同一第三方身份落在多个账号的候选，以及历史合并记录；回滚按合并前快照还原。</text>
+        <view class="btn-row">
+          <button class="btn btn--ghost" :loading="mergesLoading" @click="loadMerges">读取合并记录</button>
+        </view>
+        <view class="row">
+          <text class="k">重复身份候选</text>
+          <text class="v">{{ mergeCandidateCount }} 组</text>
+        </view>
+        <view v-if="!merges.length" class="hint">暂无合并记录。</view>
+        <view v-for="m in merges" :key="m.id" class="prov-row">
+          <view class="prov-main">
+            <text class="prov-name">{{ m.reason }} · {{ m.status }}</text>
+            <text class="prov-meta mono">{{ m.id }}</text>
+            <text class="prov-reason">
+              完成 {{ fmtTime(m.completedAt) }}<text v-if="m.rolledBackAt"> · 已回滚 {{ fmtTime(m.rolledBackAt) }}</text>
+            </text>
+          </view>
+          <button
+            v-if="m.status === 'completed' && !m.rolledBackAt"
+            class="prov-toggle"
+            @click="rollbackMerge(m)"
+          >
+            <text class="prov-toggle-text">回滚</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- ---------- 目录导入 ---------- -->
+      <view class="section">
+        <view class="sec-head">
+          <view class="sec-head-l">
+            <text class="eyebrow">IMPORT</text>
+            <text class="sec-title">目录导入</text>
+          </view>
+        </view>
+        <text class="hint">按仓库内 catalog.json 路径批量导入商品；路径限制在仓库根目录内。</text>
+        <text class="label mt">catalog 文件路径</text>
+        <input class="field" placeholder="如 tools/.../catalog.json" v-model="importFile" />
+        <text class="label mt">批次号（可选）</text>
+        <input class="field" placeholder="批次标记，留空自动生成" v-model="importBatch" />
+        <view class="btn-row">
+          <button class="btn btn--deep btn--block" :loading="importLoading" @click="runImport">触发导入</button>
+        </view>
+        <view v-if="importReport" class="row row--last">
+          <text class="k">导入报告</text>
+          <text class="v mono">{{ reportText }}</text>
+        </view>
+      </view>
+
       <text v-if="error" class="err">{{ error }}</text>
       <text v-if="notice" class="notice">{{ notice }}</text>
 
@@ -122,7 +212,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { adminApi, ApiError, readAdminToken, writeAdminToken } from '../../api/client';
+import {
+  adminApi,
+  ApiError,
+  readAdminToken,
+  writeAdminToken,
+  type AccountMergeDto,
+  type ImportReportDto,
+  type ProviderStateDto,
+  type ProviderSummaryDto,
+} from '../../api/client';
 
 type DbStatus = Awaited<ReturnType<typeof adminApi.db>>;
 type SweepResult = { ttlMinutes: number; cancelled: string[]; count: number };
@@ -133,6 +232,44 @@ const sweepResult = ref<SweepResult | null>(null);
 const loading = ref(false);
 const error = ref('');
 const notice = ref('');
+
+// ===== OAuth 渠道注册表 =====
+const oauthSummary = ref<ProviderSummaryDto | null>(null);
+const oauthProviders = ref<ProviderStateDto[]>([]);
+const oauthLoading = ref(false);
+
+// ===== 账号合并 =====
+const merges = ref<AccountMergeDto[]>([]);
+const mergeCandidateCount = ref(0);
+const mergesLoading = ref(false);
+
+// ===== 目录导入 =====
+const importFile = ref('');
+const importBatch = ref('');
+const importReport = ref<ImportReportDto | null>(null);
+const importLoading = ref(false);
+
+const PROVIDER_STATUS_TEXT: Record<ProviderStateDto['status'], string> = {
+  ready: '已就绪',
+  unconfigured: '缺配置',
+  disabled: '已停用',
+  unavailable: '不可用',
+};
+
+function fmtTime(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
+/** 导入报告：把返回对象拍平成单行键值串便于展示。 */
+const reportText = computed(() => {
+  const r = importReport.value;
+  if (!r) return '';
+  return Object.entries(r)
+    .map(([k, v]) => `${k}=${typeof v === 'object' && v !== null ? JSON.stringify(v) : v}`)
+    .join(' · ');
+});
 
 const currentLabel = computed(() => (status.value?.target === 'cloudbase' ? 'CLOUDBASE' : 'SERVER'));
 const backupLabel = computed(() =>
@@ -190,6 +327,119 @@ async function sweep(): Promise<void> {
   } finally {
     loading.value = false;
   }
+}
+
+// ===== OAuth 渠道注册表 =====
+async function loadOauth(): Promise<void> {
+  if (!token.value.trim()) {
+    error.value = '先填入管理令牌';
+    return;
+  }
+  oauthLoading.value = true;
+  error.value = '';
+  notice.value = '';
+  try {
+    const data = await adminApi.oauthProviders(token.value.trim());
+    oauthSummary.value = data.summary;
+    oauthProviders.value = data.providers;
+  } catch (e) {
+    error.value = e instanceof ApiError ? `渠道读取失败：${e.message}` : '渠道读取失败';
+  } finally {
+    oauthLoading.value = false;
+  }
+}
+
+async function toggleProvider(p: ProviderStateDto): Promise<void> {
+  uni.showModal({
+    title: p.enabled ? '停用渠道' : '启用渠道',
+    content: `确定${p.enabled ? '停用' : '启用'} ${p.name}（${p.key}）？`,
+    success: async (res) => {
+      if (!res.confirm) return;
+      try {
+        const next = await adminApi.toggleOAuthProvider(token.value.trim(), p.key, !p.enabled);
+        const idx = oauthProviders.value.findIndex((x) => x.key === p.key);
+        if (idx >= 0) oauthProviders.value[idx] = next;
+        notice.value = `${next.name} 已${next.enabled ? '启用' : '停用'}`;
+      } catch (e) {
+        error.value = e instanceof ApiError ? e.message : '渠道切换失败';
+      }
+    },
+  });
+}
+
+// ===== 账号合并 =====
+async function loadMerges(): Promise<void> {
+  if (!token.value.trim()) {
+    error.value = '先填入管理令牌';
+    return;
+  }
+  mergesLoading.value = true;
+  error.value = '';
+  notice.value = '';
+  try {
+    const [cand, list] = await Promise.all([
+      adminApi.mergesCandidates(token.value.trim()),
+      adminApi.merges(token.value.trim()),
+    ]);
+    mergeCandidateCount.value = cand.count;
+    merges.value = list;
+  } catch (e) {
+    error.value = e instanceof ApiError ? `合并记录读取失败：${e.message}` : '合并记录读取失败';
+  } finally {
+    mergesLoading.value = false;
+  }
+}
+
+async function rollbackMerge(m: AccountMergeDto): Promise<void> {
+  uni.showModal({
+    title: '回滚合并',
+    content: `回滚合并记录 ${m.id}？按合并前快照还原，刷新令牌无法复活。`,
+    success: async (res) => {
+      if (!res.confirm) return;
+      try {
+        await adminApi.rollbackMerge(token.value.trim(), m.id);
+        notice.value = '回滚完成';
+        await loadMerges();
+      } catch (e) {
+        error.value = e instanceof ApiError ? e.message : '回滚失败';
+      }
+    },
+  });
+}
+
+// ===== 目录导入 =====
+async function runImport(): Promise<void> {
+  if (importLoading.value) return;
+  if (!token.value.trim()) {
+    error.value = '先填入管理令牌';
+    return;
+  }
+  const file = importFile.value.trim();
+  if (!file) {
+    error.value = '请填写仓库内 catalog.json 文件路径';
+    return;
+  }
+  uni.showModal({
+    title: '目录导入',
+    content: `按 ${file} 导入目录商品？大批量写入请确认已备份。`,
+    success: async (res) => {
+      if (!res.confirm) return;
+      importLoading.value = true;
+      error.value = '';
+      notice.value = '';
+      try {
+        importReport.value = await adminApi.mallImport(token.value.trim(), {
+          file,
+          ...(importBatch.value.trim() ? { batch: importBatch.value.trim() } : {}),
+        });
+        notice.value = '目录导入完成';
+      } catch (e) {
+        error.value = e instanceof ApiError ? `导入失败：${e.message}` : '导入失败';
+      } finally {
+        importLoading.value = false;
+      }
+    },
+  });
 }
 
 onLoad(() => {
@@ -406,6 +656,67 @@ onLoad(() => {
 
 .warn {
   color: $amber;
+}
+
+/* ---------- 渠道 / 合并记录行 ---------- */
+.prov-row {
+  display: flex;
+  align-items: flex-start;
+  gap: $sp-3;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid $paper-2;
+}
+
+.prov-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.prov-name {
+  font-size: $fs-meta;
+  font-weight: 700;
+  color: $ink;
+}
+
+.prov-meta {
+  font-size: $fs-micro;
+  color: $ink-3;
+}
+
+.prov-reason {
+  font-size: $fs-micro;
+  line-height: 1.5;
+  color: $amber;
+  word-break: break-all;
+}
+
+.prov-toggle {
+  flex-shrink: 0;
+  min-height: 64rpx;
+  padding: 0 24rpx;
+  border: none;
+  border-radius: $r-control;
+  background: $paper-2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: normal;
+}
+
+.prov-toggle--on {
+  background: $solid;
+}
+
+.prov-toggle-text {
+  font-size: $fs-micro;
+  color: $ink;
+}
+
+.prov-toggle--on .prov-toggle-text {
+  color: $on-solid;
 }
 
 .sweep-row {

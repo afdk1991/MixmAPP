@@ -154,21 +154,26 @@ CloudBase 静态托管 6 个入口，按 Prefix Rewrite 分两类（沿用 32 �
 - 元信息：`/meta` 能力快照与演示标记、健康检查。
 - 管理面：DB 落点读取 / 切换、超时订单清扫（admin token）。
 
-**后端已实现、前端暂未接入口（按归属分类）：**
+**本轮已离线落地（2026-11-20，门禁全绿）：**
 
-| 后端端点 | 能力 | 未接归属 |
-| --- | --- | --- |
-| `POST /me/bind/email` | 邮箱补绑 | 产品增强：账号绑定完善 UI 未规划；后端契约稳定，接入不依赖外部凭证 |
-| `POST /me/bind/phone` | 手机补绑（前端封装已有，无表单） | 同上 |
-| `POST /me/push-token`、`/me/push-test` | 设备推送注册与测试 | 凭证阻塞：`push=dev`，待极光 / FCM 凭证 + 端侧 SDK |
-| `POST /map/regeo`、`/map/route` | 定位逆地理 / 路径规划 | 凭证阻塞：待高德 Key；前端无地图选点页 |
-| `POST /storage/presign`、`PUT /storage/upload` | 对象存储预签名上传 | 凭证 / 产品增强：待 S3 凭证；前端无上传入口（头像 / 图片） |
-| `POST /pay/orders`、`GET /pay/orders/:no` | 支付发起 / 查询 | 资质阻塞（B 类商户资质）；演示沙箱模式不调支付 |
-| `POST /ai/chat` | 通用 AI 对话 | 凭证阻塞：待 AI Key；前端无对话页 |
-| `/admin/merges*`、`/admin/oauth/providers*`、`/admin/mall/import` | 账号合并、OAuth 渠道管理、批量导入 | 后台进阶工具，未做管理 UI |
-| `/ai/research`（调研模块） | 调研任务 | 后端未实现；research 前端 mock 驱动，待 AI 能力落地 |
+| 端点 | 落地内容 |
+| --- | --- |
+| `PATCH /me`、`POST /me/bind/email`、`/me/bind/phone` | 「我的」页资料编辑（昵称 / 简介）+ 邮箱 / 手机补绑表单；手机补绑触发账号合并时自动回写主账号资料与新令牌 |
+| `POST /me/bind/oauth`、`/me/push-token`、`/me/push-test` | meApi 封装对齐契约（linkOAuth / pushToken / pushTest） |
+| `/admin/merges*`、`/admin/oauth/providers*`、`/admin/mall/import` | 管理后台新增：OAuth 渠道注册表（状态 / 缺失配置 / 启停）、账号合并审计（候选 / 记录 / 回滚）、目录导入面板 |
+| `/map/*`、`/storage/presign`、`/pay/orders`、`/ai/chat` | integrationsApi 封装就位；`/meta` 第三方快照回填前端，`providerLive()` 按快照判定入口显隐 |
 
-**结论**：线上用户主链路（浏览 → 加购 → 沙箱下单 → 订单 / 收藏 / 地址）前后端对齐完整，**无阻塞性代码缺口**；未接端点均挂在外部凭证、商户资质、后台工具或后续产品页面上，与 3.5 的 A / B / C 分层一致。本轮审计未改业务代码，门禁基线仍为 lint ✓、typecheck 全包 Done、test 169 passed / 8 skipped。
+**仍未挂页面交互入口（约束归属，非代码缺口）：**
+
+| 能力 | 约束 |
+| --- | --- |
+| 地图选点 / 路径规划 | 待高德 Key + 端侧地图组件 / 定位权限；dev 回退仅返回坐标占位 |
+| 头像 / 图片上传 | 待 S3 凭证 + 文件选择控件；local 直传走 presign.url 二进制 PUT |
+| 收银台支付调起 | B 类商户资质；沙箱模式不产生真实待支付订单，调起需端侧支付 SDK |
+| 通用 AI 对话页 | 待 AI Key；独立对话页属后续产品页 |
+| 调研 `/ai/research` | 后端研究编排未实现；research 前端保持 mock 演示态 |
+
+**结论**：主链路 + 账号完善 + 管理进阶前后端对齐，离线可闭环的代码已全部落地；剩余入口挂在外部凭证、商户资质、端侧 SDK 或后续产品规划上，与 3.5 的 A / B / C 分层一致。门禁：lint ✓、typecheck 全包 Done、test 169 passed / 8 skipped（177）。
 
 ## 4. hznzcn 女装迁移线盘点（#31）
 

@@ -1,6 +1,7 @@
 import type {
   AuthResult,
   CartDto,
+  CreatePaymentInput,
   FavoriteFolderDto,
   FavoriteItemDto,
   HomeAdDto,
@@ -9,6 +10,7 @@ import type {
   OrderCreateInput,
   OrderDto,
   PrivacyConsentInput,
+  TokenPair,
   UserDto,
 } from '@mixmapp/contracts';
 import { APP_CHANNEL } from '../version';
@@ -437,18 +439,48 @@ export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 
     apiRequest<{ ok: boolean }>('/auth/logout', { method: 'POST', data: { refreshToken }, auth: false }),
 };
 
+/** 手机补绑结果：发生账号合并时返回主账号资料与新令牌，调用方必须换用新令牌。 */
+export type BindPhoneResult = {
+  user: UserDto;
+  tokens: TokenPair;
+  merged?: {
+    mergeId: string;
+    replayed: boolean;
+    moved: unknown;
+    conflictStrategy: Record<string, string>;
+  } | null;
+};
+
+/** 设备推送注册入参；provider 缺省 jpush。 */
+export type PushTokenInput = {
+  token: string;
+  platform: 'android' | 'ios' | 'harmony' | 'web';
+  provider?: 'fcm' | 'jpush';
+};
+
 export const meApi = {
   get: () => apiRequest<UserDto>('/me'),
   update: (patch: { nickname?: string; avatarUrl?: string; bio?: string }) =>
     apiRequest<UserDto>('/me', { method: 'PATCH', data: patch }),
   bindPhone: (phone: string, code: string) =>
-    apiRequest<UserDto>('/me/bind/phone', { method: 'POST', data: { phone, code } }),
+    apiRequest<BindPhoneResult>('/me/bind/phone', { method: 'POST', data: { phone, code } }),
+  /** 邮箱补绑：需校验当前账号密码；绑定后可用邮箱 + 密码登录。 */
+  bindEmail: (email: string, password: string) =>
+    apiRequest<UserDto>('/me/bind/email', { method: 'POST', data: { email, password } }),
   /** 给游客账号补设用户名密码，绑定后不再算游客 */
   bindUsername: (username: string, password: string) =>
     apiRequest<UserDto>('/me/bind/username', { method: 'POST', data: { username, password } }),
+  /** 把已授权的第三方身份绑定到当前账号（回跳 code 换绑）。 */
+  linkOAuth: (provider: OAuthProviderId, code: string) =>
+    apiRequest<UserDto>('/me/bind/oauth', { method: 'POST', data: { provider, code } }),
   /** 解绑第三方渠道；仅剩一种登录方式时服务端会返回 409 */
   unbindOAuth: (provider: OAuthProviderId) =>
     apiRequest<UserDto>(`/me/bind/oauth/${provider}`, { method: 'DELETE' }),
+  /** 上报设备推送令牌；推送未配置时服务端回退 dev，不阻断。 */
+  pushToken: (input: PushTokenInput) =>
+    apiRequest<{ ok: boolean }>('/me/push-token', { method: 'POST', data: input }),
+  /** 向已注册设备发一条测试推送；尚未注册令牌时服务端返回 404。 */
+  pushTest: () => apiRequest<{ accepted: number }>('/me/push-test', { method: 'POST' }),
 };
 
 export const metaApi = {
@@ -481,12 +513,80 @@ export function applyMetaFlags(meta: { mall?: { demoMode?: boolean } } | null | 
   demoModeCache = meta?.mall?.demoMode !== false;
 }
 
+/** 第三方能力快照（meta.thirdParty）：键为渠道域，值为 provider 名或 on/off。 */
+let metaThirdParty: Record<string, string> = {};
+
+/** 回填第三方能力快照；与演示标记同源，页面据此条件渲染入口。 */
+export function applyMetaThirdParty(meta: { thirdParty?: Record<string, string> } | null | undefined): void {
+  metaThirdParty = meta?.thirdParty ?? {};
+}
+
+/** 读取某能力在服务端的装配状态（off / dev / console / local / jpush / fcm / amap / on…）。 */
+export function providerState(key: string): string {
+  return metaThirdParty[key] ?? 'off';
+}
+
+/**
+ * 能力是否已装配：与「关于与能力」页同一口径，非 off 即视为已配置回退态。
+ * dev/console/local 表示有安全回退、可走通链路；真正调外部渠道仍以 provider 名为准。
+ */
+export function providerLive(key: string): boolean {
+  return providerState(key) !== 'off';
+}
+
 export type DbStatusDto = {
   target: 'cloudbase' | 'server';
   driver: string;
   host: string;
   source: string;
   available: Record<'cloudbase' | 'server', { configured: boolean; host: string }>;
+};
+
+export type MergeCandidateDto = {
+  unionId: string;
+  userIds: string[];
+  bindingIds: string[];
+};
+
+export type AccountMergeDto = {
+  id: string;
+  mergeKey: string;
+  primaryUserId: string;
+  secondaryUserId: string;
+  reason: string;
+  status: string;
+  moved: unknown;
+  conflictStrategy: Record<string, string>;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  rolledBackAt: string | null;
+};
+
+export type ProviderStateDto = {
+  key: string;
+  name: string;
+  group: 'A' | 'B' | 'C';
+  status: 'ready' | 'unconfigured' | 'disabled' | 'unavailable';
+  enabled: boolean;
+  missing: string[];
+  reason: string | null;
+};
+
+export type ProviderSummaryDto = {
+  total: number;
+  byGroup: Record<string, number>;
+  byStatus: Record<string, number>;
+  ready: string[];
+  unavailable: string[];
+};
+
+/** 目录导入报告：字段由 mall.importCatalog 决定，这里保留宽松索引便于展示计数。 */
+export type ImportReportDto = {
+  imported?: number;
+  skipped?: number;
+  failed?: number;
+  [key: string]: unknown;
 };
 
 /** 管理面：需要 x-admin-token；未在服务端设置 ADMIN_TOKEN 时这些接口整体 404 */
@@ -500,6 +600,55 @@ export const adminApi = {
   sweepOrders: (token: string) =>
     apiRequest<{ ttlMinutes: number; cancelled: string[]; count: number }>('/admin/orders/sweep', {
       method: 'POST',
+      auth: false,
+      headers: { 'x-admin-token': token },
+    }),
+  // ===== 账号合并审计 =====
+  /** 历史重复账号候选：同一 union_id 落在多个账号上。 */
+  mergesCandidates: (token: string) =>
+    apiRequest<{ count: number; candidates: MergeCandidateDto[] }>('/admin/merges/candidates', {
+      auth: false,
+      headers: { 'x-admin-token': token },
+    }),
+  /** 最近的合并记录列表。 */
+  merges: (token: string, limit = 50) =>
+    apiRequest<AccountMergeDto[]>(`/admin/merges?limit=${encodeURIComponent(String(limit))}`, {
+      auth: false,
+      headers: { 'x-admin-token': token },
+    }),
+  /** 单条合并记录详情。 */
+  mergeDetail: (token: string, id: string) =>
+    apiRequest<AccountMergeDto>(`/admin/merges/${encodeURIComponent(id)}`, {
+      auth: false,
+      headers: { 'x-admin-token': token },
+    }),
+  /** 按合并前快照回滚（仅 completed 可回滚；刷新令牌无法复活）。 */
+  rollbackMerge: (token: string, id: string) =>
+    apiRequest<{ merge: AccountMergeDto; primary: UserDto }>(
+      `/admin/merges/${encodeURIComponent(id)}/rollback`,
+      { method: 'POST', auth: false, headers: { 'x-admin-token': token } },
+    ),
+  // ===== 第三方登录渠道注册表 =====
+  /** 全量渠道：状态、缺失配置、不可用原因、运行时开关。 */
+  oauthProviders: (token: string) =>
+    apiRequest<{ summary: ProviderSummaryDto; providers: ProviderStateDto[] }>('/admin/oauth/providers', {
+      auth: false,
+      headers: { 'x-admin-token': token },
+    }),
+  /** 单独启停某渠道：热生效；C 类或缺配置渠道服务端拒绝开启。 */
+  toggleOAuthProvider: (token: string, key: string, enabled: boolean) =>
+    apiRequest<ProviderStateDto>(`/admin/oauth/providers/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      data: { enabled },
+      auth: false,
+      headers: { 'x-admin-token': token },
+    }),
+  // ===== 目录导入 =====
+  /** 按仓库内 catalog.json 文件路径（或直接给 catalog 对象）触发导入。 */
+  mallImport: (token: string, payload: { file?: string; batch?: string; catalog?: unknown }) =>
+    apiRequest<ImportReportDto>('/admin/mall/import', {
+      method: 'POST',
+      data: payload,
       auth: false,
       headers: { 'x-admin-token': token },
     }),
@@ -632,4 +781,97 @@ export const homeApi = {
       `/home/rcs${limit ? `?limit=${encodeURIComponent(String(limit))}` : ''}`,
       { auth: false },
     ),
+};
+
+/* ---------- 第三方集成（地图 / 对象存储 / 支付 / AI） ---------- */
+
+export type RegeoResult = {
+  address: string;
+  province: string;
+  city: string;
+  district: string;
+  adcode: string;
+};
+
+export type RouteResult = {
+  distanceMeters: number;
+  durationSec: number;
+  steps: string[];
+};
+
+export type PresignUploadResult = {
+  url: string;
+  method: 'PUT';
+  headers: Record<string, string>;
+  expiresAt: string;
+  key: string;
+  publicUrl: string;
+};
+
+export type PayOrderDto = {
+  id: string;
+  outTradeNo: string;
+  channel: 'wechat' | 'alipay';
+  amountFen: number;
+  subject: string;
+  status: 'pending' | 'paid' | 'failed' | 'closed';
+  prepay: Record<string, unknown> | null;
+  transactionId: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+export type PayOrderResult = {
+  outTradeNo: string;
+  channel: 'wechat' | 'alipay';
+  amountFen: number;
+  status: 'pending';
+  payload: Record<string, unknown>;
+  /** live = 已接真实商户；dev = 仅走通下单链路，不真实扣款 */
+  mode: 'live' | 'dev';
+};
+
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+export type AiChatResult = {
+  content: string;
+  usage?: { promptTokens: number; completionTokens: number };
+};
+
+export const integrationsApi = {
+  map: {
+    /** 逆地理编码：坐标 → 省市区与结构化地址。 */
+    regeo: (longitude: number, latitude: number) =>
+      apiRequest<RegeoResult>('/map/regeo', { method: 'POST', data: { longitude, latitude } }),
+    /** 路径规划：步行 / 驾车 / 骑行。 */
+    route: (
+      from: { longitude: number; latitude: number },
+      to: { longitude: number; latitude: number },
+      mode: 'walking' | 'driving' | 'riding' = 'walking',
+    ) => apiRequest<RouteResult>('/map/route', { method: 'POST', data: { from, to, mode } }),
+  },
+  storage: {
+    /** 预签名上传地址；拿到 url 后由前端直接 PUT 文件二进制。 */
+    presign: (key: string, contentType?: string, expiresIn?: number) =>
+      apiRequest<PresignUploadResult>('/storage/presign', {
+        method: 'POST',
+        data: { key, ...(contentType ? { contentType } : {}), ...(expiresIn ? { expiresIn } : {}) },
+      }),
+  },
+  pay: {
+    /** 发起支付：未配置商户时服务端返回 dev 模式占位参数，不真实扣款。 */
+    createOrder: (input: CreatePaymentInput) =>
+      apiRequest<PayOrderResult>('/pay/orders', { method: 'POST', data: input }),
+    /** 按商户订单号查询支付状态。 */
+    getOrder: (outTradeNo: string) =>
+      apiRequest<PayOrderDto>(`/pay/orders/${encodeURIComponent(outTradeNo)}`),
+  },
+  ai: {
+    /** 通用对话；未配置 AI Key 时服务端回退开发态回显。 */
+    chat: (messages: ChatMessage[], model?: string, temperature?: number) =>
+      apiRequest<AiChatResult>('/ai/chat', {
+        method: 'POST',
+        data: { messages, ...(model ? { model } : {}), ...(temperature != null ? { temperature } : {}) },
+      }),
+  },
 };

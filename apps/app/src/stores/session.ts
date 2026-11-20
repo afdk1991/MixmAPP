@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-import type { AuthResult, OAuthProviderId, UserDto } from '@mixmapp/contracts';
+import type { AuthResult, OAuthProviderId, TokenPair, UserDto } from '@mixmapp/contracts';
 import { authApi, clearTokens, meApi, readTokens, writeTokens } from '../api/client';
 
 type SessionState = {
@@ -29,6 +29,14 @@ export async function applyAuth(result: AuthResult): Promise<void> {
   session.accessToken = result.tokens.accessToken;
   session.user = result.user;
   uni.setStorageSync('mixmapp:user', result.user);
+}
+
+/** 账号合并 / 换绑后回写主账号资料与新令牌（次账号已删除，旧令牌失效）。 */
+export async function applySession(user: UserDto, tokens: TokenPair): Promise<void> {
+  writeTokens(tokens);
+  session.accessToken = tokens.accessToken;
+  session.user = user;
+  uni.setStorageSync('mixmapp:user', user);
 }
 
 export async function loginByPassword(account: string, password: string): Promise<AuthResult> {

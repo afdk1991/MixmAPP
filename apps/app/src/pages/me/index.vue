@@ -102,6 +102,110 @@
         </view>
       </view>
 
+      <!-- ---------- 资料编辑 ---------- -->
+      <view class="sec">
+        <view class="sec-head">
+          <text class="eyebrow">PROFILE</text>
+          <text class="sec-title">资料编辑</text>
+        </view>
+        <view class="rule" />
+        <text class="label mt">昵称</text>
+        <input
+          class="field"
+          type="text"
+          maxlength="24"
+          placeholder="展示昵称（1–24 字）"
+          placeholder-class="field-ph"
+          v-model="profileNickname"
+        />
+        <text class="label mt">简介</text>
+        <textarea
+          class="field field--area"
+          maxlength="160"
+          placeholder="一句话介绍自己（可选）"
+          placeholder-class="field-ph"
+          v-model="profileBio"
+        />
+        <text v-if="profileSaved" class="notice-inline">{{ profileSaved }}</text>
+        <text v-if="profileError" class="error">{{ profileError }}</text>
+        <view class="btn btn--deep btn--block mt-l" hover-class="is-press" @tap="saveProfile">
+          <text class="btn-text">{{ profileSaving ? '保存中…' : '保存资料' }}</text>
+        </view>
+      </view>
+
+      <!-- ---------- 账号完善：手机 / 邮箱补绑 ---------- -->
+      <view v-if="!user.phone || !user.email" class="sec">
+        <view class="sec-head">
+          <text class="eyebrow">RECOVERY</text>
+          <text class="sec-title">账号完善</text>
+        </view>
+        <view class="rule" />
+        <text class="hint">绑定后可凭手机验证码或邮箱密码找回账号；缺一种找回方式存在登录风险。</text>
+
+        <!-- 手机补绑 -->
+        <view v-if="!user.phone" class="bind-block">
+          <text class="label mt">手机号</text>
+          <input
+            class="field"
+            type="number"
+            maxlength="11"
+            placeholder="用于绑定与登录的手机号"
+            placeholder-class="field-ph"
+            v-model="bindPhoneInput"
+          />
+          <view class="code-row">
+            <input
+              class="field code-input"
+              type="number"
+              maxlength="6"
+              placeholder="6 位验证码"
+              placeholder-class="field-ph"
+              v-model="bindPhoneCode"
+            />
+            <view
+              class="code-btn"
+              :class="{ 'code-btn--off': bindPhoneCounting || bindPhoneSending }"
+              hover-class="is-press"
+              @tap="sendBindCode"
+            >
+              <text class="code-btn-text mono">
+                {{ bindPhoneCounting ? `${bindPhoneCountdown}s` : bindPhoneSending ? '发送中' : '获取验证码' }}
+              </text>
+            </view>
+          </view>
+          <text v-if="bindPhoneDevCode" class="dev-hint">开发态验证码：{{ bindPhoneDevCode }}（正式环境不显示）</text>
+          <text v-if="bindPhoneError" class="error">{{ bindPhoneError }}</text>
+          <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="bindPhoneSubmit">
+            <text class="btn-text btn-text--dark">{{ bindPhoneSubmitting ? '绑定中…' : '绑定手机号' }}</text>
+          </view>
+        </view>
+
+        <!-- 邮箱补绑 -->
+        <view v-if="!user.email" class="bind-block">
+          <text class="label mt">邮箱</text>
+          <input
+            class="field"
+            type="text"
+            maxlength="254"
+            placeholder="用于绑定与登录的邮箱"
+            placeholder-class="field-ph"
+            v-model="bindEmailInput"
+          />
+          <text class="label mt">账号密码</text>
+          <input
+            class="field"
+            password
+            placeholder="校验当前账号密码（至少 8 位，含字母与数字）"
+            placeholder-class="field-ph"
+            v-model="bindEmailPassword"
+          />
+          <text v-if="bindEmailError" class="error">{{ bindEmailError }}</text>
+          <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="bindEmailSubmit">
+            <text class="btn-text btn-text--dark">{{ bindEmailSubmitting ? '绑定中…' : '绑定邮箱' }}</text>
+          </view>
+        </view>
+      </view>
+
       <!-- ---------- 资产 ---------- -->
       <view class="sec">
         <view class="sec-head">
@@ -269,8 +373,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { OAuthProviderId } from '@mixmapp/contracts';
-import { session, logout, refreshProfile } from '../../stores/session';
-import { meApi, ApiError } from '../../api/client';
+import { session, logout, refreshProfile, applySession } from '../../stores/session';
+import { meApi, authApi, ApiError } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import {
@@ -360,6 +464,36 @@ const upPassword = ref('');
 const upError = ref('');
 const upgrading = ref(false);
 
+// ===== 资料编辑（昵称 / 简介） =====
+const profileNickname = ref('');
+const profileBio = ref('');
+const profileSaving = ref(false);
+const profileError = ref('');
+const profileSaved = ref('');
+
+// ===== 手机补绑 =====
+const bindPhoneInput = ref('');
+const bindPhoneCode = ref('');
+const bindPhoneDevCode = ref('');
+const bindPhoneSending = ref(false);
+const bindPhoneCounting = ref(false);
+const bindPhoneCountdown = ref(0);
+const bindPhoneSubmitting = ref(false);
+const bindPhoneError = ref('');
+
+// ===== 邮箱补绑 =====
+const bindEmailInput = ref('');
+const bindEmailPassword = ref('');
+const bindEmailSubmitting = ref(false);
+const bindEmailError = ref('');
+
+/** 用当前账号资料回填资料表单；刷新后保持表单与通行证一致。 */
+function syncProfileForm(): void {
+  if (!user.value) return;
+  profileNickname.value = user.value.nickname;
+  profileBio.value = user.value.bio ?? '';
+}
+
 function go(url: string): void {
   goTo(url);
 }
@@ -394,6 +528,7 @@ async function reload(): Promise<void> {
   try {
     await refreshProfile();
     refreshError.value = '';
+    syncProfileForm();
     uni.showToast({ title: '已刷新', icon: 'none' });
   } catch (e) {
     refreshError.value = e instanceof ApiError ? e.message : '网络异常';
@@ -416,6 +551,103 @@ async function upgradeGuest(): Promise<void> {
   }
 }
 
+async function saveProfile(): Promise<void> {
+  if (profileSaving.value) return;
+  profileError.value = '';
+  profileSaved.value = '';
+  const nickname = profileNickname.value.trim();
+  if (!nickname) {
+    profileError.value = '昵称不能为空';
+    return;
+  }
+  profileSaving.value = true;
+  try {
+    await meApi.update({ nickname, bio: profileBio.value.trim() });
+    await refreshProfile();
+    syncProfileForm();
+    profileSaved.value = '资料已保存';
+  } catch (e) {
+    profileError.value = e instanceof ApiError ? e.message : '保存失败，请稍后重试';
+  } finally {
+    profileSaving.value = false;
+  }
+}
+
+async function sendBindCode(): Promise<void> {
+  if (bindPhoneCounting.value || bindPhoneSending.value) return;
+  if (!/^1[3-9]\d{9}$/.test(bindPhoneInput.value)) {
+    bindPhoneError.value = '请输入正确的手机号';
+    return;
+  }
+  bindPhoneSending.value = true;
+  bindPhoneError.value = '';
+  try {
+    const res = await authApi.requestSmsCode(bindPhoneInput.value, 'bind');
+    if (res.devCode) bindPhoneDevCode.value = res.devCode;
+    bindPhoneCounting.value = true;
+    bindPhoneCountdown.value = 60;
+    const timer = setInterval(() => {
+      bindPhoneCountdown.value -= 1;
+      if (bindPhoneCountdown.value <= 0) {
+        clearInterval(timer);
+        bindPhoneCounting.value = false;
+      }
+    }, 1000);
+  } catch (e) {
+    bindPhoneError.value = e instanceof ApiError ? e.message : '验证码发送失败';
+  } finally {
+    bindPhoneSending.value = false;
+  }
+}
+
+async function bindPhoneSubmit(): Promise<void> {
+  if (bindPhoneSubmitting.value) return;
+  bindPhoneError.value = '';
+  if (!/^1[3-9]\d{9}$/.test(bindPhoneInput.value)) {
+    bindPhoneError.value = '请输入正确的手机号';
+    return;
+  }
+  if (!/^\d{6}$/.test(bindPhoneCode.value)) {
+    bindPhoneError.value = '验证码为 6 位数字';
+    return;
+  }
+  bindPhoneSubmitting.value = true;
+  try {
+    const res = await meApi.bindPhone(bindPhoneInput.value, bindPhoneCode.value);
+    // 手机号归属其他账号时会触发合并：返回主账号资料与新令牌，必须换用新令牌。
+    await applySession(res.user, res.tokens);
+    uni.showToast({ title: res.merged ? '已合并到主账号' : '手机号已绑定', icon: 'none' });
+  } catch (e) {
+    bindPhoneError.value = e instanceof ApiError ? e.message : '绑定失败，请稍后重试';
+  } finally {
+    bindPhoneSubmitting.value = false;
+  }
+}
+
+async function bindEmailSubmit(): Promise<void> {
+  if (bindEmailSubmitting.value) return;
+  bindEmailError.value = '';
+  const email = bindEmailInput.value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    bindEmailError.value = '邮箱格式不正确';
+    return;
+  }
+  if (bindEmailPassword.value.length < 8) {
+    bindEmailError.value = '密码至少 8 位，需包含字母与数字';
+    return;
+  }
+  bindEmailSubmitting.value = true;
+  try {
+    await meApi.bindEmail(email, bindEmailPassword.value);
+    await refreshProfile();
+    uni.showToast({ title: '邮箱已绑定', icon: 'none' });
+  } catch (e) {
+    bindEmailError.value = e instanceof ApiError ? e.message : '绑定失败，请稍后重试';
+  } finally {
+    bindEmailSubmitting.value = false;
+  }
+}
+
 async function doLogout(): Promise<void> {
   await logout();
   uni.showToast({ title: '已退出', icon: 'none' });
@@ -424,7 +656,7 @@ async function doLogout(): Promise<void> {
 onShow(() => {
   if (session.user) {
     void refreshProfile()
-      .then(() => { refreshError.value = ''; })
+      .then(() => { refreshError.value = ''; syncProfileForm(); })
       .catch((e) => { refreshError.value = e instanceof ApiError ? e.message : '网络异常'; });
   }
 });
@@ -866,6 +1098,59 @@ onShow(() => {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $signal;
+}
+
+/* ---------- 账号完善表单 ---------- */
+.bind-block {
+  margin-top: $sp-3;
+  padding-top: $sp-3;
+  border-top: 1rpx solid $paper-2;
+}
+
+.code-row {
+  display: flex;
+  align-items: center;
+  margin-top: $sp-2;
+}
+
+.code-input {
+  flex: 1;
+}
+
+.code-btn {
+  margin-left: 14rpx;
+  height: 96rpx;
+  padding: 0 24rpx;
+  border-radius: $r-control;
+  background: $solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.code-btn--off {
+  opacity: 0.45;
+}
+
+.code-btn-text {
+  font-size: $fs-micro;
+  letter-spacing: 0.5rpx;
+  color: $on-solid;
+}
+
+.dev-hint {
+  display: block;
+  margin-top: 14rpx;
+  font-size: $fs-micro;
+  color: $amber;
+}
+
+.notice-inline {
+  display: block;
+  margin-top: 14rpx;
+  font-size: $fs-meta;
+  color: $brand-deep;
 }
 
 /* ---------- 未登录（纸面） ---------- */

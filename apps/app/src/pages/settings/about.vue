@@ -44,7 +44,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { API_BASE, API_BASE_SOURCE, metaApi, ApiError, applyMetaFlags } from '../../api/client';
+import { API_BASE, API_BASE_SOURCE, metaApi, ApiError, applyMetaFlags, applyMetaThirdParty } from '../../api/client';
 import { APP_VERSION } from '../../version';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
@@ -124,6 +124,7 @@ onLoad(async () => {
   try {
     const data = await metaApi.get();
     applyMetaFlags(data);
+    applyMetaThirdParty(data);
     meta.value = data;
     // 版本只认构建期 APP_VERSION，不读服务端 meta.version，避免显示旧版串。
     env.value = data.env;
