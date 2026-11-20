@@ -1,11 +1,11 @@
 <template>
   <view class="page">
-    <mx-bar />
+    <mx-bar title="关于 MixmAPP" />
 
     <view class="brand">
       <mx-logo size="lg" tone="light" sub="MIXMAPP ACCOUNT" />
       <view class="brand-meta">
-        <text class="brand-ver mono">V{{ APP_VERSION }}</text>
+        <text class="brand-ver mono" @tap="secretTap">V{{ APP_VERSION }}</text>
         <text class="brand-env mono">ENV · {{ envText }}</text>
       </view>
       <text class="brand-lede">uni-app 单码多端 · 内置发号中心</text>
@@ -16,6 +16,9 @@
       <text class="block-title">服务端能力</text>
       <view class="rule" />
       <text v-if="!meta" class="hint">{{ error || '正在读取服务端能力…' }}</text>
+      <view v-if="!meta && error" class="btn btn--ghost btn--sm retry" hover-class="is-press" @tap="reloadMeta">
+        <text class="retry-text">重试</text>
+      </view>
       <view v-else class="cap-list">
         <view v-for="cap in capabilities" :key="cap.key" class="cap">
           <view class="cap-left">
@@ -46,6 +49,8 @@ import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { API_BASE, API_BASE_SOURCE, metaApi, ApiError, applyMetaFlags, applyMetaThirdParty } from '../../api/client';
 import { APP_VERSION } from '../../version';
+import { ROUTES } from '../../routes';
+import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
 
 type MetaInfo = {
@@ -100,6 +105,17 @@ const ENV_TEXT: Record<string, string> = {
 
 const envText = computed(() => (env.value ? (ENV_TEXT[env.value] ?? env.value) : '—'));
 
+/** 隐藏入口：连续点击版本号 5 次进入管理后台；后台面仍由 x-admin-token 守卫。 */
+const SECRET_TAPS = 5;
+let secretCount = 0;
+function secretTap(): void {
+  secretCount += 1;
+  if (secretCount >= SECRET_TAPS) {
+    secretCount = 0;
+    goTo(ROUTES.admin);
+  }
+}
+
 /** oauthProviders 是聚合调试串，不对外展示。 */
 const capabilities = computed(() => {
   const third = meta.value?.thirdParty ?? {};
@@ -116,7 +132,11 @@ const capabilities = computed(() => {
     });
 });
 
-onLoad(async () => {
+onLoad(() => {
+  void reloadMeta();
+});
+
+async function reloadMeta(): Promise<void> {
   const info = uni.getSystemInfoSync();
   platform.value = `${info.uniPlatform} · ${info.osName ?? info.platform}`;
   const stored = uni.getStorageSync('mixmapp:lastLaunch') as { at?: string } | '';
@@ -131,14 +151,14 @@ onLoad(async () => {
   } catch (e) {
     error.value = e instanceof ApiError ? `无法连接 API：${e.message}` : '无法连接 API';
   }
-});
+}
 </script>
 
 <style scoped lang="scss">
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: $sp-4 $sp-3 $sp-8;
+  padding: $sp-4 $sp-3 calc($sp-8 + var(--mx-safe-bottom));
 }
 
 /* ---------- 品牌板 ---------- */
@@ -148,7 +168,7 @@ onLoad(async () => {
   padding: $sp-6 $sp-5 $sp-5;
   background:
     radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
-    linear-gradient(158deg, #0b0f0e 0%, #152622 62%, #17322c 120%);
+    linear-gradient(158deg, $deep 0%, $deep-2 62%, $deep-3 120%);
   border-radius: $r-shell;
 }
 
@@ -264,6 +284,16 @@ onLoad(async () => {
   font-size: $fs-micro;
   line-height: 1.6;
   color: $ink-3;
+}
+
+.retry {
+  margin-top: $sp-3;
+  align-self: flex-start;
+}
+
+.retry-text {
+  font-size: $fs-meta;
+  color: $acc-2;
 }
 
 /* ---------- 运行环境 ---------- */

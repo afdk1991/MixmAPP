@@ -1,6 +1,6 @@
 <template>
-  <view class="page">
-    <mx-bar />
+  <view class="page mx-ime-pad">
+    <mx-bar title="智能助手" />
 
     <view class="head">
       <text class="eyebrow">ASSISTANT</text>
@@ -34,6 +34,7 @@
         maxlength="500"
         placeholder="输入问题，回车发送"
         placeholder-class="field-ph"
+        confirm-type="done"
         v-model="draft"
         @confirm="send"
       />
@@ -88,7 +89,7 @@ async function send(): Promise<void> {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-3 $sp-6;
+  padding: 0 $sp-3 calc($sp-6 + var(--mx-safe-bottom) + var(--mx-ime-bottom));
   display: flex;
   flex-direction: column;
 }
@@ -120,7 +121,7 @@ async function send(): Promise<void> {
   margin: $sp-2 4rpx $sp-3;
   padding: 16rpx 20rpx;
   border-radius: $r-control;
-  background: rgba(15, 157, 143, 0.08);
+  background: $brand-soft;
 }
 
 .demo-note-text {

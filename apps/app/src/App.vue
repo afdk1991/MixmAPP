@@ -4,8 +4,7 @@ import { restore } from './stores/session';
 import { PRIVACY_GATE_MODE, resolvePrivacyConsent } from './privacy';
 import { ROUTES } from './routes';
 
-// 正式产物里管理面（pages/admin/index）不注册，直接访问该地址会命中「路由不存在」。
-// 统一回首页，避免用户停在一张白屏上；开发态注册了该页面，不受影响。
+// 未注册 / 不存在的页面路径统一回首页，避免停在白屏；管理面已纳入正式包，数据由后端令牌守卫。
 onPageNotFound(() => {
   uni.reLaunch({ url: ROUTES.home });
 });
@@ -32,6 +31,9 @@ onLaunch(async () => {
 
 <style lang="scss">
 @import './styles/theme.scss';
+/* App 壳层：安全区变量、二级页头部骨架、按压/三态/吸附底栏/键盘避让。
+ * 必须排在 theme.scss 之后：它读 --mx-* 令牌，并给出安全区变量的 env() 回落值。 */
+@import './styles/app-shell.scss';
 
 page {
   background-color: $paper;
@@ -74,7 +76,7 @@ image {
 .mx-beian--edge {
   padding-left: $sp-4;
   padding-right: $sp-4;
-  padding-bottom: calc(#{$sp-4} + env(safe-area-inset-bottom));
+  padding-bottom: calc(#{$sp-4} + var(--mx-safe-bottom, 0px));
 }
 
 .mx-beian-link {

@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <mx-bar />
+    <mx-bar title="我的订单" />
     <view class="head">
       <text class="eyebrow">ORDERS</text>
       <text class="title">通行证订单</text>
@@ -181,7 +181,6 @@ function askCancel(order: OrderDto): void {
     title: '取消订单',
     content: `确认取消订单 ${order.orderNo}？取消后不可恢复，库存将退回。`,
     confirmText: '确认取消',
-    confirmColor: '#C0392B',
     success: (res) => {
       if (res.confirm) void doCancel(order);
     },
@@ -275,7 +274,7 @@ onLoad((options) => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-3 $sp-8;
+  padding: 0 $sp-3 calc($sp-8 + var(--mx-safe-bottom));
 }
 
 .head {
@@ -444,6 +443,7 @@ onLoad((options) => {
 
 .item-title {
   flex: 1;
+  min-width: 0;
   font-size: 30rpx;
   line-height: 1.35;
   color: $acc-2;

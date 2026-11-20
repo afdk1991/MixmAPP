@@ -1,6 +1,6 @@
 <template>
-  <view class="page page--auth">
-    <mx-bar compact />
+  <view class="page page--auth mx-ime-pad">
+    <mx-bar compact title="注册" />
 
     <view class="brand">
       <mx-logo size="md" tone="ink" sub="MIXMAPP ACCOUNT" />
@@ -14,20 +14,20 @@
     </view>
 
     <view class="mode">
-      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'phone' }" @tap="mode = 'phone'">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'phone' }" hover-class="is-press" @tap="mode = 'phone'">
         <text class="mode-label">手机号</text>
         <view class="mode-line" />
       </view>
-      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'email' }" @tap="mode = 'email'">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'email' }" hover-class="is-press" @tap="mode = 'email'">
         <text class="mode-label">邮箱</text>
         <view class="mode-line" />
       </view>
-      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'username' }" @tap="mode = 'username'">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'username' }" hover-class="is-press" @tap="mode = 'username'">
         <text class="mode-label">用户名</text>
         <view class="mode-line" />
       </view>
       <!-- internal:start -->
-      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'onekey' }" hover-class="is-press" @tap="mode = 'onekey'">
         <text class="mode-label">一键</text>
         <view class="mode-line" />
       </view>
@@ -44,6 +44,7 @@
             maxlength="11"
             placeholder="请输入 11 位手机号"
             placeholder-class="field-ph"
+            confirm-type="next"
             v-model="phone"
           />
         </view>
@@ -56,7 +57,9 @@
               maxlength="6"
               placeholder="6 位验证码"
               placeholder-class="field-ph"
+              confirm-type="done"
               v-model="code"
+              @confirm="submit"
             />
             <view
               class="code-btn"
@@ -83,6 +86,7 @@
             type="text"
             placeholder="you@example.com"
             placeholder-class="field-ph"
+            confirm-type="next"
             v-model="email"
           />
         </view>
@@ -93,7 +97,9 @@
             password
             placeholder="至少 8 位，含字母与数字"
             placeholder-class="field-ph"
+            confirm-type="done"
             v-model="password"
+            @confirm="submit"
           />
         </view>
       </block>
@@ -107,6 +113,7 @@
             maxlength="20"
             placeholder="2–20 个字符，中文/字母/数字/下划线"
             placeholder-class="field-ph"
+            confirm-type="next"
             v-model="username"
           />
         </view>
@@ -117,7 +124,9 @@
             password
             placeholder="至少 8 位，含字母与数字"
             placeholder-class="field-ph"
+            confirm-type="done"
             v-model="password"
+            @confirm="submit"
           />
         </view>
         <text class="hint note">注册后可用「用户名 + 密码」直接登录，无需手机号。</text>
@@ -134,7 +143,9 @@
             type="text"
             placeholder="本机号码认证凭证（开发态填 dev:手机号）"
             placeholder-class="field-ph"
+            confirm-type="done"
             v-model="onekeyToken"
+            @confirm="submit"
           />
         </view>
         <text class="hint note">同一手机号已注册时直接登录，不会重复建号。</text>
@@ -149,6 +160,7 @@
           maxlength="24"
           placeholder="不填则自动生成"
           placeholder-class="field-ph"
+          confirm-type="done"
           v-model="nickname"
         />
       </view>
@@ -159,7 +171,7 @@
       </view>
 
       <!-- 隐私同意：注册提交前必须勾选；未勾选点提交会被拦下并高亮 -->
-      <view class="consent" :class="{ 'consent--error': consentError }" @tap="toggleConsent">
+      <view class="consent" :class="{ 'consent--error': consentError }" hover-class="is-press" @tap="toggleConsent">
         <view class="consent-box" :class="{ 'consent-box--on': consent }">
           <text v-if="consent" class="consent-tick mono">✓</text>
         </view>
@@ -182,7 +194,7 @@
 
       <view class="secondary">
         <text class="secondary-text">已有账号？</text>
-        <text class="secondary-link" @tap="goLogin">去登录</text>
+        <text class="secondary-link" hover-class="is-press" @tap="goLogin">去登录</text>
       </view>
     </view>
 
@@ -435,7 +447,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: $sp-5 $sp-4 $sp-8;
+  padding: $sp-5 $sp-4 calc($sp-8 + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
 /* ---------- 品牌区 ---------- */

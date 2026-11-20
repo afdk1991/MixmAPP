@@ -16,4 +16,7 @@
         原生侧取同一个值时，首帧渲染前不会出现「白底 → 深色页面」的闪屏。
     -->
     <color name="app_background">#F4F4F1</color>
+    <!-- 显式深浅底色：手动主题与系统 uiMode 不一致时，原生按页面主题精确取色，不走 night 资源回落。 -->
+    <color name="app_background_light">#F4F4F1</color>
+    <color name="app_background_dark">#121716</color>
 </resources>

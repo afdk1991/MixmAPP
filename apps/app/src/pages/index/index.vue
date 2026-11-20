@@ -1,137 +1,23 @@
 <template>
   <view class="halo">
-    <!-- home--search：搜索激活时整页切到「结果优先」形态，首屏自动收成一条搜索栏 -->
     <view class="page page--wide home" :class="{ 'home--search': searchActive }">
       <!-- 桌面端顶部导航（移动端不渲染，仍走底部 tabBar） -->
       <mx-bar desktop-only hide-back />
 
-      <!-- ============================================================
-           首屏「目录台」
-           旧版首屏是一张品牌海报，搜索要越过运营位与推荐分类才出现，
-           移动端首屏几乎看不到输入框；而首页的第一任务通常是「找一件具体的货」。
-           所以这里把搜索做成首屏唯一的大控件，标题只留一句定位，
-           账号 / 版本 / 链路收进右侧窄卡，不再与找货争抢注意力。
-           搜索激活后 .home--search 会把标题、说明、数据尺、侧卡全部收起，
-           让结果紧接着搜索出现，而不是被首屏继续往下推。
-           ============================================================ -->
-      <view class="hero">
-        <view class="hero-grid">
-          <view class="hero-main">
-            <view class="hero-eyebrow-row">
-              <text class="hero-eyebrow mono">MIXMAPP 五金商品</text>
-              <!-- 状态只给用户能理解的两种说法，不暴露内部链路术语 -->
-              <view class="hero-badge" :class="{ 'hero-badge--off': !online }">
-                <view class="hero-badge-dot" />
-                <text class="hero-badge-text mono">{{ online ? '在线' : '连不上' }}</text>
-              </view>
-            </view>
-
-            <view class="hero-title-wrap">
-              <text class="hero-title">五金商品，</text>
-              <text class="hero-title hero-title--accent">一搜就到。</text>
-            </view>
-            <text class="hero-lede">输入名称、规格或项目号，结果直接出现在下面；想慢慢挑，也可以从类目进去看。</text>
-
-            <!-- 搜索：首屏主控件。行为完全沿用原实现（输入即检 + 320ms 防抖 + 五态），只改位置与权重 -->
-            <view class="search search--hero">
-              <view class="search-mark">
-                <view class="search-lens" />
-                <view class="search-handle" />
-              </view>
-              <input
-                :value="searchKeyword"
-                class="search-input"
-                placeholder="搜名称、规格或项目号"
-                placeholder-class="field-ph"
-                confirm-type="search"
-                @input="onSearchInput"
-                @confirm="submitSearch"
-              />
-              <view v-if="searchKeyword" class="search-clear" hover-class="is-press" @tap="clearSearch">
-                <text class="search-clear-x mono">×</text>
-              </view>
-              <view class="search-go" hover-class="is-press" @tap="submitSearch">
-                <text class="search-go-text">搜索</text>
-              </view>
-            </view>
-
-            <!-- 搜索提示用日常说法，不写「空格分词 / AND」这类实现口径 -->
-            <view v-if="!searchActive" class="search-hint">
-              <text class="search-hint-i mono">多个词用空格分开，顺序不限</text>
-              <text class="search-hint-i mono">项目号记得不全，输前 6 位也能找</text>
-              <text class="search-hint-i mono">规格可省螺纹距：M6x8 也能搜到</text>
-              <text class="search-hint-i mono">大小写、全角半角都不影响</text>
-            </view>
-            <view v-if="searchNotice" class="search-notice">
-              <text class="search-notice-text">{{ searchNotice }}</text>
-            </view>
-
-            <!-- 数据尺：用真实计数替代营销数字，给「目录有多大」一个可核对的量 -->
-            <view v-if="!searchActive" class="hero-stats">
-              <view class="stat">
-                <text class="stat-k mono">商品类别</text>
-                <text class="stat-v">{{ tabCategories.length || '—' }}<text class="stat-u"> 类</text></text>
-              </view>
-              <view class="stat">
-                <text class="stat-k mono">在售商品</text>
-                <text class="stat-v">{{ totalCountText }}<text class="stat-u"> 件</text></text>
-              </view>
-              <view class="stat">
-                <text class="stat-k mono">本页推荐</text>
-                <text class="stat-v">{{ PAGE_SIZE }}<text class="stat-u"> 件</text></text>
-              </view>
-            </view>
+      <!-- 48px App 头部行：左侧品牌标（logo 自带字标，不再重复写标题）+ 右侧购物车图标位；
+           不放版本徽标，也不暴露 6 ENDS / AUTO / OFFLINE 这类内部运行指标 -->
+      <view class="home-head">
+        <view class="mx-safe-top" />
+        <view class="home-head__inner">
+          <view class="home-head__brand" hover-class="is-press" @tap="goHome">
+            <mx-logo size="sm" />
           </view>
-
-          <!-- 通行证侧卡：品牌 / 运行态 / 登录入口仍集中在一处，但降为辅助层级 -->
-          <view class="hero-side">
-            <view class="pass">
-              <view class="pass-head">
-                <mx-logo size="md" tone="light" sub="我的账号" />
-                <text class="pass-kicker mono">{{ signedIn ? '已登录' : '未登录' }}</text>
-              </view>
-
-              <view class="pass-facts">
-                <!-- 版本号只在有正式发版号时展示：0.0.0 是仓库的初始占位版本，
-                     直接摆出来像没做完的产品，没有信息价值 -->
-                <view v-if="versionLabel" class="pass-fact">
-                  <text class="pass-k mono">版本</text>
-                  <view class="pass-line" />
-                  <text class="pass-v mono">{{ versionLabel }}</text>
-                </view>
-                <view class="pass-fact">
-                  <text class="pass-k mono">环境</text>
-                  <view class="pass-line" />
-                  <text class="pass-v mono">{{ envLabel }}</text>
-                </view>
-                <view class="pass-fact">
-                  <text class="pass-k mono">网络</text>
-                  <view class="pass-line" />
-                  <view class="pass-status">
-                    <view class="status-dot" :class="{ 'status-dot--off': !online }" />
-                    <text class="pass-v mono">{{ online ? '正常' : '未连接' }}</text>
-                  </view>
-                </view>
-              </view>
-
-              <view v-if="error" class="pass-error">
-                <view class="pass-error-mark mono">!</view>
-                <view class="pass-error-main">
-                  <text class="pass-error-title">暂时连不上服务</text>
-                  <text class="pass-error-text">检查网络后再点一次重试。</text>
-                </view>
-                <view class="pass-retry" hover-class="is-press" @tap="loadMeta">
-                  <text class="pass-retry-text mono">重试</text>
-                </view>
-              </view>
-
-              <!-- 通行证主入口：与「通行入口 02」同一去向，全页只在这里给强调样式 -->
-              <view class="pass-cta" hover-class="is-press" @tap="go(primaryUrl)">
-                <view class="pass-cta-main">
-                  <text class="pass-cta-title">{{ signedIn ? '查看我的通行证' : '登录或注册' }}</text>
-                  <text class="pass-cta-sub">{{ signedIn ? '编号、绑定方式与账号资料' : '30 秒完成，手机电脑通用' }}</text>
-                </view>
-                <text class="pass-cta-arrow mono">→</text>
+          <view class="home-head__actions">
+            <view class="home-head__action" hover-class="is-press" @tap="go(ROUTES.cart)" aria-label="购物车">
+              <image class="home-head__icon" src="/static/tab/cart.png" mode="aspectFit" />
+              <!-- 角标位：待数据层提供全局购物车数量后接入；无数据时不渲染 -->
+              <view v-if="cartBadge > 0" class="home-head__badge">
+                <text class="home-head__badge-num mono">{{ cartBadge }}</text>
               </view>
             </view>
           </view>
@@ -139,6 +25,75 @@
       </view>
 
       <view class="body">
+        <!-- ============================================================
+             搜索：首屏主控件。行为完全沿用原实现（输入即检 + 320ms 防抖 + 五态），
+             只改位置与权重，不重写数据层。
+             ============================================================ -->
+        <view class="search search--home">
+          <view class="search-mark">
+            <view class="search-lens" />
+            <view class="search-handle" />
+          </view>
+          <input
+            :value="searchKeyword"
+            class="search-input"
+            placeholder="搜名称、规格或项目号"
+            placeholder-class="field-ph"
+            confirm-type="search"
+            @input="onSearchInput"
+            @confirm="submitSearch"
+          />
+          <view v-if="searchKeyword" class="search-clear" hover-class="is-press" @tap="clearSearch">
+            <text class="search-clear-x mono">×</text>
+          </view>
+          <view class="search-go" hover-class="is-press" @tap="submitSearch">
+            <text class="search-go-text">搜索</text>
+          </view>
+        </view>
+
+        <!-- 搜索提示用日常说法，不写「空格分词 / AND」这类实现口径 -->
+        <view v-if="!searchActive" class="search-hint">
+          <text class="search-hint-i mono">多个词用空格分开，顺序不限</text>
+          <text class="search-hint-i mono">项目号记得不全，输前 6 位也能找</text>
+          <text class="search-hint-i mono">规格可省螺纹距：M6x8 也能搜到</text>
+          <text class="search-hint-i mono">大小写、全角半角都不影响</text>
+        </view>
+        <view v-if="searchNotice" class="search-notice">
+          <text class="search-notice-text">{{ searchNotice }}</text>
+        </view>
+
+        <!-- 4 宫格快捷入口：商城 / 购物车 / 订单 / 通行证 -->
+        <view v-if="!searchActive" class="quick">
+          <view class="quick-grid">
+            <view
+              v-for="q in quickEntries"
+              :key="q.key"
+              class="quick-cell"
+              hover-class="is-press"
+              @tap="go(q.url)"
+            >
+              <view class="quick-icon">
+                <image v-if="q.icon" class="quick-icon-img" :src="q.icon" mode="aspectFit" />
+                <text v-else class="quick-icon-glyph mono">{{ q.glyph }}</text>
+              </view>
+              <text class="quick-label">{{ q.label }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 压缩版通行证卡（≤120px）：登录态 + 编号 + 一句动作 -->
+        <view v-if="!searchActive" class="passcard" hover-class="is-press" @tap="go(primaryUrl)">
+          <view class="passcard__main">
+            <view class="passcard__state">
+              <text class="passcard__tag mono">{{ signedIn ? '已登录' : '未登录' }}</text>
+              <text v-if="signedIn && passNo" class="passcard__no mono">{{ passNo }}</text>
+            </view>
+            <text class="passcard__title">{{ passcardTitle }}</text>
+            <text class="passcard__sub">{{ signedIn ? '编号、绑定方式与账号资料' : '30 秒完成，手机电脑通用' }}</text>
+          </view>
+          <text class="passcard__arrow mono">→</text>
+        </view>
+
         <!-- ============================================================
              运营位（home/ggs）
              放在搜索之后：先让用户完成找货，再看运营内容；
@@ -219,7 +174,7 @@
           </view>
           <view class="rule" />
 
-          <!-- 搜索态回执：让用户随时确认「现在看到的是哪个关键词的结果」，并可一键退回浏览态 -->
+          <!-- 搜索态回执：让用户随时确认「现在看到的是哪个关键词」，并可一键退回浏览态 -->
           <view v-if="searchActive" class="search-scope">
             <text class="search-scope-k mono">关键词</text>
             <text class="search-scope-v">「{{ searchKeyword.trim() }}」</text>
@@ -413,51 +368,14 @@
         </view>
 
         <!-- ============================================================
-             02 通行入口
-             货架之后才是账号与工具入口；卡片高度压到 150px 左右，
-             让「找货」与「办事」在纵向节奏上有明确主次。
+             02 多端覆盖
+             静态事实，收成紧凑单元：已接通 / 规划中仍用绿点与虚线底区分，信息不丢。
              ============================================================ -->
         <view class="section">
           <view class="sec-head">
             <view class="sec-head-l">
               <view class="sec-kicker">
                 <text class="sec-no mono">02</text>
-                <text class="sec-cap mono">入口</text>
-              </view>
-              <text class="sec-title">常用入口</text>
-            </view>
-            <text class="sec-count mono">共 {{ entries.length }} 项</text>
-          </view>
-          <view class="rule" />
-          <view class="entry-grid">
-            <view
-              v-for="entry in entries"
-              :key="entry.key"
-              class="entry-card"
-              hover-class="is-press"
-              @tap="go(entry.url)"
-            >
-              <view class="entry-top">
-                <text class="entry-no mono">{{ entry.key }}</text>
-                <text class="entry-tag mono">{{ entry.tag }}</text>
-              </view>
-              <text class="entry-title">{{ entry.title }}</text>
-              <text class="entry-desc">{{ entry.desc }}</text>
-              <text class="entry-arrow mono">→</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- ============================================================
-             03 多端覆盖
-             从 6 张大卡收成 6 个紧凑单元：这是静态事实，不该占据与货架同级的面积。
-             已接通 / 规划中仍用绿点与虚线底区分，信息不丢。
-             ============================================================ -->
-        <view class="section">
-          <view class="sec-head">
-            <view class="sec-head-l">
-              <view class="sec-kicker">
-                <text class="sec-no mono">03</text>
                 <text class="sec-cap mono">终端</text>
               </view>
               <text class="sec-title">在各端使用</text>
@@ -524,23 +442,12 @@ import {
 /**
  * 版本文案由构建期 APP_VERSION 驱动，不写死版本号。
  * 初始版本 0.0.0 属于仓库占位值，展开口反而像未完成品，这里只保留「正式发布」。
- * 用函数宽化入参为 string，避免与版本字面量窄类型做无重叠比较。
  */
 const isBaselineVersion = (v: string) => v === '0.0.0';
 const releaseLabel = computed(() =>
   APP_VERSION && !isBaselineVersion(APP_VERSION) ? `版本 ${APP_VERSION} · 正式发布` : '正式发布',
 );
 
-const version = ref(APP_VERSION);
-/** 通行证卡里的版本行：仅在拿到真实发版号时展示，0.0.0 直接隐藏。 */
-const versionLabel = computed(() => (version.value && !isBaselineVersion(version.value) ? version.value : ''));
-const env = ref('unknown');
-/** 环境值来自接口，页面只展示用户能懂的中文，不直接暴露 production/development 这类内部值。 */
-const envLabel = computed(() => {
-  if (env.value === 'production') return '正式版';
-  if (env.value === 'development') return '开发版';
-  return '预览版';
-});
 const online = ref(false);
 const error = ref('');
 
@@ -557,23 +464,24 @@ const platforms = [
   { code: 'APP-PLUS', short: 'APP', name: 'App 版', status: 'planned' },
 ];
 
-/**
- * 通行入口：序号由数组顺序派生（01/02/03/04），不在数据里另写 key。
- * 之前数据里手写 04 排在 03 前面，序号与展示顺序不一致。
- */
-const entryItems = [
-  { tag: '购物', title: '逛商城', desc: '商品、购物车和订单都在这里', url: ROUTES.mall },
-  { tag: '账号', title: '我的通行证', desc: '登录、注册，查看账号资料', url: ROUTES.me },
-  { tag: '研究', title: '深度研究', desc: '多轮检索后给出结构化报告', url: ROUTES.research },
-  { tag: '说明', title: '关于 MixmAPP', desc: '能做什么、当前版本与更新', url: ROUTES.about },
-];
-
-const entries = computed(() =>
-  entryItems.map((item, index) => ({ ...item, key: String(index + 1).padStart(2, '0') })),
-);
-
 const signedIn = computed(() => Boolean(session.user));
 const primaryUrl = computed(() => ROUTES.me);
+
+/** 压缩通行证卡：编号与持证人昵称，未登录时给登录动作。 */
+const passNo = computed(() => session.user?.accountNo ?? '');
+const passcardTitle = computed(() => (signedIn.value ? session.user?.nickname || '我的通行证' : '登录或注册'));
+
+/** 首屏 4 宫格快捷入口：商城 / 购物车 / 订单 / 通行证，全部走 ROUTES 常量。
+ *  前三项与通行证复用 tab 既有图标；订单无现成图标，保留等宽字形兜底。 */
+const quickEntries = [
+  { key: 'mall', glyph: '', label: '商城', url: ROUTES.mall, icon: '/static/tab/mall.png' },
+  { key: 'cart', glyph: '', label: '购物车', url: ROUTES.cart, icon: '/static/tab/cart.png' },
+  { key: 'orders', glyph: '单', label: '订单', url: ROUTES.orders, icon: '' },
+  { key: 'me', glyph: '', label: '通行证', url: ROUTES.me, icon: '/static/tab/me.png' },
+];
+
+/** 购物车角标数量：暂无全局计数数据源，先留位，为 0 时不渲染角标。 */
+const cartBadge = ref(0);
 
 /* ---------- 目录与检索：真实商城数据（mallApi 契约，不加 mock） ---------- */
 /** 首页精选只展示 6 条（前端截断的展示口径）。 */
@@ -888,6 +796,11 @@ function go(url: string): void {
   goTo(url);
 }
 
+/** 头部品牌标回首页 Tab：switchTab 保留 Tab 上下文，不 reLaunch 清栈。 */
+function goHome(): void {
+  uni.switchTab({ url: ROUTES.home });
+}
+
 /** meta 请求在途标记：避免首屏与目录补拉同时打同一个接口 */
 let metaLoading = false;
 
@@ -899,8 +812,6 @@ async function loadMeta(): Promise<void> {
     const meta = await metaApi.get();
     applyMetaFlags(meta);
     applyMetaThirdParty(meta);
-    // 版本以构建期 APP_VERSION（正式发布）为准，不被服务端 meta.version 覆盖成旧版串。
-    env.value = meta.env;
     online.value = true;
   } catch (e) {
     online.value = false;
@@ -925,9 +836,9 @@ onPullDownRefresh(() => {
 
 <style scoped lang="scss">
 /* ==========================================================================
-   首页 · 目录台
-   层级：首屏搜索 → 运营位 → 热门分类 → 货架（分类 + 商品）→ 入口 → 覆盖。
-   视觉原则沿用「星际联邦」令牌：暖白纸 + 深场石墨 + 品牌青，
+   首页 · App 目录台
+   层级：头部行 → 搜索 → 快捷入口 → 通行证卡 → 运营位 → 热门分类 → 货架 → 覆盖端。
+   视觉原则沿用「星际联邦」令牌：暖白纸 + 品牌青 + 墨黑文字，等宽小标签 + 发丝线；
    所有颜色/字阶/间距只取 uni.scss，不新增裸色值，深色模式自动跟随。
    ========================================================================== */
 
@@ -939,7 +850,7 @@ onPullDownRefresh(() => {
 .home {
   /* 单一内边距变量：窄屏再收一档时只改这里，避免子块各自写死 */
   --home-pad: #{$sp-3};
-  padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(120rpx + var(--mx-safe-bottom, 0px));
 }
 
 @media (max-width: 360px) {
@@ -948,115 +859,90 @@ onPullDownRefresh(() => {
   }
 }
 
-/* ---------- 首屏：深场 + 细网格，像一张目录工作台 ---------- */
-.hero {
-  position: relative;
-  overflow: hidden;
-  padding: calc(32rpx + var(--status-bar-height, 0px)) $sp-4 $sp-5;
-  background-color: $deep;
-  /* 网格线放在渐变之上；两层发丝线给深场一点「图纸」质感，不抢内容 */
-  background-image:
-    linear-gradient($on-deep-line 1rpx, transparent 1rpx),
-    linear-gradient(90deg, $on-deep-line 1rpx, transparent 1rpx),
-    linear-gradient(168deg, $deep 0%, $deep-2 58%, $deep-3 100%);
-  background-size:
-    72rpx 72rpx,
-    72rpx 72rpx,
-    100% 100%;
-  border-bottom: 1rpx solid $on-deep-line;
+/* ---------- 48px App 头部行 ---------- */
+.home-head {
+  background: $paper;
+  border-bottom: 1rpx solid $paper-3;
 }
 
-.hero-eyebrow-row {
+.home-head__inner {
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: $sp-2;
+  padding: 0 $sp-3;
+  box-sizing: border-box;
 }
 
-.hero-eyebrow {
+.home-head__brand {
+  flex: 1;
   min-width: 0;
-  font-size: 20rpx;
-  letter-spacing: $ls-label;
-  color: $acc-on-deep-1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8rpx;
+.home-head__actions {
   flex: 0 0 auto;
-  padding: 6rpx 14rpx;
-  border: 1rpx solid $on-deep-line;
+  display: flex;
+  align-items: center;
+}
+
+/* 顶部动作位：44×44 图标位，不带描边底，不做次级按钮 */
+.home-head__action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+
+.home-head__icon {
+  width: 26px;
+  height: 26px;
+}
+
+.home-head__badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28rpx;
+  height: 28rpx;
+  padding: 0 8rpx;
+  background: $brand;
   border-radius: $r-pill;
 }
 
-.hero-badge-dot {
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 50%;
-  background: $brand-on-deep;
+.home-head__badge-num {
+  font-size: 16rpx;
+  line-height: 1;
+  color: $on-solid;
 }
 
-.hero-badge-text {
-  font-size: 18rpx;
-  letter-spacing: $ls-label;
-  color: $brand-on-deep;
+/* ---------- 搜索：首屏主控件，纸面白壳 + 发丝描边 ---------- */
+.body {
+  padding: $sp-3 var(--home-pad) 0;
 }
 
-.hero-badge--off .hero-badge-dot {
-  background: $amber-on-deep;
-}
-
-.hero-badge--off .hero-badge-text {
-  color: $amber-on-deep;
-}
-
-.hero-title-wrap {
-  display: flex;
-  flex-direction: column;
-  margin-top: $sp-4;
-}
-
-.hero-title {
-  font-family: $font-display;
-  font-size: 84rpx;
-  font-weight: 800;
-  line-height: $lh-tight;
-  letter-spacing: $ls-tight;
-  color: $acc-on-deep-2;
-}
-
-.hero-title--accent {
-  color: $brand-on-deep;
-}
-
-.hero-lede {
-  margin-top: $sp-2;
-  font-size: $fs-meta;
-  line-height: $lh-snug;
-  color: $on-deep-2;
-}
-
-/* ---------- 搜索：首屏唯一主控件，白壳 + 品牌青描边明确「从这里开始」 ---------- */
 .search {
   display: flex;
   align-items: center;
   gap: $sp-2;
   box-sizing: border-box;
-  min-height: 100rpx;
+  min-height: 96rpx;
   padding: 10rpx 12rpx 10rpx 28rpx;
   background: $shell;
-  border: 2rpx solid $paper-3;
+  border: 1rpx solid $paper-3;
   border-radius: $r-control;
 }
 
-.search--hero {
-  margin-top: $sp-4;
+.search--home {
   border-color: $brand;
-  box-shadow: $shadow-lift;
 }
 
 .search-mark {
@@ -1135,267 +1021,156 @@ onPullDownRefresh(() => {
 .search-hint {
   display: flex;
   flex-wrap: wrap;
-  gap: $sp-1 $sp-3;
+  gap: 8rpx $sp-3;
   margin-top: $sp-2;
 }
 
 .search-hint-i {
   padding-left: 14rpx;
-  border-left: 2rpx solid $on-deep-line;
+  border-left: 2rpx solid $paper-3;
   font-size: 22rpx;
   line-height: 1.5;
-  color: $on-deep-3;
+  color: $ink-4;
 }
 
 .search-notice {
   margin-top: $sp-2;
   padding: 18rpx 22rpx;
-  background: $deep-3;
-  border-left: 6rpx solid $amber-on-deep;
+  background: $paper-2;
+  border-left: 6rpx solid $amber;
   border-radius: 0 $r-control $r-control 0;
 }
 
 .search-notice-text {
   font-size: $fs-meta;
   line-height: 1.5;
-  color: $on-deep;
+  color: $ink-2;
 }
 
-/* ---------- 数据尺：真实计数，给目录规模一个可核对的口径 ---------- */
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: $sp-2;
-  margin-top: $sp-5;
-  padding-top: $sp-3;
-  border-top: 1rpx solid $on-deep-line;
-}
-
-.stat {
-  min-width: 0;
-}
-
-.stat-k {
-  display: block;
-  font-size: 20rpx;
-  letter-spacing: $ls-label;
-  color: $on-deep-3;
-}
-
-.stat-v {
-  display: block;
-  margin-top: 8rpx;
-  font-family: $font-display;
-  font-size: 40rpx;
-  font-weight: 800;
-  line-height: 1.1;
-  color: $acc-on-deep-2;
-}
-
-.stat-u {
-  font-size: $fs-micro;
-  font-weight: 400;
-  color: $on-deep-3;
-}
-
-/* ---------- 通行证侧卡：品牌与账号仍在，但不再占据首屏主位 ---------- */
-.hero-side {
-  margin-top: $sp-5;
-}
-
-.pass {
-  padding: $sp-4;
-  background: $deep-3;
-  border: 1rpx solid $on-deep-line;
-  border-radius: $r-shell;
-}
-
-.pass-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: $sp-2;
-}
-
-.pass-kicker {
-  padding-top: 6rpx;
-  font-size: 18rpx;
-  letter-spacing: $ls-label;
-  color: $on-deep-3;
-}
-
-.pass-facts {
+/* ---------- 4 宫格快捷入口 ---------- */
+.quick {
   margin-top: $sp-4;
 }
 
-.pass-fact {
-  display: flex;
-  align-items: center;
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: $sp-2;
-  padding: 14rpx 0;
-  border-bottom: 1rpx solid $on-deep-line;
 }
 
-.pass-fact:last-child {
-  border-bottom: 0;
-}
-
-.pass-k {
-  flex: 0 0 auto;
-  width: 56rpx;
-  font-size: 20rpx;
-  letter-spacing: $ls-label;
-  color: $on-deep-3;
-}
-
-.pass-line {
-  flex: 1;
-  height: 1rpx;
-  background: $on-deep-line;
-}
-
-.pass-v {
-  font-size: $fs-micro;
-  color: $on-deep;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pass-status {
+.quick-cell {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 10rpx;
-  min-width: 0;
+  padding: $sp-2 8rpx;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
 }
 
-.status-dot {
-  flex: 0 0 auto;
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: 50%;
-  background: $brand-on-deep;
-}
-
-.status-dot--off {
-  background: $amber-on-deep;
-}
-
-.pass-error {
-  display: flex;
-  align-items: flex-start;
-  gap: $sp-2;
-  margin-top: $sp-3;
-  padding: $sp-2;
-  background: $deep;
-  border: 1rpx solid $amber-on-deep;
-  border-radius: $r-control;
-}
-
-.pass-error-mark {
+.quick-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  width: 34rpx;
-  height: 34rpx;
-  border: 1rpx solid $amber-on-deep;
-  border-radius: 50%;
-  font-size: 20rpx;
-  color: $amber-on-deep;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: $r-control;
 }
 
-.pass-error-main {
-  flex: 1;
-  min-width: 0;
+.quick-icon-img {
+  width: 40rpx;
+  height: 40rpx;
 }
 
-.pass-error-title {
-  display: block;
-  font-size: $fs-meta;
+/* 无现成图标的入口（订单）：等宽字形兜底，尺寸/圆角与图标位对齐 */
+.quick-icon-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: $brand-soft;
+  border-radius: $r-control;
+  font-size: 28rpx;
   font-weight: 600;
-  color: $on-deep;
+  color: $brand-deep;
 }
 
-.pass-error-text {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 20rpx;
-  line-height: 1.4;
-  color: $on-deep-3;
-  overflow-wrap: break-word;
+.quick-label {
+  font-size: $fs-meta;
+  line-height: 1.2;
+  color: $ink-2;
+  white-space: nowrap;
 }
 
-.pass-retry {
-  flex: 0 0 auto;
-  padding: 8rpx 16rpx;
-  border: 1rpx solid $on-deep-line;
-  border-radius: $r-pill;
-}
-
-.pass-retry-text {
-  font-size: 20rpx;
-  color: $on-deep;
-}
-
-/* 反白按钮：底色用深场白、文字固定用深色，避免深色主题下与 $ink 一起反转 */
-.pass-cta {
+/* ---------- 压缩版通行证卡（≤120px） ---------- */
+.passcard {
   display: flex;
   align-items: center;
   gap: $sp-2;
   margin-top: $sp-3;
   padding: $sp-3;
-  background: $on-deep;
-  border-radius: $r-control;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-card;
 }
 
-.pass-cta-main {
+.passcard__main {
   flex: 1;
   min-width: 0;
 }
 
-.pass-cta-title {
+.passcard__state {
+  display: flex;
+  align-items: center;
+  gap: $sp-2;
+}
+
+.passcard__tag {
+  padding: 4rpx 12rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-pill;
+  font-size: 18rpx;
+  letter-spacing: $ls-label;
+  color: $acc-1;
+}
+
+.passcard__no {
+  font-size: 20rpx;
+  color: $ink-3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.passcard__title {
   display: block;
+  margin-top: 8rpx;
   font-size: $fs-body;
   font-weight: 600;
   line-height: 1.25;
-  color: $deep;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.pass-cta-sub {
+.passcard__sub {
   display: block;
-  margin-top: 6rpx;
+  margin-top: 4rpx;
   font-size: $fs-micro;
-  color: $deep;
-  opacity: 0.62;
+  line-height: 1.4;
+  color: $ink-3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.pass-cta-arrow {
+.passcard__arrow {
   flex: 0 0 auto;
   font-size: $fs-body;
-  color: $deep;
-}
-
-/* 搜索态：首屏只留「眉标 + 搜索」，其余全部收起，结果紧接着出现 */
-.home--search .hero {
-  padding-bottom: $sp-4;
-}
-
-.home--search .hero-title-wrap,
-.home--search .hero-lede,
-.home--search .search-hint,
-.home--search .hero-stats,
-.home--search .hero-side {
-  display: none;
-}
-
-.home--search .search--hero {
-  margin-top: $sp-3;
-}
-
-/* ---------- 纸面 ---------- */
-.body {
-  padding: $sp-5 var(--home-pad) 0;
+  color: $ink-4;
 }
 
 /* ---------- 运营位：3 列编辑卡，移动端单列；无图也不塌 ---------- */
@@ -1591,15 +1366,16 @@ onPullDownRefresh(() => {
   color: $ink-4;
 }
 
+/* 区块标题与「首页精选」同级：纯色墨黑、不带渐变彩字，避免落地页营销感 */
 .sec-title {
   display: block;
   margin-top: $sp-1;
   font-family: $font-display;
-  font-size: $fs-h2;
+  font-size: $fs-h3;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.2;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .sec-count {
@@ -2177,66 +1953,7 @@ onPullDownRefresh(() => {
   color: $brand-deep;
 }
 
-/* ---------- 02 通行入口 ---------- */
-.entry-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: $sp-2;
-  margin-top: $sp-3;
-}
-
-.entry-card {
-  display: flex;
-  flex-direction: column;
-  min-height: 180rpx;
-  padding: $sp-3;
-  background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-card;
-}
-
-.entry-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: $sp-2;
-}
-
-.entry-no {
-  font-size: 20rpx;
-  color: $acc-2;
-}
-
-.entry-tag {
-  font-size: 16rpx;
-  letter-spacing: $ls-label;
-  color: $acc-1;
-}
-
-.entry-title {
-  margin-top: $sp-2;
-  font-family: $font-display;
-  font-size: $fs-body;
-  font-weight: 800;
-  line-height: 1.25;
-  color: $acc-1;
-}
-
-.entry-desc {
-  margin-top: 6rpx;
-  font-size: 20rpx;
-  line-height: 1.45;
-  color: $ink-3;
-}
-
-.entry-arrow {
-  margin-top: auto;
-  padding-top: $sp-2;
-  font-size: $fs-body;
-  color: $ink-4;
-}
-
-/* ---------- 03 多端覆盖：紧凑单元，已接通 / 规划中仍可区分 ---------- */
+/* ---------- 02 多端覆盖：紧凑单元，已接通 / 规划中仍可区分 ---------- */
 .cov-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2347,25 +2064,15 @@ onPullDownRefresh(() => {
 
 /* ==========================================================================
    平板 / 桌面
-   768 起：网格加密（分类 4 列、商品 3 列、入口 4 列）；
-   1000 起：首屏才切双栏，避免 768 宽度下搜索被侧卡挤窄。
+   768 起：网格加密（分类 4 列、商品 3 列）；
+   1000 起：版心放宽，桌面顶部一级导航由 mx-bar 提供。
    ========================================================================== */
 @media (min-width: 768px) {
-  .hero {
-    padding: 40px 32px 36px;
+  .body {
+    padding: 24px 32px 0;
   }
 
-  .hero-title {
-    font-size: 56px;
-  }
-
-  .hero-lede {
-    max-width: 560px;
-    font-size: 15px;
-  }
-
-  .search--hero {
-    margin-top: 28px;
+  .search--home {
     min-height: 64px;
     padding: 8px 10px 8px 18px;
   }
@@ -2382,19 +2089,6 @@ onPullDownRefresh(() => {
 
   .search-go-text {
     font-size: 15px;
-  }
-
-  .hero-stats {
-    margin-top: 32px;
-    padding-top: 20px;
-  }
-
-  .stat-v {
-    font-size: 28px;
-  }
-
-  .body {
-    padding: 40px 32px 0;
   }
 
   .spot-grid {
@@ -2433,25 +2127,12 @@ onPullDownRefresh(() => {
     font-size: 24px;
   }
 
-  .entry-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
-  }
-
-  .entry-card {
-    min-height: 150px;
-    padding: 20px;
-  }
-
   .cov-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
 
-  .sec-title {
-    font-size: 28px;
-  }
-
+  .sec-title,
   .catalog-title {
     font-size: 22px;
   }
@@ -2463,36 +2144,8 @@ onPullDownRefresh(() => {
     max-width: 1000px;
   }
 
-  .hero {
-    padding: 56px 48px 44px;
-  }
-
-  /* 双栏：左侧标题 + 搜索 + 数据尺，右侧通行证卡 */
-  .hero-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
-    column-gap: 56px;
-    align-items: start;
-  }
-
-  .hero-side {
-    margin-top: 0;
-  }
-
-  .pass {
-    padding: 24px;
-  }
-
-  .pass-cta {
-    padding: 18px;
-  }
-
-  .pass-cta-title {
-    font-size: 17px;
-  }
-
   .body {
-    padding: 44px 48px 0;
+    padding: 28px 48px 0;
   }
 
   /* 一级分类：7 列一行，回到「一排货架」的桌面形态 */
@@ -2507,25 +2160,12 @@ onPullDownRefresh(() => {
   .pick-name {
     font-size: 16px;
   }
-
-  /* 搜索态：侧卡已隐藏，首屏塌成单列，搜索栏独占一行 */
-  .home--search .hero-grid {
-    display: block;
-  }
-
-  .home--search .hero-main {
-    max-width: 880px;
-  }
 }
 
 @media (min-width: 1400px) {
   .home {
     --shell-w: 1320px;
     max-width: 1320px;
-  }
-
-  .hero-grid {
-    grid-template-columns: minmax(0, 1.7fr) minmax(360px, 0.8fr);
   }
 }
 </style>

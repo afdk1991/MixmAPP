@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <view class="page mx-ime-pad">
     <mx-bar />
 
     <view class="page-head">
@@ -97,6 +97,7 @@
             v-for="b in user.bindings"
             :key="b"
             class="bind-chip mono"
+            hover-class="is-press"
             @tap="unbind(b)"
           >解绑 {{ bindingLabel(b) }}</text>
         </view>
@@ -109,6 +110,22 @@
           <text class="sec-title">资料编辑</text>
         </view>
         <view class="rule" />
+
+        <view class="avatar-row">
+          <view class="avatar">
+            <image v-if="avatarPreview" class="avatar-img" :src="avatarPreview" mode="aspectFill" />
+            <mx-logo v-else size="md" tone="light" sub="AVATAR" />
+          </view>
+          <view class="avatar-actions">
+            <button class="btn btn--ghost" :loading="avatarUploading" hover-class="is-press" @tap="pickAvatar">
+              <text class="btn-text">{{ avatarUploading ? '上传中…' : '更换头像' }}</text>
+            </button>
+            <text class="hint">JPG / PNG / WebP，≤ 5MB；未配置云存储时落到本机存储回退。</text>
+            <text v-if="avatarError" class="error">{{ avatarError }}</text>
+          </view>
+          <input ref="fileInput" type="file" accept="image/*" class="avatar-file" @change="onAvatarPicked" />
+        </view>
+
         <text class="label mt">昵称</text>
         <input
           class="field"
@@ -116,7 +133,9 @@
           maxlength="24"
           placeholder="展示昵称（1–24 字）"
           placeholder-class="field-ph"
+          confirm-type="done"
           v-model="profileNickname"
+          @confirm="saveProfile"
         />
         <text class="label mt">简介</text>
         <textarea
@@ -151,6 +170,7 @@
             maxlength="11"
             placeholder="用于绑定与登录的手机号"
             placeholder-class="field-ph"
+            confirm-type="next"
             v-model="bindPhoneInput"
           />
           <view class="code-row">
@@ -160,7 +180,9 @@
               maxlength="6"
               placeholder="6 位验证码"
               placeholder-class="field-ph"
+              confirm-type="done"
               v-model="bindPhoneCode"
+              @confirm="bindPhoneSubmit"
             />
             <view
               class="code-btn"
@@ -189,6 +211,7 @@
             maxlength="254"
             placeholder="用于绑定与登录的邮箱"
             placeholder-class="field-ph"
+            confirm-type="next"
             v-model="bindEmailInput"
           />
           <text class="label mt">账号密码</text>
@@ -197,7 +220,9 @@
             password
             placeholder="校验当前账号密码（至少 8 位，含字母与数字）"
             placeholder-class="field-ph"
+            confirm-type="done"
             v-model="bindEmailPassword"
+            @confirm="bindEmailSubmit"
           />
           <text v-if="bindEmailError" class="error">{{ bindEmailError }}</text>
           <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="bindEmailSubmit">
@@ -242,6 +267,7 @@
           maxlength="20"
           placeholder="用户名（2–20 个字符，中文/字母/数字/下划线）"
           placeholder-class="field-ph"
+          confirm-type="next"
           v-model="upUsername"
         />
         <text class="label mt">密码</text>
@@ -250,7 +276,9 @@
           password
           placeholder="密码（至少 8 位，含字母与数字）"
           placeholder-class="field-ph"
+          confirm-type="done"
           v-model="upPassword"
+          @confirm="upgradeGuest"
         />
         <text class="hint mt-s">不得使用管理员、官方、政府机关等名称。</text>
         <text v-if="upError" class="error">{{ upError }}</text>
@@ -290,6 +318,11 @@
         <view v-if="aiLive" class="link-row" hover-class="is-press" @tap="go(ROUTES.assistant)">
           <text class="link-title">智能助手</text>
           <text class="link-desc">通用 AI 对话（开发态回显）</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view v-if="adminVisible" class="link-row" hover-class="is-press" @tap="go(ROUTES.admin)">
+          <text class="link-title">管理后台</text>
+          <text class="link-desc">渠道注册 · 合并审计 · 目录导入</text>
           <text class="link-arrow mono">→</text>
         </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
@@ -379,7 +412,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { OAuthProviderId } from '@mixmapp/contracts';
 import { session, logout, refreshProfile, applySession } from '../../stores/session';
-import { meApi, authApi, ApiError, providerLive } from '../../api/client';
+import { meApi, authApi, ApiError, providerLive, readAdminToken, uploadImageBlob, mediaUrl } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import {
@@ -412,6 +445,48 @@ function chooseTheme(next: ThemePref): void {
 
 /** AI 能力已装配（含 dev 回退）才展示助手入口；off 时隐藏。 */
 const aiLive = computed(() => providerLive('ai'));
+
+/** 已配置过后台令牌才在通行证页露出后台入口；未配置时走关于页隐藏手势进入。 */
+const adminVisible = computed(() => Boolean(readAdminToken()));
+
+// ===== 头像上传 =====
+const avatarUploading = ref(false);
+const avatarError = ref('');
+const fileInput = ref<HTMLInputElement | null>(null);
+const avatarPreview = computed(() => (user.value?.avatarUrl ? mediaUrl(user.value.avatarUrl) : ''));
+
+function pickAvatar(): void {
+  avatarError.value = '';
+  fileInput.value?.click();
+}
+
+async function onAvatarPicked(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    avatarError.value = '请选择图片文件';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    avatarError.value = '图片不能超过 5MB';
+    return;
+  }
+  if (avatarUploading.value) return;
+  avatarUploading.value = true;
+  avatarError.value = '';
+  try {
+    const { publicUrl } = await uploadImageBlob(file, 'avatar');
+    await meApi.update({ avatarUrl: publicUrl });
+    await refreshProfile();
+    uni.showToast({ title: '头像已更新', icon: 'none' });
+  } catch (e) {
+    avatarError.value = e instanceof ApiError ? e.message : '头像上传失败，请稍后重试';
+  } finally {
+    avatarUploading.value = false;
+    if (input) input.value = '';
+  }
+}
 let stopSystemTheme = (): void => {};
 
 onMounted(() => {
@@ -674,8 +749,8 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  /* tabBar 页面：为原生底部标签栏留安全距离 */
-  padding: $sp-4 $sp-3 calc(140rpx + env(safe-area-inset-bottom));
+  /* tabBar 页面：为原生底部标签栏 + 安全区 + 软键盘留距离 */
+  padding: $sp-4 $sp-3 calc(140rpx + var(--mx-tabbar-h) + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
 /* ---------- 深场通行证 ---------- */
@@ -686,7 +761,7 @@ onShow(() => {
   background:
     radial-gradient(130% 100% at 92% -16%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 56%),
     radial-gradient(90% 80% at 0% 110%, rgba(244, 244, 241, 0.05), rgba(244, 244, 241, 0) 60%),
-    linear-gradient(152deg, #0b0f0e 0%, #11201d 58%, #16302a 128%);
+    linear-gradient(152deg, $deep 0%, $deep-2 58%, $deep-3 128%);
   border: 1rpx solid $on-deep-line;
   border-radius: $r-shell $r-shell 0 0;
 }
@@ -1016,6 +1091,43 @@ onShow(() => {
   color: $signal;
 }
 
+/* ---------- 头像上传 ---------- */
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: $sp-3;
+  margin-top: $sp-3;
+}
+
+.avatar {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-actions {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.avatar-file {
+  display: none;
+}
+
 /* ---------- 入口行：发丝线分隔，不叠卡片 ---------- */
 .link-row {
   display: flex;
@@ -1034,7 +1146,11 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $acc-2;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .link-desc {

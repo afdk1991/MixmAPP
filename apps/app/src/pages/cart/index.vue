@@ -1,5 +1,5 @@
 <template>
-  <view class="page page--wide">
+  <view class="page page--wide mx-ime-pad">
     <mx-bar />
     <view class="head">
       <text class="eyebrow">BAG</text>
@@ -189,9 +189,9 @@
           </view>
           <text class="addr-text">{{ item.fullAddress }}</text>
           <view class="addr-ops">
-            <text v-if="!item.isDefault" class="addr-op" @tap.stop="setDefaultAddress(item)">设默认</text>
-            <text class="addr-op" @tap.stop="editAddress(item)">编辑</text>
-            <text class="addr-op" @tap.stop="removeAddress(item)">删除</text>
+            <text v-if="!item.isDefault" class="addr-op" hover-class="is-press" @tap.stop="setDefaultAddress(item)">设默认</text>
+            <text class="addr-op" hover-class="is-press" @tap.stop="editAddress(item)">编辑</text>
+            <text class="addr-op" hover-class="is-press" @tap.stop="removeAddress(item)">删除</text>
           </view>
         </view>
         <view class="addr-add" hover-class="is-press" @tap="toggleAddressForm">
@@ -204,6 +204,7 @@
             class="field"
             placeholder="收货人姓名"
             placeholder-class="field-ph"
+            confirm-type="next"
           />
           <input
             v-model="addrForm.receiverPhone"
@@ -212,6 +213,7 @@
             maxlength="11"
             placeholder="手机号"
             placeholder-class="field-ph"
+            confirm-type="next"
           />
           <view class="loc-row">
             <view
@@ -228,24 +230,28 @@
             class="field field--gap"
             placeholder="省（如 上海）"
             placeholder-class="field-ph"
+            confirm-type="next"
           />
           <input
             v-model="addrForm.city"
             class="field field--gap"
             placeholder="市（如 上海市）"
             placeholder-class="field-ph"
+            confirm-type="next"
           />
           <input
             v-model="addrForm.district"
             class="field field--gap"
             placeholder="区（如 浦东新区）"
             placeholder-class="field-ph"
+            confirm-type="next"
           />
           <textarea
             v-model="addrForm.detail"
             class="field field--area field--gap"
             placeholder="详细地址（街道、门牌号）"
             placeholder-class="field-ph"
+            confirm-type="done"
           />
           <view class="form-actions">
             <view class="btn btn--ghost form-btn" hover-class="is-press" @tap="toggleAddressForm">
@@ -299,6 +305,7 @@
           class="field"
           placeholder="收货人姓名"
           placeholder-class="field-ph"
+          confirm-type="next"
           @input="onManualEdit"
         />
         <text class="label mt">手机号</text>
@@ -309,6 +316,7 @@
           maxlength="11"
           placeholder="手机号"
           placeholder-class="field-ph"
+          confirm-type="next"
           @input="onManualEdit"
         />
         <text class="label mt">详细地址</text>
@@ -317,10 +325,17 @@
           class="field field--area"
           placeholder="省市区 + 门牌号"
           placeholder-class="field-ph"
+          confirm-type="done"
           @input="onManualEdit"
         />
         <text class="label mt">备注（选填）</text>
-        <input v-model="form.remark" class="field" placeholder="备注" placeholder-class="field-ph" />
+        <input
+          v-model="form.remark"
+          class="field"
+          placeholder="备注"
+          placeholder-class="field-ph"
+          confirm-type="done"
+        />
 
         <view class="form-actions">
           <view class="btn btn--ghost form-btn" hover-class="is-press" @tap="checkoutVisible = false">
@@ -337,7 +352,7 @@
         </view>
       </view>
 
-      <view class="bar">
+      <view class="mx-sticky-bar mx-sticky-bar--tab">
         <view class="bar-total">
           <text class="bar-label mono">已选 {{ selectedLines.length }} 件 · 共 {{ cart.totalQuantity }} 件</text>
           <text class="bar-price mono">¥{{ price(pricing.payableFen) }}</text>
@@ -1031,8 +1046,8 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  /* tabBar 页面：预留固定结算条 + 原生底部标签栏 + 安全区，内容不被遮挡 */
-  padding: 0 $sp-3 calc(320rpx + env(safe-area-inset-bottom));
+  /* tabBar 页面：预留固定结算条 + 原生底部标签栏 + 安全区 + 软键盘，内容不被遮挡 */
+  padding: 0 $sp-3 calc(320rpx + var(--mx-tabbar-h) + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
 .head {
@@ -1211,6 +1226,7 @@ onShow(() => {
 
 .name {
   flex: 1;
+  min-width: 0;
   padding-right: $sp-2;
   font-family: $font-display;
   font-size: 34rpx;
@@ -1617,11 +1633,8 @@ onShow(() => {
   color: $on-solid;
 }
 
-/* ---------- 底栏 ---------- */
-/* tabBar 页面：结算条抬到原生标签栏之上，避免被 tabBar 遮挡（全局 .bar 默认 bottom:0） */
-.bar {
-  bottom: calc(120rpx + env(safe-area-inset-bottom));
-}
+/* ---------- 底栏 ----------
+ * 定位 / 内边距 / 标签栏抬升 / 安全区一律由 .mx-sticky-bar--tab 提供，此处只排内部元素 */
 
 .bar-total {
   flex: 1;

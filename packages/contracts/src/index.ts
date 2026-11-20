@@ -162,9 +162,15 @@ export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(20),
 });
 
+/** 头像地址：允许完整 http(s) URL，或对象存储 / 媒体服务的站内相对路径（如 `/media/<key>`）。 */
+const avatarUrlSchema = z
+  .string()
+  .max(512)
+  .refine((v) => /^https?:\/\//i.test(v) || v.startsWith('/'), '头像地址需为 URL 或站内相对路径');
+
 export const updateProfileSchema = z.object({
   nickname: z.string().trim().min(1).max(24).optional(),
-  avatarUrl: z.string().url().max(512).optional(),
+  avatarUrl: avatarUrlSchema.optional(),
   bio: z.string().max(160).optional(),
 });
 

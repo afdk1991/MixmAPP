@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <mx-bar />
+    <mx-bar title="我的收藏" />
     <view class="head">
       <text class="eyebrow">FAVORITES</text>
       <text class="title">收藏夹</text>
@@ -67,7 +67,7 @@
 
     <view v-else class="list">
       <view v-for="item in items" :key="item.id" class="sheet fav">
-        <view class="fav-cover" :style="tintOf(item)" @tap="openDetail(item)">
+        <view class="fav-cover" :style="tintOf(item)" hover-class="is-press" @tap="openDetail(item)">
           <image
             v-if="coverOf(item)"
             class="fav-cover-img"
@@ -80,7 +80,7 @@
           </view>
         </view>
         <view class="fav-body">
-          <text class="fav-title" @tap="openDetail(item)">{{ item.title }}</text>
+          <text class="fav-title" hover-class="is-press" @tap="openDetail(item)">{{ item.title }}</text>
           <text v-if="item.unit" class="fav-unit mono">{{ item.unit }}</text>
           <view class="fav-foot">
             <text v-if="item.available" class="fav-price mono">¥{{ price(item.priceFen) }}</text>
@@ -216,7 +216,6 @@ function askRemove(item: FavoriteItemDto): void {
     title: '移除收藏',
     content: `把「${item.title}」移出当前收藏夹？`,
     confirmText: '移除',
-    confirmColor: '#C0392B',
     success: (res) => {
       if (res.confirm) void doRemove(item);
     },
@@ -300,7 +299,6 @@ function askClear(): void {
     title: '清空收藏夹',
     content: `清空「${activeFolder.value.name}」里的 ${activeFolder.value.itemCount} 个商品？收藏夹本身会保留。`,
     confirmText: '清空',
-    confirmColor: '#C0392B',
     success: (res) => {
       if (res.confirm) void doClear();
     },
@@ -332,7 +330,7 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-3 $sp-8;
+  padding: 0 $sp-3 calc($sp-8 + var(--mx-safe-bottom));
 }
 
 .head {

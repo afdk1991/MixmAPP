@@ -61,7 +61,7 @@ import java.nio.charset.StandardCharsets;
  * 2) 返回键走 OnBackPressedDispatcher + WebView 历史栈 + 双击退出（Android 15 预测性返回必需）；
  * 3) 主框架加载失败时显示品牌化离线页（重试 / 检查网络设置），子资源失败不接管；
  * 4) WebSettings 工程化配置：缓存、DOM storage、缩放、混合内容、UA 后缀；
- *    深色主题由 H5 的 prefers-color-scheme 承担，原生侧只同步壳层底色与系统栏图标明暗；
+ *    深色主题双通道（跟随系统 + data-mx-theme 手动切换），原生侧按页面自报主题同步壳层底色与系统栏图标明暗；
  * 5) ConnectivityManager 网络状态监听：断网提示、恢复后若在离线页则自动重试，onDestroy 反注册；
  * 6) Android 12+ SplashScreen 与低版本 windowBackground 双轨，避免白/黑闪；
  * 7) 启动日志 + 轻量版本检查（GET /api/v1/meta），仅提示不强制升级、不下载 APK。
@@ -76,6 +76,25 @@ public class MainActivity extends BridgeActivity {
     /** 首启隐私同意页（见 apps/app/src/pages.json / pages/legal/privacy.vue） */
     private static final String PRIVACY_GATE_PATH = "/pages/legal/privacy";
     private static final String PRIVACY_GATE_QUERY = "mode=gate";
+
+    /**
+     * 装在页面里的主题观察者：监听 <html> 上的 data-mx-theme 手动切换与
+     * prefers-color-scheme 系统深浅变化，首帧自报一次给原生壳。
+     * 与 docs/34 契约 §5 一致：原生系统栏图标明暗跟随页面实际主题，而不是只认系统 uiMode。
+     */
+    private static final String THEME_OBSERVER_JS =
+            "(function(){if(window.__mxShellThemeBound)return;window.__mxShellThemeBound=true;"
+            + "var root=document.documentElement;"
+            + "function report(){try{"
+            + "var t=root.getAttribute('data-mx-theme');"
+            + "var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;"
+            + "var v=(t==='dark'||t==='light')?t:(dark?'dark':'light');"
+            + "if(window.MixmShell&&window.MixmShell.notifyTheme)MixmShell.notifyTheme(v);"
+            + "}catch(e){}}"
+            + "try{new MutationObserver(report).observe(root,{attributes:true,attributeFilter:['data-mx-theme']});}catch(e){}"
+            + "if(window.matchMedia){var m=window.matchMedia('(prefers-color-scheme: dark)');"
+            + "if(m.addEventListener)m.addEventListener('change',report);else if(m.addListener)m.addListener(report);}"
+            + "report();})()";
 
     /** 品牌化离线页：深墨底 + 品牌青（#0f9d8f，见 apps/app/src/uni.scss $brand）。 */
     private static final String ERROR_PAGE_HTML =
@@ -114,6 +133,22 @@ public class MainActivity extends BridgeActivity {
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
     private boolean networkWasLost = false;
+
+    /**
+     * 安全区契约（docs/34 §1）：原生壳是 --mx-safe-* / --mx-ime-bottom 四个变量的唯一来源。
+     * 缓存最近一次 insets 回调算出的像素，页面加载完成后强制重推一次。
+     */
+    private int safeTop = 0;
+    private int safeBottom = 0;
+    private int safeRight = 0;
+    private int imeBottom = 0;
+    /** 上次已下发给 Web 的四元组；-1 表示尚未下发，避免 insets 抖动时重复 evaluateJavascript。 */
+    private int lastPushedTop = -1;
+    private int lastPushedBottom = -1;
+    private int lastPushedRight = -1;
+    private int lastPushedIme = -1;
+    /** 页面自报主题："dark" / "light"；null 表示未自报，跟随系统 uiMode。 */
+    private String webTheme = null;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -216,6 +251,14 @@ public class MainActivity extends BridgeActivity {
                 view.evaluateJavascript(
                         "window.__MIXMAPP_NATIVE_VERSION__=" + JSONObject.quote(BuildConfig.VERSION_NAME) + ";",
                         null);
+                // 绑定主题观察者（手动 data-mx-theme 切换 / 系统深浅变化自报原生）
+                view.evaluateJavascript(THEME_OBSERVER_JS, null);
+                // 新文档的 CSS 变量已被重置，丢弃去重缓存后至少再推一次安全区
+                lastPushedTop = -1;
+                lastPushedBottom = -1;
+                lastPushedRight = -1;
+                lastPushedIme = -1;
+                pushInsetsToWeb();
             }
         });
 
@@ -284,8 +327,11 @@ public class MainActivity extends BridgeActivity {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);   // 禁掉边缘光晕，接近原生列表观感
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
+        // 壳层桥：只暴露主题自报一个方法，供页面观察者回调系统栏图标明暗；
+        // 不暴露任何 URL / 导航能力，错误页按钮仍走既有自定义 scheme。
+        webView.addJavascriptInterface(new ShellBridge(), "MixmShell");
         // 与页面底色同源（浅色 #F4F4F1 / 夜间 #121716），首帧渲染前不会出现白底闪屏
-        webView.setBackgroundColor(ContextCompat.getColor(this, R.color.app_background));
+        webView.setBackgroundColor(resolveWindowBackground(isNightMode(getResources().getConfiguration())));
         // 硬件加速由 AndroidManifest 的 android:hardwareAccelerated="true" 提供；
         // 不额外 setLayerType(HARDWARE)，以免破坏 WebView 默认合成路径。
     }
@@ -314,8 +360,8 @@ public class MainActivity extends BridgeActivity {
      * 真 edge-to-edge：内容铺到状态栏/导航栏下方，系统栏透明，图标明暗跟随当前深浅色。
      * 取代 values-v35 的 windowOptOutEdgeToEdgeEnforcement（Android 16 起该开关已失效）。
      *
-     * 顶部安全区由 H5 的 mx-bar 用 statusBarHeight 自行预留；底部由 applyWindowInsets
-     * 给 WebView 加 padding，避免底部 tabBar 被手势条压住。
+     * 四边安全区不在这里用 margin/padding 收缩视口，而是由 applyWindowInsets 把
+     * 真实像素写进 --mx-safe-* / --mx-ime-bottom 变量，页面读变量自行留白（docs/34 §1）。
      */
     private void setupEdgeToEdge() {
         Window window = getWindow();
@@ -330,15 +376,18 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * 按当前 uiMode 决定系统栏图标明暗与窗口底色，两处必须同源：
-     * 浅色页面（--mx-paper #F4F4F1）用深色图标，夜间页面（#121716）用浅色图标。
+     * 决定系统栏图标明暗与窗口底色，两处必须同源。
+     *
+     * 主题优先级（docs/34 §5）：页面自报的 data-mx-theme > 系统 uiMode。
+     * 页面手动切深色时自报 "dark"，原生把状态栏/导航栏图标切浅色；自报 "light"
+     * 则切深色图标；未自报（auto）才回落到跟随系统深浅。
      *
      * Manifest 的 android:configChanges 含 uiMode，切换深色时 Activity 不会重建，
-     * 因此这个方法既在 onCreate 调用一次，也在 onConfigurationChanged 里重新调用。
+     * 因此这个方法既在 onCreate 调用一次，也在 onConfigurationChanged 与主题回调里重放。
      */
     private void applySystemBarAppearance() {
         Window window = getWindow();
-        boolean night = isNightMode(getResources().getConfiguration());
+        boolean night = resolveNight();
         WindowInsetsControllerCompat controller =
                 WindowCompat.getInsetsController(window, window.getDecorView());
         controller.setAppearanceLightStatusBars(!night);
@@ -346,7 +395,26 @@ public class MainActivity extends BridgeActivity {
         controller.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         window.setBackgroundDrawable(
-                new ColorDrawable(ContextCompat.getColor(this, R.color.app_background)));
+                new ColorDrawable(resolveWindowBackground(night)));
+    }
+
+    /** 页面观察者回调：记录自报主题并重放系统栏外观（回调来自 WebView binder 线程，先切到 UI 线程）。 */
+    private void applyWebTheme(String theme) {
+        webTheme = theme;
+        Log.d(TAG, "页面主题自报：" + theme);
+        runOnUiThread(this::applySystemBarAppearance);
+    }
+
+    private boolean resolveNight() {
+        if ("dark".equals(webTheme)) return true;
+        if ("light".equals(webTheme)) return false;
+        return isNightMode(getResources().getConfiguration());
+    }
+
+    /** 显式按深浅取壳层底色，避免手动主题与系统 uiMode 不一致时取到 night 资源回落值。 */
+    private int resolveWindowBackground(boolean night) {
+        return ContextCompat.getColor(this,
+                night ? R.color.app_background_dark : R.color.app_background_light);
     }
 
     private static boolean isNightMode(Configuration config) {
@@ -362,50 +430,69 @@ public class MainActivity extends BridgeActivity {
         applySystemBarAppearance();
         WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
         if (webView != null) {
-            webView.setBackgroundColor(ContextCompat.getColor(this, R.color.app_background));
+            webView.setBackgroundColor(resolveWindowBackground(resolveNight()));
         }
+        // 配置变化（横竖屏 / 深浅色）后 insets 可能重算，强制给新页面再推一次安全区。
+        lastPushedTop = -1;
+        lastPushedBottom = -1;
+        lastPushedRight = -1;
+        lastPushedIme = -1;
+        pushInsetsToWeb();
     }
 
     /**
-     * 把系统栏与输入法高度下发给 WebView。
+     * 注册系统栏 / 挖孔 / 输入法 insets 监听，把真实像素经 CSS 变量下发给 Web。
      *
-     * 注意：WebView 不按 Android 的 padding 语义收缩网页内容（padding 只影响滚动条），
-     * 所以这里必须改 LayoutParams 的 margin——WebView 的父容器是 Capacitor 的
-     * CoordinatorLayout（MarginLayoutParams），缩边后网页 viewport 才会真正让位。
+     * 契约（docs/34 §1）：原生壳是 --mx-safe-top / --mx-safe-bottom / --mx-safe-right /
+     * --mx-ime-bottom 四个变量的唯一来源。WebView 保持 edge-to-edge 全幅铺底，
+     * 不再用父容器 margin 收缩视口——留白由页面读变量自行完成；旧版 margin 兜底是
+     * H5 还不会读变量时的临时方案，与新壳层样式叠加会造成双重留白。
      *
-     * - 四边 margin = 系统栏 inset，底部再与输入法取 max：tabBar 不被手势条压住，
-     *   键盘弹起时页面整体上移而不是被盖住；
-     * - 顶部必须由原生预留：H5 的 mx-bar 用 `#ifndef H5` 读取 statusBarHeight，
-     *   在壳内该值为 0，若这里不补，页面会直接顶到状态栏下。
+     * - safeTop    = 状态栏与挖孔顶部取大；
+     * - safeRight  = 系统栏与挖孔右侧取大（横屏刘海，竖屏一般 0）；
+     * - safeBottom = 手势条 / 三键导航高度（键盘弹起不并入它，避免标签栏被顶高）；
+     * - imeBottom  = 软键盘高度，未弹为 0，供 .mx-ime-pad 避让输入框。
      */
     private void applyWindowInsets(View view) {
         ViewCompat.setOnApplyWindowInsetsListener(view, (v, insets) -> {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
             Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
-            int top = Math.max(bars.top, cutout.top);
-            int left = Math.max(bars.left, cutout.left);
-            int right = Math.max(bars.right, cutout.right);
-            int bottom = Math.max(bars.bottom, ime.bottom);
-            applyInsetsMargins(v, left, top, right, bottom);
+            safeTop = Math.max(bars.top, cutout.top);
+            safeRight = Math.max(bars.right, cutout.right);
+            safeBottom = Math.max(bars.bottom, cutout.bottom);
+            imeBottom = ime.bottom;
+            pushInsetsToWeb();
             return insets;
         });
         ViewCompat.requestApplyInsets(view);
     }
 
-    private void applyInsetsMargins(View v, int left, int top, int right, int bottom) {
-        ViewGroup.LayoutParams lp = v.getLayoutParams();
-        if (!(lp instanceof ViewGroup.MarginLayoutParams)) return;
-        ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
-        if (mlp.leftMargin == left && mlp.topMargin == top
-                && mlp.rightMargin == right && mlp.bottomMargin == bottom) {
+    /**
+     * 把缓存的安全区像素写进 Web 根节点 CSS 变量；四元组未变化时跳过，
+     * 避免 insets 反复回调造成重复 JS 求值。页面每次加载完成后由调用方重置
+     * lastPushed* 再推一次，保证新文档拿到初始值。
+     */
+    private void pushInsetsToWeb() {
+        WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
+        if (webView == null) return;
+        if (safeTop == lastPushedTop && safeBottom == lastPushedBottom
+                && safeRight == lastPushedRight && imeBottom == lastPushedIme) {
             return;
         }
-        mlp.leftMargin = left;
-        mlp.topMargin = top;
-        mlp.rightMargin = right;
-        mlp.bottomMargin = bottom;
-        v.setLayoutParams(mlp);
+        lastPushedTop = safeTop;
+        lastPushedBottom = safeBottom;
+        lastPushedRight = safeRight;
+        lastPushedIme = imeBottom;
+        Log.d(TAG, "安全区下发 top=" + safeTop + " bottom=" + safeBottom
+                + " right=" + safeRight + " ime=" + imeBottom);
+        String js = "(function(){try{var r=document.documentElement.style;"
+                + "r.setProperty('--mx-safe-top','" + safeTop + "px');"
+                + "r.setProperty('--mx-safe-bottom','" + safeBottom + "px');"
+                + "r.setProperty('--mx-safe-right','" + safeRight + "px');"
+                + "r.setProperty('--mx-ime-bottom','" + imeBottom + "px');"
+                + "}catch(e){}})()";
+        webView.evaluateJavascript(js, null);
     }
 
     // ── 离线错误页 ────────────────────────────────────────────────────────
@@ -423,7 +510,7 @@ public class MainActivity extends BridgeActivity {
         webView.loadUrl(retryUrl != null ? retryUrl : DEFAULT_LOCAL_ORIGIN);
     }
 
-    /** 错误页的两个按钮走自定义 scheme，避免引入 addJavascriptInterface 与额外 keep 规则。 */
+    /** 错误页按钮走自定义 scheme；与主题桥 ShellBridge 互不混用，错误页不暴露任何 JS 接口能力。 */
     private boolean handleAppAction(Uri uri) {
         if (uri == null || !ACTION_SCHEME.equals(uri.getScheme())) return false;
         String host = uri.getHost();
@@ -675,6 +762,18 @@ public class MainActivity extends BridgeActivity {
         } catch (ActivityNotFoundException e) {
             Toast.makeText(this, R.string.no_browser_for_link, Toast.LENGTH_SHORT).show();
             return true;
+        }
+    }
+
+    /**
+     * 壳层 JS 桥（addJavascriptInterface 名 MixmShell）。
+     * 只暴露主题自报一个方法；不提供 URL 跳转 / 文件能力。方法必须 public 且带
+     * {@link JavascriptInterface}，否则 WebView 侧调用不到。
+     */
+    private final class ShellBridge {
+        @android.webkit.JavascriptInterface
+        public void notifyTheme(String theme) {
+            applyWebTheme(theme);
         }
     }
 }

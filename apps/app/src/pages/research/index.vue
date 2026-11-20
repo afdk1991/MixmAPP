@@ -1,6 +1,6 @@
 <template>
-  <view class="halo">
-    <mx-bar />
+  <view class="halo mx-ime-pad">
+    <mx-bar title="研究助手" />
 
     <view class="rs">
       <!-- ---------- 提问区 ---------- -->
@@ -75,6 +75,13 @@
           </view>
         </view>
 
+        <view v-else-if="error" class="empty">
+          <view class="empty-mark mono">!</view>
+          <text class="empty-title">研究记录没打开</text>
+          <text class="empty-sub">{{ error }}</text>
+          <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="loadHistory">重新加载</view>
+        </view>
+
         <view v-else-if="history.length === 0" class="empty">
           <view class="empty-mark">∅</view>
           <text class="empty-title">还没有研究记录</text>
@@ -138,6 +145,7 @@ const samples = [
 const query = ref('');
 const history = ref<ResearchTask[]>([]);
 const loading = ref(false);
+const error = ref('');
 const starting = ref(false);
 
 function relativeTime(iso: string): string {
@@ -146,6 +154,7 @@ function relativeTime(iso: string): string {
 
 async function loadHistory(): Promise<void> {
   loading.value = true;
+  error.value = '';
   try {
     const list = await researchApi.listResearch();
     // 进行中置顶，已完成按时间倒序
@@ -155,8 +164,14 @@ async function loadHistory(): Promise<void> {
       if (aRank !== bRank) return aRank - bRank;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  } catch {
+  } catch (e) {
     history.value = [];
+    const message = e instanceof Error ? e.message : '研究记录加载失败';
+    if (message.includes('登录') || message.includes('未授权')) {
+      uni.navigateTo({ url: ROUTES.login });
+      return;
+    }
+    error.value = message;
   } finally {
     loading.value = false;
   }
@@ -199,12 +214,12 @@ onPullDownRefresh(() => {
 }
 
 .rs {
-  padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(120rpx + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
 /* ---------- 提问区 ---------- */
 .rs-hero {
-  padding: calc(40rpx + var(--status-bar-height, 0px)) $sp-4 $sp-5;
+  padding: calc(40rpx + var(--mx-safe-top)) $sp-4 $sp-5;
   background:
     radial-gradient(80% 120% at 94% 0%, rgba(15, 157, 143, 0.12), rgba(15, 157, 143, 0) 56%),
     $paper;
@@ -243,7 +258,7 @@ onPullDownRefresh(() => {
   margin-right: $sp-2;
   padding: 2rpx 12rpx;
   border-radius: 999rpx;
-  background: rgba(15, 157, 143, 0.12);
+  background: $brand-soft;
   color: $brand-deep;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
@@ -487,6 +502,11 @@ onPullDownRefresh(() => {
   font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $ink-4;
+}
+
+.retry {
+  margin-top: $sp-4;
+  padding: 0 40rpx;
 }
 
 @media (min-width: 768px) {

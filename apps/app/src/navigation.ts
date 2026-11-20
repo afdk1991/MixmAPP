@@ -12,6 +12,11 @@ const TAB_PATHS: ReadonlySet<string> = new Set<string>([
   ROUTES.me,
 ]);
 
+/** 判断路径是否为 tabBar 根页（供头部组件收敛返回行为：根页返回交给原生双击退出）。 */
+export function isTabRoute(path: string): boolean {
+  return TAB_PATHS.has(path);
+}
+
 /**
  * tab 页不接受 URL 查询参数（switchTab 会丢弃），这里用一次性本地缓存做临时通道：
  * 跳转前把 query 按目标路径存起来，目标页 onShow 读取后立即清除。

@@ -1,5 +1,5 @@
 <template>
-  <view class="page page--wide">
+  <view class="page page--wide mx-ime-pad">
     <mx-bar />
     <view class="head">
       <view class="head-top">
@@ -52,7 +52,7 @@
       <view v-if="l1Nodes.length" class="spec-group">
         <text class="spec-label mono">分类</text>
         <scroll-view :scroll-x="true" class="chips chips--spec" :show-scrollbar="false">
-          <view class="chip chip--spec" :class="{ 'chip--active': !ctgs.length }" @tap="clearCtgs">
+          <view class="chip chip--spec" :class="{ 'chip--active': !ctgs.length }" hover-class="is-press" @tap="clearCtgs">
             <text class="chip-label">不限</text>
           </view>
           <view
@@ -60,6 +60,7 @@
             :key="`ctg-${node.id}`"
             class="chip chip--spec"
             :class="{ 'chip--active': ctgs.includes(node.id) }"
+            hover-class="is-press"
             @tap="toggleCtg(node.id)"
           >
             <text class="chip-label">{{ node.name }}</text>
@@ -74,6 +75,7 @@
           <view
             class="chip chip--spec"
             :class="{ 'chip--active': !group.value }"
+            hover-class="is-press"
             @tap="selectFilter(group.key, '')"
           >
             <text class="chip-label">不限</text>
@@ -83,6 +85,7 @@
             :key="`${group.key}-${opt}`"
             class="chip chip--spec"
             :class="{ 'chip--active': group.value === opt }"
+            hover-class="is-press"
             @tap="selectFilter(group.key, opt)"
           >
             <text class="chip-label mono">{{ opt }}</text>
@@ -844,8 +847,8 @@ onPullDownRefresh(() => {
 .page {
   min-height: 100vh;
   background: $paper;
-  /* tabBar 页面：为原生底部标签栏留安全距离，避免列表底部被遮挡 */
-  padding: 0 $sp-3 calc(140rpx + env(safe-area-inset-bottom));
+  /* tabBar 页面：为原生底部标签栏 + 安全区 + 软键盘留距离，避免列表底部被遮挡 */
+  padding: 0 $sp-3 calc(140rpx + var(--mx-tabbar-h) + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
 /* ---------- 页头：eyebrow + 大标 + 等宽计数 + 发丝线 ---------- */
@@ -1130,7 +1133,7 @@ onPullDownRefresh(() => {
   flex-direction: column;
   width: 78vw;
   max-width: 640rpx;
-  padding-top: calc(env(safe-area-inset-top) + 20rpx);
+  padding-top: calc(var(--mx-safe-top) + 20rpx);
   background: $shell;
   box-shadow: 8rpx 0 40rpx rgba(0, 0, 0, 0.35);
   transform: translateX(-100%);

@@ -875,3 +875,71 @@ export const integrationsApi = {
       }),
   },
 };
+
+/** 图片直传结果：publicUrl 为落库地址（local 存储为 `/media/<key>` 站内相对路径）。 */
+export type UploadImageResult = { publicUrl: string; key: string };
+
+const IMAGE_EXT_BY_CONTENT_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+};
+
+function extFromContentType(contentType: string): string {
+  return IMAGE_EXT_BY_CONTENT_TYPE[contentType.toLowerCase()] ?? 'jpg';
+}
+
+/** 二进制 PUT 直传；uni.request 的 data 支持 ArrayBuffer，跨端复用。 */
+function putBinary(url: string, body: ArrayBuffer, headers: Record<string, string>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url,
+      method: 'PUT',
+      data: body,
+      header: { ...headers },
+      timeout: 30000,
+      success: (res) => {
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve();
+        else reject(new ApiError('UPLOAD', `上传失败(${res.statusCode})`, res.statusCode));
+      },
+      fail: (err) => reject(new ApiError('NETWORK', err.errMsg || '网络异常', 0)),
+    });
+  });
+}
+
+/** 把相对预签名地址补成绝对地址；绝对地址（local / s3）原样返回。 */
+function absoluteUploadUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  const origin = (() => {
+    try {
+      return new URL(API_BASE).origin;
+    } catch {
+      return '';
+    }
+  })();
+  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+/**
+ * 图片直传：先取预签名地址，再把二进制 PUT 上去。
+ * - local 存储：落到服务器磁盘，读回走 `/media/<key>`；
+ * - s3 兼容存储：走预签名直传；
+ * - dev 回退：占位地址，未配置真实存储时由调用方兜底提示。
+ * 选图（File/Blob）在调用端完成，本函数只负责上传与返回落库地址。
+ */
+export async function uploadImageBlob(
+  blob: Blob,
+  kind: 'avatar' | 'image' = 'image',
+): Promise<UploadImageResult> {
+  const contentType = blob.type || 'image/jpeg';
+  const ext = extFromContentType(contentType);
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const key = `${kind}/${stamp}.${ext}`;
+  const presigned = await integrationsApi.storage.presign(key, contentType);
+  const body = await blob.arrayBuffer();
+  await putBinary(absoluteUploadUrl(presigned.url), body, presigned.headers);
+  return { publicUrl: presigned.publicUrl, key: presigned.key };
+}

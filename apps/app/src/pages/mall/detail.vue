@@ -1,6 +1,6 @@
 <template>
   <view class="page page--wide">
-    <mx-bar />
+    <mx-bar title="商品详情" />
     <view v-if="loading" class="loading">
       <view class="sk hero-sk" />
       <view class="loading-body">
@@ -226,7 +226,7 @@
       </view>
 
       <!-- 未登录：折后价与库存不可见，底部条改为登录入口 -->
-      <view v-if="loginGated" class="bar bar--inquiry">
+      <view v-if="loginGated" class="mx-sticky-bar bar--inquiry">
         <view class="bar-total">
           <text class="bar-label mono">折后价 / 库存</text>
           <text class="bar-state mono">{{ LOGIN_VISIBLE_TEXT }}</text>
@@ -236,7 +236,7 @@
         </view>
       </view>
 
-      <view v-else-if="purchasable" class="bar">
+      <view v-else-if="purchasable" class="mx-sticky-bar">
         <view class="bar-total">
           <text class="bar-label mono">合计</text>
           <text class="bar-price mono">¥{{ totalText }}</text>
@@ -249,7 +249,7 @@
         </view>
       </view>
 
-      <view v-else-if="outOfStock" class="bar bar--inquiry">
+      <view v-else-if="outOfStock" class="mx-sticky-bar bar--inquiry">
         <view class="bar-total">
           <text class="bar-label mono">库存状态</text>
           <text class="bar-state mono">缺货</text>
@@ -259,7 +259,7 @@
         </view>
       </view>
 
-      <view v-else class="bar bar--inquiry">
+      <view v-else class="mx-sticky-bar bar--inquiry">
         <view class="bar-btn bar-btn--primary bar-btn--block" hover-class="is-press" @tap="showInquiry">
           <text class="bar-btn-text">询价 / 联系报价</text>
         </view>
@@ -657,7 +657,7 @@ onLoad((options) => {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding-bottom: calc(240rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(240rpx + var(--mx-safe-bottom));
 }
 
 /* ---------- 主视觉 ---------- */
@@ -666,7 +666,7 @@ onLoad((options) => {
   height: 440rpx;
   background:
     radial-gradient(120% 120% at 18% 0%, rgba(15, 157, 143, 0.3), rgba(15, 157, 143, 0) 58%),
-    linear-gradient(160deg, #0b0f0e 0%, #152622 100%);
+    linear-gradient(160deg, $deep 0%, $deep-2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -849,6 +849,7 @@ onLoad((options) => {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .cur {
@@ -1059,6 +1060,7 @@ onLoad((options) => {
   flex-direction: column;
   align-items: flex-end;
   margin-left: $sp-3;
+  min-width: 0;
 }
 
 .amount-label {
@@ -1077,7 +1079,7 @@ onLoad((options) => {
   margin-left: 12rpx;
   padding: 2rpx 10rpx;
   border-radius: 6rpx;
-  background: rgba(15, 157, 143, 0.12);
+  background: $brand-soft;
   color: $brand-deep;
   font-size: 22rpx;
 }
@@ -1153,7 +1155,7 @@ onLoad((options) => {
 
 .unit-tab--active {
   border-color: $brand-deep;
-  background: rgba(15, 157, 143, 0.1);
+  background: $brand-soft;
 }
 
 .unit-tab-text {
@@ -1220,7 +1222,7 @@ onLoad((options) => {
 .promo {
   margin-top: 12rpx;
   padding: 16rpx;
-  background: rgba(15, 157, 143, 0.08);
+  background: $brand-soft;
   border-radius: $r-control;
 }
 

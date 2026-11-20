@@ -2,55 +2,71 @@
   <view
     class="mx-bar-wrap"
     :class="{ 'mx-bar-wrap--desktop-only': desktopOnly }"
-    :style="{ '--status-h': statusBarHeight + 'px' }"
   >
-    <view class="mx-bar" :class="{ 'mx-bar--compact': compact }">
-      <view class="mx-bar-inner">
-        <view class="mx-bar-row" :class="{ 'mx-bar-row--compact': compact }">
-          <view v-if="!hideBack" class="mx-back" hover-class="is-press" @tap="goBack">
-            <text class="mx-back-chev">‹</text>
-          </view>
+    <view class="mx-app-head mx-bar" :class="{ 'mx-bar--compact': compact }">
+      <view class="mx-app-head__inner mx-bar-row" :class="{ 'mx-bar-row--compact': compact }">
+        <!-- Tab 根页不渲染返回钮：返回交给原生双击退出，避免组件 reLaunch 误清栈 -->
+        <view
+          v-if="!hideBack && !isTab"
+          class="mx-app-head__back"
+          hover-class="is-press"
+          @tap="goBack"
+        >
+          <text class="mx-back-chev">‹</text>
+        </view>
 
-          <view class="mx-brand" hover-class="is-press" @tap="goHome">
-            <mx-logo size="sm" />
-          </view>
+        <view class="mx-bar-brand" hover-class="is-press" @tap="goHome">
+          <mx-logo size="sm" />
+          <text v-if="title" class="mx-bar-title">{{ title }}</text>
+        </view>
 
-          <!-- 移动端右侧留白给小程序胶囊；桌面端换成一级导航（底部 tabBar 在宽屏隐藏） -->
-          <view class="mx-side"></view>
-          <view class="mx-nav">
-            <view
-              v-for="item in NAV_ITEMS"
-              :key="item.url"
-              class="mx-nav-item"
-              :class="{ 'mx-nav-item--on': currentRoute === item.route }"
-              hover-class="is-press"
-              @tap="goTab(item.url)"
-            >
-              <text class="mx-nav-text">{{ item.label }}</text>
-            </view>
+        <!-- 移动端右侧留白；桌面端换成一级导航（底部 tabBar 在宽屏隐藏） -->
+        <view class="mx-side"></view>
+        <view class="mx-nav">
+          <view
+            v-for="item in NAV_ITEMS"
+            :key="item.url"
+            class="mx-nav-item"
+            :class="{ 'mx-nav-item--on': currentRoute === item.route }"
+            hover-class="is-press"
+            @tap="goTab(item.url)"
+          >
+            <text class="mx-nav-text">{{ item.label }}</text>
           </view>
         </view>
       </view>
     </view>
-    <view class="mx-bar-gap"></view>
+    <view class="mx-app-head-gap mx-bar-gap"></view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { ROUTES } from '../../routes';
+import { goTo, isTabRoute } from '../../navigation';
 import MxLogo from '../mx-logo/mx-logo.vue';
 
-withDefaults(defineProps<{ compact?: boolean; desktopOnly?: boolean; hideBack?: boolean }>(), {
-  compact: false,
-  desktopOnly: false,
-  hideBack: false,
-});
+withDefaults(
+  defineProps<{
+    compact?: boolean;
+    desktopOnly?: boolean;
+    hideBack?: boolean;
+    /** 二级页标题；不传则只显示品牌标 */
+    title?: string;
+  }>(),
+  {
+    compact: false,
+    desktopOnly: false,
+    hideBack: false,
+    title: '',
+  },
+);
 
 /**
  * 全站品牌栏：左返回，中品牌标（点即回首页），右侧留白给小程序胶囊。
  * 桌面端（≥1000px）同一根栏内换成一级导航，移动端仍由底部 tabBar 负责。
- * 用固定高度占位块顶住页面内容，页面本身不需要再补 padding。
+ * 安全区一律读 app-shell 注入的 var(--mx-safe-top)，不再取 statusBarHeight，
+ * 也不直接读 env(safe-area-inset-*)（APK 内 WebView 两者都恒为 0）。
  */
 const NAV_ITEMS = [
   { label: '首页', route: 'pages/index/index', url: ROUTES.home },
@@ -68,17 +84,11 @@ try {
   currentRoute.value = '';
 }
 
-const statusBarHeight = ref(0);
-// #ifndef H5
-try {
-  statusBarHeight.value = uni.getSystemInfoSync().statusBarHeight || 0;
-} catch {
-  statusBarHeight.value = 0;
-}
-// #endif
+/** 是否落在 tabBar 根页：根页返回不在这里接管。 */
+const isTab = computed(() => isTabRoute(`/${currentRoute.value}`));
 
 function goHome(): void {
-  uni.reLaunch({ url: ROUTES.home });
+  uni.switchTab({ url: ROUTES.home });
 }
 
 function goBack(): void {
@@ -91,53 +101,44 @@ function goBack(): void {
   if (depth > 1) {
     uni.navigateBack({
       delta: 1,
-      fail: () => uni.reLaunch({ url: ROUTES.home }),
+      fail: () => uni.switchTab({ url: ROUTES.home }),
     });
     return;
   }
-  uni.reLaunch({ url: ROUTES.home });
+  // 一级栈（Tab 根页）：不 reLaunch 清栈，交原生双击退出；H5 兜底回首页 Tab。
+  uni.switchTab({ url: ROUTES.home });
 }
 
-/** 桌面一级导航跳转：命中当前页直接返回，避免重复 reLaunch 造成无谓重载。 */
+/** 桌面一级导航跳转：命中当前页直接返回；tab 页走 switchTab，保留 Tab 上下文。 */
 function goTab(url: string): void {
   const route = url.replace(/^\//, '');
   if (route === currentRoute.value) return;
-  uni.reLaunch({ url });
+  goTo(url);
 }
 </script>
 
 <style scoped lang="scss">
-.mx-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 900;
-  background: $paper;
-  border-bottom: 1rpx solid rgba(13, 25, 23, 0.07);
-}
-
-.mx-bar-inner {
-  width: 100%;
-  box-sizing: border-box;
-  padding-top: var(--status-h, 0px);
-  padding-top: calc(var(--status-h, 0px) + env(safe-area-inset-top));
-}
-
-.mx-bar-row {
+/* 头部骨架（固定定位 / 安全区占位 / 48px 行高）复用 app-shell 的 .mx-app-head 系列，
+ * 这里只排品牌、留白槽与桌面导航。 */
+.mx-bar-brand {
+  flex: 1;
+  min-width: 0;
   height: 44px;
   display: flex;
   align-items: center;
-  padding: 0 12px;
-  box-sizing: border-box;
+  gap: 12rpx;
 }
 
-.mx-back {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.mx-bar-title {
+  min-width: 0;
+  font-family: $font-body;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mx-back-chev {
@@ -147,17 +148,10 @@ function goTab(url: string): void {
   color: $ink-2;
 }
 
-.mx-brand {
-  flex: 1;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .mx-side {
   width: 44px;
   height: 44px;
+  flex: 0 0 auto;
 }
 
 /* 桌面一级导航：移动端不渲染规则（display:none），避免与底部 tabBar 互相顶替 */
@@ -186,16 +180,6 @@ function goTab(url: string): void {
 
 .mx-nav-item--on .mx-nav-text {
   color: $on-solid;
-}
-
-.mx-bar-gap {
-  width: 100%;
-  height: calc(var(--status-h, 0px) + 44px);
-  height: calc(var(--status-h, 0px) + 44px + env(safe-area-inset-top));
-}
-
-.is-press {
-  opacity: 0.6;
 }
 
 @media (min-width: 768px) {
@@ -235,7 +219,7 @@ function goTab(url: string): void {
     padding: 0 4px;
   }
 
-  .mx-brand {
+  .mx-bar-brand {
     justify-content: flex-start;
     padding-left: 8px;
   }

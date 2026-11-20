@@ -1,6 +1,6 @@
 <template>
-  <view class="page page--auth">
-    <mx-bar compact />
+  <view class="page page--auth mx-ime-pad">
+    <mx-bar compact title="登录" />
 
     <view class="brand">
       <mx-logo size="md" tone="ink" sub="MIXMAPP ACCOUNT" />
@@ -14,16 +14,16 @@
     </view>
 
     <view class="mode">
-      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'password' }" @tap="mode = 'password'">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'password' }" hover-class="is-press" @tap="mode = 'password'">
         <text class="mode-label">密码</text>
         <view class="mode-line" />
       </view>
-      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'sms' }" @tap="mode = 'sms'">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'sms' }" hover-class="is-press" @tap="mode = 'sms'">
         <text class="mode-label">验证码</text>
         <view class="mode-line" />
       </view>
       <!-- internal:start -->
-      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'onekey' }" @tap="mode = 'onekey'">
+      <view class="mode-tab" :class="{ 'mode-tab--on': mode === 'onekey' }" hover-class="is-press" @tap="mode = 'onekey'">
         <text class="mode-label">一键登录</text>
         <view class="mode-line" />
       </view>
@@ -39,6 +39,7 @@
             type="text"
             placeholder="邮箱、用户名或 MixmAPP 号码"
             placeholder-class="field-ph"
+            confirm-type="next"
             v-model="account"
           />
         </view>
@@ -49,7 +50,9 @@
             password
             placeholder="请输入密码"
             placeholder-class="field-ph"
+            confirm-type="done"
             v-model="password"
+            @confirm="submit"
           />
         </view>
       </block>
@@ -63,6 +66,7 @@
             maxlength="11"
             placeholder="请输入手机号"
             placeholder-class="field-ph"
+            confirm-type="next"
             v-model="phone"
           />
         </view>
@@ -75,7 +79,9 @@
               maxlength="6"
               placeholder="6 位验证码"
               placeholder-class="field-ph"
+              confirm-type="done"
               v-model="code"
+              @confirm="submit"
             />
             <view
               class="code-btn"
@@ -105,7 +111,9 @@
             type="text"
             placeholder="本机号码认证凭证（开发态填 dev:手机号）"
             placeholder-class="field-ph"
+            confirm-type="done"
             v-model="onekeyToken"
+            @confirm="submit"
           />
         </view>
       </block>
@@ -127,7 +135,7 @@
 
       <view class="secondary">
         <text class="secondary-text">还没有账号？</text>
-        <text class="secondary-link" @tap="goRegister">立即注册</text>
+        <text class="secondary-link" hover-class="is-press" @tap="goRegister">立即注册</text>
       </view>
     </view>
 
@@ -332,7 +340,7 @@ function oauthLogin(provider: OAuthProviderOption): void {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: $sp-5 $sp-4 $sp-8;
+  padding: $sp-5 $sp-4 calc($sp-8 + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
 /* ---------- 品牌区 ---------- */

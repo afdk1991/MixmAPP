@@ -1,8 +1,20 @@
 <template>
   <view class="halo">
-    <mx-bar />
+    <mx-bar title="研究报告" />
 
-    <view v-if="!task" class="empty">
+    <view v-if="loadError" class="empty">
+      <view class="empty-mark mono">!</view>
+      <text class="empty-title">研究报告没打开</text>
+      <text class="empty-sub">网络可能不可用，请重试；记录仍在列表里。</text>
+      <view class="btn btn--brand empty-btn" hover-class="is-press" @tap="reloadTask">
+        <text class="empty-btn-text">重新加载</text>
+      </view>
+      <view class="btn btn--ghost empty-btn" hover-class="is-press" @tap="backToList">
+        <text class="empty-btn-text empty-btn-text--ghost">返回研究记录</text>
+      </view>
+    </view>
+
+    <view v-else-if="!task" class="empty">
       <view class="empty-mark">!</view>
       <text class="empty-title">未找到该研究</text>
       <text class="empty-sub">记录可能已失效，返回重新发起一次研究。</text>
@@ -200,6 +212,8 @@ import MxBar from '../../components/mx-bar/mx-bar.vue';
 import { researchApi, researchRelativeTime, type ResearchTask } from '../../api/research';
 
 const task = ref<ResearchTask | null>(null);
+const loadError = ref(false);
+const taskId = ref('');
 const stepIndex = ref(0);
 const durationSec = ref(0);
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -274,20 +288,31 @@ function runSimulator(): void {
 }
 
 async function loadTask(id: string): Promise<void> {
-  const t = await researchApi.getResearch(id);
-  if (!t) {
+  loadError.value = false;
+  try {
+    const t = await researchApi.getResearch(id);
+    if (!t) {
+      task.value = null;
+      return;
+    }
+    task.value = t;
+    stepIndex.value = t.stepIndex;
+    durationSec.value = t.durationSec;
+    if (t.status !== 'done' && t.stepIndex < t.steps.length) {
+      runSimulator();
+    } else {
+      stepIndex.value = t.steps.length;
+      task.value = { ...t, status: 'done', stepIndex: t.steps.length };
+    }
+  } catch {
     task.value = null;
-    return;
+    loadError.value = true;
   }
-  task.value = t;
-  stepIndex.value = t.stepIndex;
-  durationSec.value = t.durationSec;
-  if (t.status !== 'done' && t.stepIndex < t.steps.length) {
-    runSimulator();
-  } else {
-    stepIndex.value = t.steps.length;
-    task.value = { ...t, status: 'done', stepIndex: t.steps.length };
-  }
+}
+
+function reloadTask(): void {
+  if (taskId.value) void loadTask(taskId.value);
+  else backToList();
 }
 
 function reportPlainText(): string {
@@ -335,6 +360,7 @@ function backToList(): void {
 
 onLoad((options?: Record<string, any>) => {
   const id = (options as { id?: string })?.id ?? '';
+  taskId.value = id;
   if (id) void loadTask(id);
   else task.value = null;
 });
@@ -349,12 +375,12 @@ onUnload(() => stopTimer());
 }
 
 .rs {
-  padding: 0 0 calc(220rpx + env(safe-area-inset-bottom));
+  padding: 0 0 calc(220rpx + var(--mx-safe-bottom));
 }
 
 /* ---------- 问题重述 ---------- */
 .rs-head {
-  padding: calc(36rpx + var(--status-bar-height, 0px)) $sp-4 $sp-4;
+  padding: calc(36rpx + var(--mx-safe-top)) $sp-4 $sp-4;
   background:
     radial-gradient(80% 120% at 94% 0%, rgba(15, 157, 143, 0.12), rgba(15, 157, 143, 0) 56%),
     $paper;
@@ -411,7 +437,7 @@ onUnload(() => stopTimer());
   margin-right: $sp-2;
   padding: 2rpx 12rpx;
   border-radius: 999rpx;
-  background: rgba(15, 157, 143, 0.12);
+  background: $brand-soft;
   color: $brand-deep;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
@@ -697,7 +723,7 @@ onUnload(() => stopTimer());
   position: fixed;
   left: $sp-3;
   right: $sp-3;
-  bottom: calc(#{$sp-2} + env(safe-area-inset-bottom));
+  bottom: calc(#{$sp-2} + var(--mx-safe-bottom));
   z-index: 90;
   display: flex;
   align-items: center;
@@ -755,7 +781,7 @@ onUnload(() => stopTimer());
 
 /* ---------- 空态 ---------- */
 .empty {
-  padding: calc(180rpx + var(--status-bar-height, 0px)) $sp-4 120rpx;
+  padding: calc(180rpx + var(--mx-safe-top)) $sp-4 120rpx;
   text-align: center;
 }
 
@@ -768,6 +794,10 @@ onUnload(() => stopTimer());
   font-size: $fs-meta;
   font-weight: 600;
   color: $on-solid;
+}
+
+.empty-btn-text--ghost {
+  color: $ink;
 }
 
 /* ---------- 页脚 ---------- */

@@ -86,7 +86,7 @@
     "backgroundColor": "#f4f4f1",
     "borderStyle": "white",
     "height": "58px",
-    "fontSize": "11px",
+    "fontSize": "12px",
     "iconWidth": "26px",
     "spacing": "3px",
     "list": [
@@ -110,7 +110,7 @@
       },
       {
         "pagePath": "pages/me/index",
-        "text": "星际联邦通行证",
+        "text": "通行证",
         "iconPath": "static/tab/me.png",
         "selectedIconPath": "static/tab/me-active.png"
       }

@@ -1,6 +1,6 @@
 <template>
   <view class="page" :class="{ 'page--gate': gate }">
-    <mx-bar v-if="!gate" />
+    <mx-bar v-if="!gate" title="隐私政策" />
 
     <view class="head">
       <text class="eyebrow">PRIVACY &amp; PERMISSIONS</text>
@@ -54,7 +54,7 @@
       <text class="para">你可以在「星际联邦通行证」页查看与修改账号资料、退出登录；在系统设置中清除应用数据，等同于撤回同意并删除本地数据。运营方与反馈入口见「星际联邦通行证 → 关于与能力」。</text>
     </view>
 
-    <view v-if="gate" class="gate-bar">
+    <view v-if="gate" class="mx-sticky-bar gate-bar">
       <view class="btn btn--quiet btn--sm gate-decline" hover-class="is-press" @tap="decline">
         <text class="btn-text btn-text--dark">暂不同意</text>
       </view>
@@ -116,11 +116,11 @@ function exitApp(): void {
 .page {
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-4 calc($sp-6 + env(safe-area-inset-bottom));
+  padding: 0 $sp-4 calc($sp-6 + var(--mx-safe-bottom));
 }
 
 .page--gate {
-  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(180rpx + var(--mx-safe-bottom));
 }
 
 .head {
@@ -203,18 +203,11 @@ function exitApp(): void {
   text-align: center;
 }
 
+/* 定位 / 背景 / 内边距 / 安全区一律由 .mx-sticky-bar 提供，这里只排两个按钮 */
 .gate-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 90;
   display: flex;
   align-items: center;
   gap: $sp-2;
-  padding: $sp-3 $sp-4 calc($sp-3 + env(safe-area-inset-bottom));
-  background: $shell;
-  border-top: 1rpx solid $paper-3;
 }
 
 .gate-decline {
