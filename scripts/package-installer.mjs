@@ -57,6 +57,7 @@ if (!skipBuild) {
   // 单文件 H5 必须把 API 源钉死，否则回落到相对 /api/v1，装到 /mixmapp/api/v1 的站点会显示离线
   run('node', ['scripts/build-h5-single.mjs'], repo, {
     MIXMAPP_API_BASE: process.env.MIXMAPP_API_BASE ?? '/mixmapp/api/v1',
+    MIXMAPP_MEDIA_BASE: process.env.MIXMAPP_MEDIA_BASE ?? '',
   });
 }
 
@@ -74,7 +75,12 @@ run(pnpm, ['--filter', '@mixmapp/api', 'deploy', '--prod', deployArg]);
 // 另外本环境 Node 22 的 fs.cpSync(recursive) 连普通目录复制都会原生崩溃（127），
 // 因此目录复制统一走 shell `cp -r`（已实测正常），文件复制仍用 fs.copyFileSync。
 console.log('[pkg] 组装发布包（以 deploy 产物为根）');
-const cpDir = (src, dst) => execFileSync('cp', ['-r', src, dst], { cwd: repo, stdio: 'inherit', shell: true });
+// 目录复制：Windows 走 xcopy（cmd 里没有 cp，`cp -r` 在 pwsh/cmd 下必然 ENOENT/exit 1），
+// Linux/macOS 走 `cp -r`；文件名含非 ASCII 时两条路径都实测正常。
+const cpDir = (src, dst) =>
+  isWin
+    ? execFileSync('xcopy', [path.join(repo, src), dst, '/E', '/I', '/Y', '/Q'], { stdio: 'inherit' })
+    : execFileSync('cp', ['-r', path.join(repo, src), dst], { stdio: 'inherit' });
 cpDir('infra', path.join(deployDir, 'infra'));
 cpDir('install', path.join(deployDir, 'install'));
 fs.mkdirSync(path.join(deployDir, 'scripts'), { recursive: true });
@@ -87,10 +93,11 @@ fs.copyFileSync(h5, path.join(deployDir, 'index.html'));
 // tar（Windows 10+ 自带 bsdtar，Linux 自带 GNU tar，两条路径都能压出同一份包）
 // --force-local：GNU tar 在 Windows 上会把 `F:\...` 绝对路径当成「远程主机:路径」
 // 去调 rsh，报 "Cannot connect to F: resolve failed" 并以 127/128 退出（2026-11-19 实测）。
-// 强制本地文件后绝对路径可正常使用；bsdtar 忽略该选项，不影响跨平台。
+// 但 Windows 自带的是 bsdtar，它不认 --force-local 会直接 exit 1（2026-11-21 实测），
+// 且 bsdtar 本来就按本地绝对路径处理，所以只在非 Windows 上带这个开关。
 if (fs.existsSync(outFile)) fs.rmSync(outFile);
-console.log('[pkg] 打包 tar（--force-local）');
-run('tar', ['--force-local', '-czf', outFile, '-C', deployDir, '.']);
+console.log('[pkg] 打包 tar');
+run('tar', [...(isWin ? [] : ['--force-local']), '-czf', outFile, '-C', deployDir, '.']);
 fs.rmSync(stage, { recursive: true, force: true });
 
 const size = (fs.statSync(outFile).size / 1024 / 1024).toFixed(1);
