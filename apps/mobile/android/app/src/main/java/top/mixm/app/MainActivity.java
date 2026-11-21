@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -16,6 +17,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -49,6 +51,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /**
  * MixmAPP 原生壳。
@@ -76,6 +79,9 @@ public class MainActivity extends BridgeActivity {
     /** 首启隐私同意页（见 apps/app/src/pages.json / pages/legal/privacy.vue） */
     private static final String PRIVACY_GATE_PATH = "/pages/legal/privacy";
     private static final String PRIVACY_GATE_QUERY = "mode=gate";
+    /** 壳层私有存储：设备号持久化（docs/39 §4），与既有 "mixmapp" 提示词 SP 隔离，互不污染。 */
+    private static final String SHELL_PREFS_NAME = "mixmapp_shell";
+    private static final String PREF_DEVICE_ID = "device_id";
 
     /**
      * 装在页面里的主题观察者：监听 <html> 上的 data-mx-theme 手动切换与
@@ -817,8 +823,8 @@ public class MainActivity extends BridgeActivity {
 
     /**
      * 壳层 JS 桥（addJavascriptInterface 名 MixmShell）。
-     * 只暴露主题自报一个方法；不提供 URL 跳转 / 文件能力。方法必须 public 且带
-     * {@link JavascriptInterface}，否则 WebView 侧调用不到。
+     * 暴露主题自报与设备快照两个只读方法；不提供 URL 跳转 / 文件能力。
+     * 方法必须 public 且带 {@link JavascriptInterface}，否则 WebView 侧调用不到。
      */
     private final class ShellBridge {
         @android.webkit.JavascriptInterface
@@ -830,6 +836,124 @@ public class MainActivity extends BridgeActivity {
         @android.webkit.JavascriptInterface
         public void notifyThemePref(String theme, String source) {
             applyWebTheme(theme, source == null ? "页面观察者" : source);
+        }
+
+        /**
+         * 设备与网络快照（docs/39 §4）。返回固定字段的 JSON 字符串：
+         * {@code {"deviceId","model","osName","osVersion","networkType","carrier"}}。
+         * 只读系统属性，不发网络请求、不申请权限；整个方法 try/catch，任何异常都返回
+         * 字段完整的合法 JSON（空串 / none），绝不抛穿到 WebView 导致白屏。
+         * 由 WebView binder 线程回调，读取均为同步轻量调用，不阻塞 UI 线程。
+         */
+        @android.webkit.JavascriptInterface
+        public String getDeviceInfo() {
+            try {
+                JSONObject json = new JSONObject();
+                json.put("deviceId", resolveDeviceId());
+                json.put("model", safeDeviceString(Build.MODEL));
+                json.put("osName", "Android");
+                json.put("osVersion", safeDeviceString(Build.VERSION.RELEASE));
+                json.put("networkType", resolveNetworkType());
+                json.put("carrier", resolveCarrier());
+                return json.toString();
+            } catch (Exception e) {
+                Log.w(TAG, "getDeviceInfo 兜底 JSON：" + e.getMessage());
+                return fallbackDeviceJson();
+            }
+        }
+    }
+
+    // ── 设备与网络快照（docs/39 §4） ──────────────────────────────────────
+
+    /**
+     * 设备号：优先 {@link Settings.Secure#ANDROID_ID}；取不到（厂商定制 / 读取异常）时
+     * 回落私有 SP 里的持久 UUID——首启生成后写回 {@link #SHELL_PREFS_NAME}，
+     * 保证同一设备多次调用稳定不变。SP 也不可用时返回空串，不编造。
+     */
+    private String resolveDeviceId() {
+        String androidId = "";
+        try {
+            androidId = Settings.Secure.getString(getContentResolver(),
+                    Settings.Secure.ANDROID_ID);
+            if (androidId != null) androidId = androidId.trim();
+        } catch (Exception ignored) {
+            androidId = "";
+        }
+        if (androidId != null && !androidId.isEmpty()) return androidId;
+
+        try {
+            SharedPreferences prefs = getSharedPreferences(SHELL_PREFS_NAME, MODE_PRIVATE);
+            String uuid = prefs.getString(PREF_DEVICE_ID, "");
+            if (uuid == null || uuid.isEmpty()) {
+                uuid = UUID.randomUUID().toString();
+                prefs.edit().putString(PREF_DEVICE_ID, uuid).apply();
+            }
+            return uuid;
+        } catch (Exception e) {
+            Log.w(TAG, "持久设备号读取失败：" + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * 网络类型：API 23+ 走 {@link ConnectivityManager#getActiveNetwork()} +
+     * {@link ConnectivityManager#getNetworkCapabilities(Network)}，按传输层映射；
+     * 不使用已废弃的 {@code getType()} 唯一路径。无网 / 未知传输层一律 {@code none}。
+     */
+    private String resolveNetworkType() {
+        try {
+            ConnectivityManager cm =
+                    (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return "none";
+            Network active = cm.getActiveNetwork();
+            if (active == null) return "none";
+            NetworkCapabilities caps = cm.getNetworkCapabilities(active);
+            if (caps == null) return "none";
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return "wifi";
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) return "cellular";
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return "ethernet";
+        } catch (Exception e) {
+            Log.w(TAG, "networkType 解析失败：" + e.getMessage());
+        }
+        return "none";
+    }
+
+    /**
+     * 运营商：{@link TelephonyManager#getNetworkOperatorName()}；空 / 异常返回空串。
+     * 本方法不申请 READ_PHONE_STATE：无权限时系统返回空串而非崩溃，外层 try/catch 兜底。
+     */
+    private String resolveCarrier() {
+        try {
+            TelephonyManager tm =
+                    (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm == null) return "";
+            String name = tm.getNetworkOperatorName();
+            return name == null ? "" : name.trim();
+        } catch (Exception e) {
+            Log.w(TAG, "carrier 解析失败：" + e.getMessage());
+            return "";
+        }
+    }
+
+    /** 系统属性字符串归一化：null → 空串，去除首尾空白；不填「未知」假值。 */
+    private static String safeDeviceString(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    /** 全链路异常兜底：字段仍完整、JSON 仍合法；连 JSONObject 都不可用时给字面量保底。 */
+    private static String fallbackDeviceJson() {
+        try {
+            JSONObject fallback = new JSONObject();
+            fallback.put("deviceId", "");
+            fallback.put("model", "");
+            fallback.put("osName", "Android");
+            fallback.put("osVersion", "");
+            fallback.put("networkType", "none");
+            fallback.put("carrier", "");
+            return fallback.toString();
+        } catch (Exception ignored) {
+            return "{\"deviceId\":\"\",\"model\":\"\",\"osName\":\"Android\","
+                    + "\"osVersion\":\"\",\"networkType\":\"none\",\"carrier\":\"\"}";
         }
     }
 }

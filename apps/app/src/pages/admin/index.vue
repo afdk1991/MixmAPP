@@ -179,6 +179,59 @@
         </view>
       </view>
 
+      <!-- ---------- 登录设备与网络（契约 docs/39 §3.3 / §6） ---------- -->
+      <view class="section">
+        <view class="sec-head">
+          <view class="sec-head-l">
+            <text class="eyebrow">DEVICES</text>
+            <text class="sec-title">登录设备与网络</text>
+          </view>
+        </view>
+        <text class="hint">按用户 ID 查询最近登录会话的设备号、IP 与网络；会话 id 只展示后端下发的哈希前缀。</text>
+        <view class="btn-row">
+          <input class="field session-input" placeholder="用户 ID" v-model="sessionUserId" @confirm="loadUserSessions" />
+          <button class="btn btn--ghost" :loading="sessionsLoading" @click="loadUserSessions">查询</button>
+        </view>
+
+        <block v-if="latestSession">
+          <view class="row">
+            <text class="k">设备号</text>
+            <text class="v mono">{{ latestSession.deviceId || '—' }}</text>
+          </view>
+          <view class="row">
+            <text class="k">机型</text>
+            <text class="v">{{ latestSession.model || '—' }}</text>
+          </view>
+          <view class="row">
+            <text class="k">系统</text>
+            <text class="v">{{ latestOsText }}</text>
+          </view>
+          <view class="row">
+            <text class="k">IP 地址</text>
+            <text class="v mono">{{ latestSession.ip || '—' }}</text>
+          </view>
+          <view class="row">
+            <text class="k">网络类型</text>
+            <text class="v">{{ latestNetworkText }}<text v-if="latestSession.carrier"> · {{ latestSession.carrier }}</text></text>
+          </view>
+          <view class="row row--last">
+            <text class="k">采集时间</text>
+            <text class="v mono">{{ fmtTime(latestSession.lastSeenAt) }}</text>
+          </view>
+        </block>
+
+        <text v-if="sessionsLoaded && !latestSession && !sessionsError" class="hint">暂无该用户的登录会话记录。</text>
+        <text v-if="sessionsError" class="hint sessions-error">{{ sessionsError }}</text>
+
+        <view v-for="s in sessions" :key="s.id || s.deviceId" class="prov-row">
+          <view class="prov-main">
+            <text class="prov-name">{{ s.deviceId || '未记录设备' }}</text>
+            <text class="prov-meta mono">{{ s.id || '—' }} · {{ s.ip || '无 IP' }}</text>
+            <text class="prov-reason">{{ sessionLineText(s) }}</text>
+          </view>
+        </view>
+      </view>
+
       <!-- ---------- 目录导入 ---------- -->
       <view class="section">
         <view class="sec-head">
@@ -218,10 +271,12 @@ import {
   readAdminToken,
   writeAdminToken,
   type AccountMergeDto,
+  type AdminUserSessionDto,
   type ImportReportDto,
   type ProviderStateDto,
   type ProviderSummaryDto,
 } from '../../api/client';
+import { networkTypeLabel } from '../../device';
 
 type DbStatus = Awaited<ReturnType<typeof adminApi.db>>;
 type SweepResult = { ttlMinutes: number; cancelled: string[]; count: number };
@@ -242,6 +297,13 @@ const oauthLoading = ref(false);
 const merges = ref<AccountMergeDto[]>([]);
 const mergeCandidateCount = ref(0);
 const mergesLoading = ref(false);
+
+// ===== 登录设备与网络（后台 Cookie 会话） =====
+const sessionUserId = ref('');
+const sessions = ref<AdminUserSessionDto[]>([]);
+const sessionsLoading = ref(false);
+const sessionsLoaded = ref(false);
+const sessionsError = ref('');
 
 // ===== 目录导入 =====
 const importFile = ref('');
@@ -276,6 +338,43 @@ const backupLabel = computed(() =>
   status.value?.available.cloudbase.configured ? 'READY' : 'NONE',
 );
 const sweepCount = computed(() => (sweepResult.value ? String(sweepResult.value.count) : '—'));
+
+// ===== 登录设备与网络 =====
+const latestSession = computed(() => sessions.value[0] ?? null);
+const latestOsText = computed(() => {
+  const s = latestSession.value;
+  if (!s) return '—';
+  return s.osVersion ? `${s.osName} ${s.osVersion}` : s.osName || '—';
+});
+const latestNetworkText = computed(() =>
+  latestSession.value ? networkTypeLabel(latestSession.value.networkType) : '—',
+);
+
+function sessionLineText(s: AdminUserSessionDto): string {
+  const parts = [networkTypeLabel(s.networkType), fmtTime(s.lastSeenAt)];
+  if (s.revokedAt) parts.push('已登出');
+  return parts.join(' · ');
+}
+
+async function loadUserSessions(): Promise<void> {
+  const userId = sessionUserId.value.trim();
+  if (!userId) {
+    sessionsError.value = '请输入用户 ID';
+    return;
+  }
+  sessionsLoading.value = true;
+  sessionsError.value = '';
+  try {
+    sessions.value = await adminApi.userSessions(userId);
+    sessionsLoaded.value = true;
+  } catch (e) {
+    sessions.value = [];
+    sessionsLoaded.value = true;
+    sessionsError.value = e instanceof ApiError ? `读取失败：${e.message}（${e.status}）` : '读取失败';
+  } finally {
+    sessionsLoading.value = false;
+  }
+}
 
 function saveToken(): void {
   writeAdminToken(token.value.trim());
@@ -621,6 +720,15 @@ onLoad(() => {
   font-size: $fs-meta;
   line-height: $lh-body;
   color: $ink-3;
+}
+
+.session-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sessions-error {
+  color: $signal;
 }
 
 /* ---------- 档案行 ---------- */

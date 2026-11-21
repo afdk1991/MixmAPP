@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import type { Config } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
+import { DeviceContextService } from './modules/device.js';
 import { AddressService } from './modules/address.js';
 import { MallService } from './modules/mall.js';
 import { CatalogSource } from './modules/catalog-source.js';
@@ -18,6 +19,7 @@ import { createStorageProvider, type StorageProvider } from './adapters/storage.
 import { createPushProvider, type PushProvider } from './adapters/push.js';
 import { createAiProvider, type AiProvider } from './adapters/ai.js';
 import { AppError } from './lib/errors.js';
+import { maskIp } from './lib/device-context.js';
 import { verifyAccessToken } from './lib/jwt.js';
 import { authRoutes } from './routes/auth.js';
 import { oauthRoutes } from './routes/oauth.js';
@@ -28,6 +30,7 @@ import { adminRoutes } from './routes/admin.js';
 import { adminConsoleRoutes } from './routes/admin-console.js';
 import { mediaRoutes } from './routes/media.js';
 import { meRoutes } from './routes/me.js';
+import { deviceRoutes } from './routes/device.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { metaRoutes } from './routes/meta.js';
 
@@ -50,8 +53,22 @@ export type AppDeps = {
 
 /** 组装 Fastify 实例：路由、鉴权、限流、错误码统一在这里收口。 */
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
+  const loggerOption = deps.logger ?? false;
   const app = Fastify({
-    logger: deps.logger ?? false,
+    // 访问日志里的直连地址按契约 §6 脱敏；XFF 头不进日志，避免完整 IP 落盘。
+    logger: loggerOption
+      ? {
+          serializers: {
+            req: (req: FastifyRequest) => ({
+              method: req.method,
+              url: req.url,
+              host: req.hostname,
+              remoteAddress: req.ip ? maskIp(req.ip) : req.ip,
+              remotePort: req.socket?.remotePort,
+            }),
+          },
+        }
+      : false,
     genReqId: () => randomUUID(),
     trustProxy: true,
     bodyLimit: 2 * 1024 * 1024,
@@ -134,6 +151,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       onekey: app.onekey,
     }),
   );
+  app.decorate('deviceContext', new DeviceContextService(deps.store));
   app.decorate('pay', new PayService(deps.config, deps.store));
   app.decorate('address', new AddressService(deps.config, deps.store));
   app.decorate('mall', new MallService(deps.config, deps.store, catalog));
@@ -228,6 +246,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await authRoutes(scope);
       await oauthRoutes(scope);
       await meRoutes(scope);
+      await deviceRoutes(scope);
       await mallRoutes(scope);
       await homeRoutes(scope);
       await addressRoutes(scope);

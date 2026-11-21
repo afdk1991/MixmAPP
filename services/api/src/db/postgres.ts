@@ -14,6 +14,7 @@ import type {
   AdminOrderFilter,
   AdminProductFilter,
   AdminUserFilter,
+  AdminUserSessionSummary,
   AdminUserSummary,
   BindingRecord,
   CartItemRecord,
@@ -32,6 +33,7 @@ import type {
   RefreshTokenRecord,
   SmsCodeRecord,
   Store,
+  UserDeviceRecord,
   UserRecord,
 } from './types.js';
 
@@ -104,6 +106,38 @@ function mapOAuthState(row: Row): OAuthStateRecord {
     createdAt: toDate(row['created_at']),
     expiresAt: toDate(row['expires_at']),
     consumedAt: toDateOrNull(row['consumed_at']),
+  };
+}
+
+function mapRefreshToken(row: Row): RefreshTokenRecord {
+  return {
+    tokenHash: row['token_hash'] as string,
+    userId: row['user_id'] as string,
+    expiresAt: toDate(row['expires_at']),
+    revokedAt: toDateOrNull(row['revoked_at']),
+    replacedBy: (row['replaced_by'] as string | null) ?? null,
+    createdAt: toDate(row['created_at']),
+    deviceId: (row['device_id'] as string | null) ?? null,
+    deviceModel: (row['device_model'] as string | null) ?? null,
+    osName: (row['os_name'] as string | null) ?? null,
+    osVersion: (row['os_version'] as string | null) ?? null,
+    networkType: (row['network_type'] as string | null) ?? null,
+    carrier: (row['carrier'] as string | null) ?? null,
+    clientIp: (row['client_ip'] as string | null) ?? null,
+  };
+}
+
+function mapUserDevice(row: Row): UserDeviceRecord {
+  return {
+    userId: row['user_id'] as string,
+    deviceId: row['device_id'] as string,
+    deviceModel: (row['device_model'] as string) ?? '',
+    osName: (row['os_name'] as string) ?? 'Web',
+    osVersion: (row['os_version'] as string) ?? '',
+    networkType: (row['network_type'] as string) ?? 'none',
+    carrier: (row['carrier'] as string) ?? '',
+    clientIp: (row['client_ip'] as string) ?? '',
+    updatedAt: toDate(row['updated_at']),
   };
 }
 
@@ -401,25 +435,32 @@ export class PgStore implements Store {
   refreshTokens = {
     insert: async (token: RefreshTokenRecord): Promise<void> => {
       await this.pool.query(
-        `insert into refresh_tokens (token_hash, user_id, expires_at, revoked_at, replaced_by, created_at)
-         values ($1,$2,$3,$4,$5,$6)`,
-        [token.tokenHash, token.userId, token.expiresAt, token.revokedAt, token.replacedBy, token.createdAt],
+        `insert into refresh_tokens
+           (token_hash, user_id, expires_at, revoked_at, replaced_by, created_at,
+            device_id, device_model, os_name, os_version, network_type, carrier, client_ip)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          token.tokenHash,
+          token.userId,
+          token.expiresAt,
+          token.revokedAt,
+          token.replacedBy,
+          token.createdAt,
+          token.deviceId,
+          token.deviceModel,
+          token.osName,
+          token.osVersion,
+          token.networkType,
+          token.carrier,
+          token.clientIp,
+        ],
       );
     },
     findByHash: async (hash: string): Promise<RefreshTokenRecord | null> => {
       const res = await this.pool.query('select * from refresh_tokens where token_hash = $1 limit 1', [
         hash,
       ]);
-      if (!res.rows[0]) return null;
-      const row = res.rows[0] as Row;
-      return {
-        tokenHash: row['token_hash'] as string,
-        userId: row['user_id'] as string,
-        expiresAt: toDate(row['expires_at']),
-        revokedAt: toDateOrNull(row['revoked_at']),
-        replacedBy: (row['replaced_by'] as string | null) ?? null,
-        createdAt: toDate(row['created_at']),
-      };
+      return res.rows[0] ? mapRefreshToken(res.rows[0] as Row) : null;
     },
     revoke: async (hash: string, replacedBy?: string | null): Promise<void> => {
       await this.pool.query(
@@ -432,17 +473,14 @@ export class PgStore implements Store {
         'select * from refresh_tokens where user_id = $1 and revoked_at is null',
         [userId],
       );
-      return res.rows.map((row) => {
-        const r = row as Row;
-        return {
-          tokenHash: r['token_hash'] as string,
-          userId: r['user_id'] as string,
-          expiresAt: toDate(r['expires_at']),
-          revokedAt: toDateOrNull(r['revoked_at']),
-          replacedBy: (r['replaced_by'] as string | null) ?? null,
-          createdAt: toDate(r['created_at']),
-        };
-      });
+      return res.rows.map((row) => mapRefreshToken(row as Row));
+    },
+    listByUser: async (userId: string, limit: number): Promise<RefreshTokenRecord[]> => {
+      const res = await this.pool.query(
+        'select * from refresh_tokens where user_id = $1 order by created_at desc limit $2',
+        [userId, limit],
+      );
+      return res.rows.map((row) => mapRefreshToken(row as Row));
     },
     revokeByUser: async (userId: string): Promise<number> => {
       const res = await this.pool.query(
@@ -450,6 +488,56 @@ export class PgStore implements Store {
         [userId],
       );
       return res.rowCount ?? 0;
+    },
+  };
+
+  userDevices = {
+    upsert: async (record: UserDeviceRecord): Promise<void> => {
+      await this.pool.query(
+        `insert into user_devices
+           (user_id, device_id, device_model, os_name, os_version, network_type, carrier, client_ip, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         on conflict (user_id, device_id) do update set
+           device_model  = excluded.device_model,
+           os_name       = excluded.os_name,
+           os_version    = excluded.os_version,
+           network_type  = excluded.network_type,
+           carrier       = excluded.carrier,
+           client_ip     = excluded.client_ip,
+           updated_at    = excluded.updated_at`,
+        [
+          record.userId,
+          record.deviceId,
+          record.deviceModel,
+          record.osName,
+          record.osVersion,
+          record.networkType,
+          record.carrier,
+          record.clientIp,
+          record.updatedAt,
+        ],
+      );
+    },
+    find: async (userId: string, deviceId: string): Promise<UserDeviceRecord | null> => {
+      const res = await this.pool.query(
+        'select * from user_devices where user_id = $1 and device_id = $2 limit 1',
+        [userId, deviceId],
+      );
+      return res.rows[0] ? mapUserDevice(res.rows[0] as Row) : null;
+    },
+    latest: async (userId: string): Promise<UserDeviceRecord | null> => {
+      const res = await this.pool.query(
+        'select * from user_devices where user_id = $1 order by updated_at desc limit 1',
+        [userId],
+      );
+      return res.rows[0] ? mapUserDevice(res.rows[0] as Row) : null;
+    },
+    listByUser: async (userId: string): Promise<UserDeviceRecord[]> => {
+      const res = await this.pool.query(
+        'select * from user_devices where user_id = $1 order by updated_at desc',
+        [userId],
+      );
+      return res.rows.map((row) => mapUserDevice(row as Row));
     },
   };
 
@@ -1786,6 +1874,38 @@ export class PgStore implements Store {
         favoriteItems: countOf(itemRes),
         cartItems: countOf(cartRes),
       };
+    },
+    listUserSessions: async (
+      userId: string,
+      limit: number,
+    ): Promise<AdminUserSessionSummary[]> => {
+      const res = await this.pool.query(
+        `select r.*, d.updated_at as device_updated_at
+           from refresh_tokens r
+           left join user_devices d
+             on d.user_id = r.user_id and d.device_id = r.device_id
+          where r.user_id = $1
+          order by r.created_at desc
+          limit $2`,
+        [userId, limit],
+      );
+      return res.rows.map((row) => {
+        const r = row as Row;
+        const token = mapRefreshToken(r);
+        return {
+          id: token.tokenHash.slice(0, 8),
+          createdAt: token.createdAt,
+          revokedAt: token.revokedAt,
+          deviceId: token.deviceId,
+          model: token.deviceModel ?? '',
+          osName: token.osName,
+          osVersion: token.osVersion ?? '',
+          networkType: token.networkType,
+          carrier: token.carrier ?? '',
+          ip: token.clientIp,
+          lastSeenAt: r['device_updated_at'] ? toDate(r['device_updated_at']) : token.createdAt,
+        };
+      });
     },
     listFavoriteFolders: async (filter: {
       limit: number;

@@ -142,20 +142,37 @@ export const bindUsernameSchema = z.object({
   password: passwordSchema,
 });
 
+/**
+ * 设备与网络快照（契约 docs/39 §1）。
+ * `ip` / `updatedAt` 只能由服务端产生：本 schema 不含这两个字段，客户端即便上报也会被剥离。
+ * 登录三路以可选 `device` 传入；`/device/context` 上报整体用同一形状。
+ */
+export const deviceContextSchema = z.object({
+  deviceId: z.string().trim().min(1, '设备标识不能为空').max(64, '设备标识过长'),
+  model: z.string().trim().max(64).optional().default(''),
+  osName: z.string().trim().max(32).optional().default(''),
+  osVersion: z.string().trim().max(64).optional().default(''),
+  networkType: z.string().trim().max(16).optional().default(''),
+  carrier: z.string().trim().max(64).optional().default(''),
+});
+
 export const loginByPasswordSchema = z.object({
   account: z.string().trim().min(3).max(254),
   password: z.string().min(1).max(72),
+  device: deviceContextSchema.optional(),
 });
 
 export const loginBySmsSchema = z.object({
   phone: phoneSchema,
   code: smsCodeSchema,
+  device: deviceContextSchema.optional(),
 });
 
 export const oauthLoginSchema = z.object({
   provider: oauthProviderIdSchema,
   code: z.string().min(1).max(512),
   state: z.string().max(128).optional(),
+  device: deviceContextSchema.optional(),
 });
 
 export const refreshTokenSchema = z.object({
@@ -238,6 +255,7 @@ export type BindUsernameInput = z.infer<typeof bindUsernameSchema>;
 export type LoginByPasswordInput = z.infer<typeof loginByPasswordSchema>;
 export type LoginBySmsInput = z.infer<typeof loginBySmsSchema>;
 export type OAuthLoginInput = z.infer<typeof oauthLoginSchema>;
+export type DeviceContextInput = z.infer<typeof deviceContextSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 export type PresignInput = z.infer<typeof presignSchema>;

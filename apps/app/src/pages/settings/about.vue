@@ -40,6 +40,30 @@
       <view class="row row--last"><text class="k">上次启动</text><text class="v mono">{{ lastLaunch }}</text></view>
     </view>
 
+    <view class="sheet block">
+      <text class="eyebrow">DEVICE</text>
+      <text class="block-title">本机信息</text>
+      <view class="rule" />
+      <block v-if="loggedIn && deviceSnapshot">
+        <view class="row">
+          <text class="k">设备号</text>
+          <view class="v device-id">
+            <text class="v--mono mono">······{{ deviceSnapshot.deviceId.slice(-6) }}</text>
+            <text class="device-copy mono" hover-class="is-press" @tap="copyDeviceId">复制</text>
+          </view>
+        </view>
+        <view class="row">
+          <text class="k">系统</text>
+          <text class="v">{{ deviceOsText || '—' }}</text>
+        </view>
+        <view class="row row--last">
+          <text class="k">网络类型</text>
+          <text class="v">{{ deviceNetworkText }}</text>
+        </view>
+      </block>
+      <text v-else class="hint">登录后查看本机设备信息。</text>
+    </view>
+
     <text class="foot mono">© 2026 MIXMAPP</text>
   </view>
 </template>
@@ -48,6 +72,8 @@
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { API_BASE, API_BASE_SOURCE, metaApi, ApiError, applyMetaFlags, applyMetaThirdParty } from '../../api/client';
+import { getDeviceSnapshot, networkTypeLabel, type DeviceSnapshot } from '../../device';
+import { session } from '../../stores/session';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
@@ -72,6 +98,27 @@ const API_BASE_SOURCE_TEXT: Record<string, string> = {
 };
 const apiBaseSource = ref(API_BASE_SOURCE_TEXT[API_BASE_SOURCE] ?? API_BASE_SOURCE);
 const lastLaunch = ref('—');
+
+// ===== 本机信息（契约 docs/39 §6，仅登录态展示） =====
+const deviceSnapshot = ref<DeviceSnapshot | null>(null);
+const loggedIn = computed(() => Boolean(session.user));
+const deviceOsText = computed(() => {
+  const s = deviceSnapshot.value;
+  if (!s) return '';
+  return s.osVersion ? `${s.osName} ${s.osVersion}` : s.osName;
+});
+const deviceNetworkText = computed(() =>
+  networkTypeLabel(deviceSnapshot.value?.networkType ?? 'none'),
+);
+
+function copyDeviceId(): void {
+  const id = deviceSnapshot.value?.deviceId;
+  if (!id) return;
+  uni.setClipboardData({
+    data: id,
+    success: () => uni.showToast({ title: '设备号已复制', icon: 'success' }),
+  });
+}
 
 /** 对外展示的能力项与中文名；顺序即展示顺序，未在 meta 中出现的项自动跳过。 */
 const CAP_LABELS: Record<string, string> = {
@@ -141,6 +188,7 @@ async function reloadMeta(): Promise<void> {
   platform.value = `${info.uniPlatform} · ${info.osName ?? info.platform}`;
   const stored = uni.getStorageSync('mixmapp:lastLaunch') as { at?: string } | '';
   if (stored && stored.at) lastLaunch.value = new Date(stored.at).toLocaleString();
+  deviceSnapshot.value = session.user ? getDeviceSnapshot() : null;
   try {
     const data = await metaApi.get();
     applyMetaFlags(data);
@@ -328,6 +376,19 @@ async function reloadMeta(): Promise<void> {
 
 .v--mono {
   color: $ink-3;
+}
+
+.device-id {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14rpx;
+}
+
+.device-copy {
+  flex-shrink: 0;
+  font-size: $fs-micro;
+  color: $acc-2;
 }
 
 .foot {

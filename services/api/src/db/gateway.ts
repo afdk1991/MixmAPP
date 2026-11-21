@@ -31,6 +31,7 @@ const TABLES = [
   'orders',
   'order_items',
   'order_requests',
+  'user_devices',
 ] as const;
 
 /** 网关会话默认 search_path=public，必须给自有表补 schema 前缀。 */

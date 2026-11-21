@@ -65,6 +65,46 @@
         <text class="pass-foot mono">该编号全局唯一，可直接作为登录账号使用</text>
       </view>
 
+      <!-- ---------- 设备与网络（契约 docs/39 §6，仅登录态渲染） ---------- -->
+      <view class="sec">
+        <view class="sec-head">
+          <text class="eyebrow">DEVICE</text>
+          <text class="sec-title">设备与网络</text>
+        </view>
+        <view class="rule" />
+        <view class="row">
+          <text class="k">设备号</text>
+          <view class="v device-id">
+            <text class="device-id-text mono">{{ deviceSnapshot?.deviceId || '—' }}</text>
+            <text class="device-copy mono" hover-class="is-press" @tap="copyDeviceId">复制</text>
+          </view>
+        </view>
+        <view class="row">
+          <text class="k">机型</text>
+          <text class="v">{{ deviceSnapshot?.model || '—' }}</text>
+        </view>
+        <view class="row">
+          <text class="k">系统</text>
+          <text class="v">{{ deviceOsText || '—' }}</text>
+        </view>
+        <view class="row">
+          <text class="k">IP 地址</text>
+          <text class="v device-id-text mono">{{ deviceIpText }}</text>
+        </view>
+        <view class="row">
+          <text class="k">网络类型</text>
+          <text class="v">{{ deviceNetworkText }}</text>
+        </view>
+        <view v-if="deviceSnapshot?.carrier" class="row">
+          <text class="k">运营商</text>
+          <text class="v">{{ deviceSnapshot.carrier }}</text>
+        </view>
+        <view class="row row--last">
+          <text class="k">采集时间</text>
+          <text class="v mono">{{ deviceUpdatedText }}</text>
+        </view>
+      </view>
+
       <!-- ---------- 身份 ---------- -->
       <view class="sec">
         <view class="sec-head">
@@ -369,6 +409,11 @@
           <text class="link-desc">商品 · 结算 · 订单</text>
           <text class="link-arrow mono">→</text>
         </view>
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.login)">
+          <text class="link-title">设备与网络</text>
+          <text class="link-desc">登录后查看设备与网络</text>
+          <text class="link-arrow mono">→</text>
+        </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
           <text class="link-title">隐私政策与权限说明</text>
           <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>
@@ -414,7 +459,8 @@ import { onShow } from '@dcloudio/uni-app';
 import type { OAuthProviderId } from '@mixmapp/contracts';
 import { session, logout, refreshProfile, applySession } from '../../stores/session';
 import { cartBadgeText, clearCartBadge, refreshCartBadge } from '../../stores/cart-badge';
-import { meApi, authApi, ApiError, providerLive, readAdminToken, uploadImageBlob, mediaUrl } from '../../api/client';
+import { meApi, authApi, ApiError, providerLive, readAdminToken, uploadImageBlob, mediaUrl, deviceApi, type DeviceContextDto } from '../../api/client';
+import { getDeviceSnapshot, networkTypeLabel, type DeviceSnapshot } from '../../device';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import {
@@ -516,6 +562,64 @@ const holderText = computed(() => {
 });
 const statusText = computed(() => (user.value?.isGuest ? '有效 · 游客' : '有效'));
 const refreshError = ref('');
+
+// ===== 设备与网络（契约 docs/39 §5/§6） =====
+const deviceSnapshot = ref<DeviceSnapshot | null>(null);
+const deviceContext = ref<DeviceContextDto | null>(null);
+const deviceReporting = ref(false);
+const deviceFailed = ref(false);
+
+/** 系统展示值：osName + osVersion；缺版本号时只显示系统名。 */
+const deviceOsText = computed(() => {
+  const s = deviceSnapshot.value;
+  if (!s) return '';
+  return s.osVersion ? `${s.osName} ${s.osVersion}` : s.osName;
+});
+
+/** IP 只取服务端响应；上报中显示「获取中」，失败显示「不可用」，不用本地编造值。 */
+const deviceIpText = computed(() => {
+  if (deviceContext.value?.ip) return deviceContext.value.ip;
+  if (deviceReporting.value) return '获取中';
+  return deviceFailed.value ? '不可用' : '—';
+});
+
+const deviceNetworkText = computed(() =>
+  networkTypeLabel(deviceSnapshot.value?.networkType ?? 'none'),
+);
+
+const deviceUpdatedText = computed(() => {
+  const at = deviceContext.value?.updatedAt;
+  if (!at) return '—';
+  const d = new Date(at);
+  return Number.isNaN(d.getTime()) ? at : d.toLocaleString();
+});
+
+/** 本地取快照 → 上报服务端 → 用响应里的 ip / updatedAt 回填；失败不阻塞页面。 */
+async function loadDeviceContext(): Promise<void> {
+  const snapshot = getDeviceSnapshot();
+  deviceSnapshot.value = snapshot;
+  deviceContext.value = null;
+  deviceFailed.value = false;
+  deviceReporting.value = true;
+  try {
+    deviceContext.value = await deviceApi.reportContext(snapshot);
+  } catch {
+    // 未登录 / 接口失败：保留本地快照字段，IP 与采集时间走占位文案
+    deviceContext.value = null;
+    deviceFailed.value = true;
+  } finally {
+    deviceReporting.value = false;
+  }
+}
+
+function copyDeviceId(): void {
+  const id = deviceSnapshot.value?.deviceId;
+  if (!id) return;
+  uni.setClipboardData({
+    data: id,
+    success: () => uni.showToast({ title: '设备号已复制', icon: 'success' }),
+  });
+}
 const createdText = computed(() =>
   user.value ? new Date(user.value.createdAt).toLocaleString() : '',
 );
@@ -745,6 +849,12 @@ onShow(() => {
     void refreshProfile()
       .then(() => { refreshError.value = ''; syncProfileForm(); })
       .catch((e) => { refreshError.value = e instanceof ApiError ? e.message : '网络异常'; });
+    void loadDeviceContext();
+  } else {
+    deviceSnapshot.value = null;
+    deviceContext.value = null;
+    deviceFailed.value = false;
+    deviceReporting.value = false;
   }
 });
 </script>
@@ -1055,6 +1165,26 @@ onShow(() => {
   line-height: 1.45;
   letter-spacing: 0;
   color: $ink-3;
+}
+
+/* ---------- 设备与网络 ---------- */
+.device-id {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14rpx;
+}
+
+.device-id-text {
+  user-select: text;
+  -webkit-user-select: text;
+  word-break: break-all;
+}
+
+.device-copy {
+  flex-shrink: 0;
+  font-size: $fs-micro;
+  color: $acc-2;
 }
 
 /* ---------- 升级 ---------- */

@@ -12,6 +12,7 @@ import type { MergeMoved } from '../db/types.js';
 import { hashPassword, randomDigits, randomToken, sha256Hex, verifyPassword } from '../lib/crypto.js';
 import { signAccessToken } from '../lib/jwt.js';
 import { assertUsernameAllowed } from '../lib/username-policy.js';
+import { normalizeDeviceContext, type DeviceContextInput } from '../lib/device-context.js';
 
 const SMS_TTL_MS = 5 * 60 * 1000;
 const SMS_RESEND_MS = 60 * 1000;
@@ -288,7 +289,12 @@ export class AuthService {
     return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
   }
 
-  async loginByPassword(input: { account: string; password: string }): Promise<AuthResult> {
+  async loginByPassword(input: {
+    account: string;
+    password: string;
+    device?: DeviceContextInput | null;
+    ip?: string | null;
+  }): Promise<AuthResult> {
     const account = input.account.trim();
     const compact = account.replace(/\s/g, '');
     const user = account.includes('@')
@@ -299,22 +305,32 @@ export class AuthService {
       throw new AppError('UNAUTHORIZED', '账号或密码不正确');
     }
     if (user.status !== 'active') throw new AppError('FORBIDDEN', '账号已被冻结');
-    return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: false };
+    return {
+      user: await this.toDto(user),
+      tokens: await this.issueTokens(user, { ip: input.ip ?? null, device: input.device ?? null }),
+      isNewUser: false,
+    };
   }
 
-  async loginBySms(input: { phone: string; code: string }): Promise<AuthResult> {
+  async loginBySms(input: {
+    phone: string;
+    code: string;
+    device?: DeviceContextInput | null;
+    ip?: string | null;
+  }): Promise<AuthResult> {
+    const meta = { ip: input.ip ?? null, device: input.device ?? null };
     const existing = await this.store.users.findByPhone(input.phone);
     if (!existing) {
       // 免注册登录：先校验验证码，再自动创建账号
       await this.consumeSmsCode(input.phone, 'login', input.code);
       const user = await this.createUser({ phone: input.phone });
-      return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
+      return { user: await this.toDto(user), tokens: await this.issueTokens(user, meta), isNewUser: true };
     }
     await this.consumeSmsCode(input.phone, 'login', input.code);
     if (existing.status !== 'active') throw new AppError('FORBIDDEN', '账号已被冻结');
     return {
       user: await this.toDto(existing),
-      tokens: await this.issueTokens(existing),
+      tokens: await this.issueTokens(existing, meta),
       isNewUser: false,
     };
   }
@@ -374,13 +390,16 @@ export class AuthService {
   async loginByOAuth(input: {
     provider: string;
     code: string;
+    device?: DeviceContextInput | null;
+    ip?: string | null;
   }): Promise<AuthResult> {
+    const meta = { ip: input.ip ?? null, device: input.device ?? null };
     const profile = await this.exchangeProfile(input.provider, input.code);
 
     const binding = await this.store.bindings.findByProvider(input.provider, profile.openId);
     if (binding) {
       const user = await this.requireActiveUser(binding.userId);
-      return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: false };
+      return { user: await this.toDto(user), tokens: await this.issueTokens(user, meta), isNewUser: false };
     }
 
     if (profile.unionId) {
@@ -389,7 +408,7 @@ export class AuthService {
       if (userIds.length === 1) {
         const user = await this.requireActiveUser(userIds[0] as string);
         await this.attachBinding(user.id, input.provider, profile);
-        return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: false };
+        return { user: await this.toDto(user), tokens: await this.issueTokens(user, meta), isNewUser: false };
       }
       if (userIds.length > 1) {
         throw new AppError('CONFLICT', '同一第三方身份关联了多个账号，请先用手机号登录完成合并', {
@@ -405,7 +424,7 @@ export class AuthService {
       if (owner) {
         const user = await this.requireActiveUser(owner.id);
         await this.attachBinding(user.id, input.provider, profile);
-        return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: false };
+        return { user: await this.toDto(user), tokens: await this.issueTokens(user, meta), isNewUser: false };
       }
     }
 
@@ -435,7 +454,7 @@ export class AuthService {
           if (owner) {
             return {
               user: await this.toDto(owner),
-              tokens: await this.issueTokens(owner),
+              tokens: await this.issueTokens(owner, meta),
               isNewUser: false,
             };
           }
@@ -444,7 +463,7 @@ export class AuthService {
       }
       throw error;
     }
-    return { user: await this.toDto(user), tokens: await this.issueTokens(user), isNewUser: true };
+    return { user: await this.toDto(user), tokens: await this.issueTokens(user, meta), isNewUser: true };
   }
 
   async linkOAuth(userId: string, provider: string, code: string): Promise<UserDto> {
@@ -640,21 +659,52 @@ export class AuthService {
     };
   }
 
-  async issueTokens(user: UserRecord): Promise<TokenPair> {
+  /**
+   * 签发令牌。`meta.device` 为登录时客户端上报的设备快照（可选），`meta.ip` 为服务端看到的来源 IP；
+   * 缺省行为与旧版完全一致：设备字段与 IP 落 null，不写 user_devices。
+   */
+  async issueTokens(
+    user: UserRecord,
+    meta?: { ip?: string | null; device?: DeviceContextInput | null },
+  ): Promise<TokenPair> {
     const access = await signAccessToken(this.config, {
       userId: user.id,
       accountNo: user.accountNo,
     });
     const raw = randomToken();
     const expiresAt = new Date(Date.now() + this.config.jwt.refreshTtlDays * 24 * 3600 * 1000);
+    const now = new Date();
+    const normalized = meta?.device ? normalizeDeviceContext(meta.device) : null;
+    const clientIp = meta?.ip ?? null;
     await this.store.refreshTokens.insert({
       tokenHash: sha256Hex(raw),
       userId: user.id,
       expiresAt,
       revokedAt: null,
       replacedBy: null,
-      createdAt: new Date(),
+      createdAt: now,
+      deviceId: normalized?.deviceId ?? null,
+      deviceModel: normalized?.model ?? null,
+      osName: normalized?.osName ?? null,
+      osVersion: normalized?.osVersion ?? null,
+      networkType: normalized?.networkType ?? null,
+      carrier: normalized?.carrier ?? null,
+      clientIp,
     });
+    // 设备快照跨会话保留：同一 (user, device) upsert 最近一次；IP 只存服务端值。
+    if (normalized) {
+      await this.store.userDevices.upsert({
+        userId: user.id,
+        deviceId: normalized.deviceId,
+        deviceModel: normalized.model,
+        osName: normalized.osName,
+        osVersion: normalized.osVersion,
+        networkType: normalized.networkType,
+        carrier: normalized.carrier,
+        clientIp: clientIp ?? '',
+        updatedAt: now,
+      });
+    }
     return {
       accessToken: access.token,
       refreshToken: raw,

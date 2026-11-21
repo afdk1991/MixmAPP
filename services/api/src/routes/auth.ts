@@ -13,6 +13,7 @@ import {
 import { z } from 'zod';
 import { parse } from '../lib/validate.js';
 import { AppError } from '../lib/errors.js';
+import { clientIpOf } from '../lib/device-context.js';
 
 const codeRequestSchema = z.object({
   phone: z.string().regex(/^1[3-9]\d{9}$/),
@@ -59,12 +60,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/auth/login/password', async (request) => {
     const body = parse(loginByPasswordSchema, request.body);
-    return { data: await app.auth.loginByPassword(body) };
+    // IP 只取服务端看到的首跳；device 为可选快照，缺省行为与旧版一致。
+    return { data: await app.auth.loginByPassword({ ...body, ip: clientIpOf(request) }) };
   });
 
   app.post('/auth/login/sms', async (request) => {
     const body = parse(loginBySmsSchema, request.body);
-    return { data: await app.auth.loginBySms(body) };
+    return { data: await app.auth.loginBySms({ ...body, ip: clientIpOf(request) }) };
   });
 
   app.post('/auth/login/oauth', async (request) => {
@@ -77,6 +79,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       data: await app.auth.loginByOAuth({
         provider: body.provider,
         code: body.code,
+        device: body.device ?? null,
+        ip: clientIpOf(request),
       }),
     };
   });

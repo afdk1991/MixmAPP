@@ -14,6 +14,7 @@ import type {
   UserDto,
 } from '@mixmapp/contracts';
 import { APP_CHANNEL } from '../version';
+import { getDeviceSnapshot, type DeviceSnapshot } from '../device';
 import type {
   MallCategoryDto,
   MallCategoryNodeDto,
@@ -391,7 +392,35 @@ export const oauthApi = {
     ),
 };
 
-export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 'login' | 'bind') =>
+/** 登录入参里的可选设备快照（契约 docs/39 §3.1）；缺省时服务端行为与既有链路完全一致。 */
+export type DeviceLoginInput = {
+  deviceId: string;
+  model?: string;
+  osName?: string;
+  osVersion?: string;
+  networkType?: string;
+  carrier?: string;
+};
+
+/**
+ * 组装登录请求携带的设备字段：调用方显式传入优先；未传时取本地快照。
+ * 快照不含 ip（ip 只由服务端产生），与 `/device/context` 上报口径一致。
+ */
+function loginDevicePayload(input?: DeviceLoginInput): DeviceLoginInput {
+  if (input) return input;
+  const snapshot = getDeviceSnapshot();
+  return {
+    deviceId: snapshot.deviceId,
+    model: snapshot.model,
+    osName: snapshot.osName,
+    osVersion: snapshot.osVersion,
+    networkType: snapshot.networkType,
+    carrier: snapshot.carrier,
+  };
+}
+
+export const authApi = {
+  requestSmsCode: (phone: string, purpose: 'register' | 'login' | 'bind') =>
     apiRequest<{ ttlSec: number; devCode?: string }>('/auth/sms/code', {
       method: 'POST',
       data: { phone, purpose },
@@ -425,14 +454,22 @@ export const authApi = {  requestSmsCode: (phone: string, purpose: 'register' | 
   /** 一键登录：已注册手机号即登录，未注册即建号 */
   oneKey: (input: { token: string; nickname?: string; privacyConsent?: PrivacyConsentInput }) =>
     apiRequest<AuthResult>('/auth/onekey', { method: 'POST', data: input, auth: false }),
-  loginByPassword: (input: { account: string; password: string }) =>
-    apiRequest<AuthResult>('/auth/login/password', { method: 'POST', data: input, auth: false }),
-  loginBySms: (input: { phone: string; code: string }) =>
-    apiRequest<AuthResult>('/auth/login/sms', { method: 'POST', data: input, auth: false }),
-  loginByOAuth: (provider: OAuthProviderId, code: string) =>
+  loginByPassword: (input: { account: string; password: string; device?: DeviceLoginInput }) =>
+    apiRequest<AuthResult>('/auth/login/password', {
+      method: 'POST',
+      data: { account: input.account, password: input.password, device: loginDevicePayload(input.device) },
+      auth: false,
+    }),
+  loginBySms: (input: { phone: string; code: string; device?: DeviceLoginInput }) =>
+    apiRequest<AuthResult>('/auth/login/sms', {
+      method: 'POST',
+      data: { phone: input.phone, code: input.code, device: loginDevicePayload(input.device) },
+      auth: false,
+    }),
+  loginByOAuth: (provider: OAuthProviderId, code: string, device?: DeviceLoginInput) =>
     apiRequest<AuthResult>('/auth/login/oauth', {
       method: 'POST',
-      data: { provider, code },
+      data: { provider, code, device: loginDevicePayload(device) },
       auth: false,
     }),
   logout: (refreshToken: string) =>
@@ -481,6 +518,42 @@ export const meApi = {
     apiRequest<{ ok: boolean }>('/me/push-token', { method: 'POST', data: input }),
   /** 向已注册设备发一条测试推送；尚未注册令牌时服务端返回 404。 */
   pushTest: () => apiRequest<{ accepted: number }>('/me/push-test', { method: 'POST' }),
+};
+
+/** 服务端落库并回写的设备快照（含服务端产生的 ip 与采集时间）。 */
+export type DeviceContextDto = {
+  deviceId: string;
+  model: string;
+  osName: string;
+  osVersion: string;
+  ip: string;
+  networkType: string;
+  carrier: string;
+  updatedAt: string;
+};
+
+/** GET /device/context 无记录时 data.device = null（不报 404）。 */
+export type DeviceContextQueryResult = { device: DeviceContextDto | null };
+
+export const deviceApi = {
+  /** 上报 / 刷新当前快照（需登录）；body 不带 ip / updatedAt，由服务端写入后回传。 */
+  reportContext: (snapshot: DeviceSnapshot) =>
+    apiRequest<DeviceContextDto>('/device/context', {
+      method: 'POST',
+      data: {
+        deviceId: snapshot.deviceId,
+        model: snapshot.model,
+        osName: snapshot.osName,
+        osVersion: snapshot.osVersion,
+        networkType: snapshot.networkType,
+        carrier: snapshot.carrier,
+      },
+    }),
+  /** 只读查询；不传 deviceId 返回该用户最近一条，无记录返回 device = null。 */
+  getContext: (deviceId?: string) =>
+    apiRequest<DeviceContextQueryResult>(
+      `/device/context${deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : ''}`,
+    ),
 };
 
 export const metaApi = {
@@ -581,6 +654,21 @@ export type ProviderSummaryDto = {
   unavailable: string[];
 };
 
+/** 后台会话摘要（契约 docs/39 §3.3）：会话 id 只返哈希前缀 8 位，不返原文。 */
+export type AdminUserSessionDto = {
+  id: string;
+  createdAt: string;
+  revokedAt: string | null;
+  deviceId: string;
+  model: string;
+  osName: string;
+  osVersion: string;
+  networkType: string;
+  carrier: string;
+  ip: string;
+  lastSeenAt: string;
+};
+
 /** 目录导入报告：字段由 mall.importCatalog 决定，这里保留宽松索引便于展示计数。 */
 export type ImportReportDto = {
   imported?: number;
@@ -651,6 +739,14 @@ export const adminApi = {
       data: payload,
       auth: false,
       headers: { 'x-admin-token': token },
+    }),
+  /**
+   * 某用户最近 N 条登录会话摘要；走 /admin/console/* Cookie 会话（与 x-admin-token 面不同）。
+   * GET 只读，不带 x-mixm-console 写头；未登录 / 无会话服务端按既有口径 404。
+   */
+  userSessions: (userId: string) =>
+    apiRequest<AdminUserSessionDto[]>(`/admin/console/users/${encodeURIComponent(userId)}/sessions`, {
+      auth: false,
     }),
 };
 

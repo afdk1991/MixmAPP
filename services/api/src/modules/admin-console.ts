@@ -10,6 +10,7 @@ import type {
   AdminAuditRecord,
   AdminCounts,
   AdminFavoriteFolderRow,
+  AdminUserSessionSummary,
   AdminUserSummary,
   OrderRecord,
   ProductRecord,
@@ -425,6 +426,16 @@ export class AdminConsoleService {
       summary,
       bindings: summary.bindings,
     };
+  }
+
+  /**
+   * 用户最近会话（含设备与网络快照，0021）。
+   * 只返哈希前 8 位，不返令牌原文；用户不存在按既有口径 404。默认最近 10 条。
+   */
+  async userSessions(userId: string): Promise<AdminUserSessionSummary[]> {
+    const user = await this.store.users.findById(userId);
+    if (!user) throw AppError.notFound('用户不存在');
+    return this.store.admin.listUserSessions(userId, 10);
   }
 
   /** 运营位与推荐分类：当前是代码内置数据，后台只读展示。 */

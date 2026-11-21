@@ -66,6 +66,54 @@ export type RefreshTokenRecord = {
   revokedAt: Date | null;
   replacedBy: string | null;
   createdAt: Date;
+  // ===== 0021 设备与网络快照（全部 nullable，老会话/老客户端为 null，向后兼容） =====
+  /** 登录设备号；取不到为 null */
+  deviceId: string | null;
+  /** 机型；取不到为空串 */
+  deviceModel: string | null;
+  /** 系统名：Android / iOS / Web */
+  osName: string | null;
+  /** 系统版本；取不到为空串 */
+  osVersion: string | null;
+  /** 网络类型：wifi / cellular / ethernet / none */
+  networkType: string | null;
+  /** 运营商名；取不到为空串，不填假值 */
+  carrier: string | null;
+  /** 服务端看到的来源 IP（XFF 首跳回落直连地址），不采信客户端上报 */
+  clientIp: string | null;
+};
+
+/**
+ * 用户每台设备的最近一次快照（0021，user_devices 主键 (user_id, device_id)）。
+ * 与 refresh_tokens 的区别：本表跨会话保留同一设备的最新状态，供后台「最近一次登录设备」与本人展示。
+ */
+export type UserDeviceRecord = {
+  userId: string;
+  deviceId: string;
+  deviceModel: string;
+  osName: string;
+  osVersion: string;
+  networkType: string;
+  carrier: string;
+  clientIp: string;
+  updatedAt: Date;
+};
+
+/** 后台会话摘要（/admin/console/users/:id/sessions）：令牌只返哈希前缀，不返原文。 */
+export type AdminUserSessionSummary = {
+  /** 刷新令牌哈希前 8 位，仅用于区分会话 */
+  id: string;
+  createdAt: Date;
+  revokedAt: Date | null;
+  deviceId: string | null;
+  model: string;
+  osName: string | null;
+  osVersion: string;
+  networkType: string | null;
+  carrier: string;
+  ip: string | null;
+  /** user_devices 中该设备的 updated_at；没有快照则回会话 created_at */
+  lastSeenAt: Date | null;
 };
 
 export type SmsCodeRecord = {
@@ -405,8 +453,18 @@ export type Store = {
     revoke(hash: string, replacedBy?: string | null): Promise<void>;
     /** 合并审计用：列出某账号的全部刷新令牌（只取未吊销的） */
     listActiveByUser(userId: string): Promise<RefreshTokenRecord[]>;
+    /** 后台会话视图：列出某账号的全部会话（含已吊销），按创建时间倒序，limit 兜底 */
+    listByUser(userId: string, limit: number): Promise<RefreshTokenRecord[]>;
     /** 合并时吊销次账号全部会话；返回实际吊销条数 */
     revokeByUser(userId: string): Promise<number>;
+  };
+  /** 用户设备最近快照（0021）：upsert 与按设备/最近读取，双驱动同口径 */
+  userDevices: {
+    upsert(record: UserDeviceRecord): Promise<void>;
+    find(userId: string, deviceId: string): Promise<UserDeviceRecord | null>;
+    /** 该用户最近一次快照（按 updated_at 倒序首条）；无记录返回 null */
+    latest(userId: string): Promise<UserDeviceRecord | null>;
+    listByUser(userId: string): Promise<UserDeviceRecord[]>;
   };
   smsCodes: {
     insert(code: SmsCodeRecord): Promise<void>;
@@ -613,6 +671,8 @@ export type Store = {
     listUsers(filter: AdminUserFilter): Promise<{ rows: UserRecord[]; total: number }>;
     /** 用户详情附加汇总；用户不存在返回 null */
     userSummary(userId: string): Promise<AdminUserSummary | null>;
+    /** 后台会话视图：某用户最近 N 条会话摘要（含设备/网络快照；令牌只返哈希前缀） */
+    listUserSessions(userId: string, limit: number): Promise<AdminUserSessionSummary[]>;
     /** 全站收藏夹（含条目数、归属用户昵称/账号），运营只读 */
     listFavoriteFolders(
       filter: { limit: number; offset: number },

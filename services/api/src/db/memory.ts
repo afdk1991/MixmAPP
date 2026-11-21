@@ -8,6 +8,7 @@ import type {
   AdminOrderFilter,
   AdminProductFilter,
   AdminUserFilter,
+  AdminUserSessionSummary,
   AdminUserSummary,
   BindingRecord,
   CartItemRecord,
@@ -24,6 +25,7 @@ import type {
   RefreshTokenRecord,
   SmsCodeRecord,
   Store,
+  UserDeviceRecord,
   UserRecord,
 } from './types.js';
 
@@ -63,6 +65,8 @@ export class MemoryStore implements Store {
   private mergeList: AccountMergeRecord[] = [];
   /** 后台写操作审计（0020）：内存模式下只存在于进程生命周期内 */
   private auditList: AdminAuditRecord[] = [];
+  /** 用户设备最近快照（0021）：主键 (user_id, device_id)，进程生命周期内有效 */
+  private deviceList: UserDeviceRecord[] = [];
 
   async ping(): Promise<boolean> {
     return true;
@@ -91,6 +95,7 @@ export class MemoryStore implements Store {
     this.favoriteItemList = [];
     this.mergeList = [];
     this.auditList = [];
+    this.deviceList = [];
   }
 
   users = {
@@ -212,6 +217,12 @@ export class MemoryStore implements Store {
     },
     listActiveByUser: async (userId: string): Promise<RefreshTokenRecord[]> =>
       this.tokenList.filter((t) => t.userId === userId && !t.revokedAt).map(clone),
+    listByUser: async (userId: string, limit: number): Promise<RefreshTokenRecord[]> =>
+      this.tokenList
+        .filter((t) => t.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit)
+        .map(clone),
     revokeByUser: async (userId: string): Promise<number> => {
       let count = 0;
       for (const token of this.tokenList) {
@@ -221,6 +232,28 @@ export class MemoryStore implements Store {
       }
       return count;
     },
+  };
+
+  userDevices = {
+    upsert: async (record: UserDeviceRecord): Promise<void> => {
+      const idx = this.deviceList.findIndex(
+        (d) => d.userId === record.userId && d.deviceId === record.deviceId,
+      );
+      if (idx >= 0) this.deviceList[idx] = clone(record);
+      else this.deviceList.push(clone(record));
+    },
+    find: async (userId: string, deviceId: string): Promise<UserDeviceRecord | null> => {
+      const found = this.deviceList.find((d) => d.userId === userId && d.deviceId === deviceId);
+      return found ? clone(found) : null;
+    },
+    latest: async (userId: string): Promise<UserDeviceRecord | null> => {
+      const found = this.deviceList
+        .filter((d) => d.userId === userId)
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+      return found ? clone(found) : null;
+    },
+    listByUser: async (userId: string): Promise<UserDeviceRecord[]> =>
+      this.deviceList.filter((d) => d.userId === userId).map(clone),
   };
 
   smsCodes = {
@@ -889,6 +922,33 @@ export class MemoryStore implements Store {
         favoriteItems: this.favoriteItemList.filter((i) => i.userId === userId).length,
         cartItems: this.cartList.filter((c) => c.userId === userId).length,
       };
+    },
+    listUserSessions: async (
+      userId: string,
+      limit: number,
+    ): Promise<AdminUserSessionSummary[]> => {
+      const devices = this.deviceList.filter((d) => d.userId === userId);
+      const deviceById = new Map(devices.map((d) => [d.deviceId, d]));
+      return this.tokenList
+        .filter((t) => t.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit)
+        .map((t) => {
+          const device = t.deviceId ? deviceById.get(t.deviceId) : undefined;
+          return {
+            id: t.tokenHash.slice(0, 8),
+            createdAt: t.createdAt,
+            revokedAt: t.revokedAt,
+            deviceId: t.deviceId,
+            model: t.deviceModel ?? '',
+            osName: t.osName,
+            osVersion: t.osVersion ?? '',
+            networkType: t.networkType,
+            carrier: t.carrier ?? '',
+            ip: t.clientIp,
+            lastSeenAt: device?.updatedAt ?? t.createdAt,
+          };
+        });
     },
     listFavoriteFolders: async (filter: {
       limit: number;

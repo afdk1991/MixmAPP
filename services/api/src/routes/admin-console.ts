@@ -226,6 +226,13 @@ export async function adminConsoleRoutes(app: FastifyInstance): Promise<void> {
       return { data: await scope.adminConsole.userDetail(params.id) };
     });
 
+    // 用户最近会话摘要：设备号 / IP / 网络 / 系统 / 采集时间，仅后台会话可见。
+    scope.get('/admin/console/users/:id/sessions', async (request) => {
+      requireSession(request);
+      const params = request.params as { id: string };
+      return { data: await scope.adminConsole.userSessions(params.id) };
+    });
+
     // ===== 运营位与推荐分类（只读） =====
     scope.get('/admin/console/content', async (request) => {
       requireSession(request);

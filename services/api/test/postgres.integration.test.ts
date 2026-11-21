@@ -330,4 +330,49 @@ suite('PostgreSQL 驱动（真实库）', () => {
     const byCode = await store.mall.products.list({ keyword: '110001', limit: 20, offset: 0 });
     expect(byCode.some((p) => p.id === productId)).toBe(true);
   });
+
+  it('设备快照落库：登录写会话行，/device/context upsert user_devices（0021）', async () => {
+    const deviceId = `pg-dev-${stamp}`;
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login/password',
+      headers: { 'x-forwarded-for': '198.51.100.22' },
+      payload: {
+        account: email,
+        password,
+        device: {
+          deviceId,
+          model: 'PG Phone',
+          osName: 'Android',
+          osVersion: '14',
+          networkType: 'wifi',
+          carrier: 'China Mobile',
+        },
+      },
+    });
+    expect(login.statusCode).toBe(200);
+    const token = login.json().data.tokens.accessToken as string;
+    const user = await store.users.findByEmail(email);
+    const userId = user?.id as string;
+
+    const sessions = await store.refreshTokens.listByUser(userId, 10);
+    expect(sessions[0]?.deviceId).toBe(deviceId);
+    expect(sessions[0]?.clientIp).toBe('198.51.100.22');
+
+    const post = await app.inject({
+      method: 'POST',
+      url: '/api/v1/device/context',
+      headers: { authorization: `Bearer ${token}`, 'x-forwarded-for': '203.0.113.9' },
+      payload: { deviceId, model: 'PG Phone', osName: 'Android', osVersion: '14', networkType: 'cellular', carrier: '' },
+    });
+    expect(post.statusCode).toBe(200);
+    expect(post.json().data.ip).toBe('203.0.113.9');
+
+    const device = await store.userDevices.find(userId, deviceId);
+    expect(device?.networkType).toBe('cellular');
+    expect(device?.clientIp).toBe('203.0.113.9');
+
+    const latest = await store.userDevices.latest(userId);
+    expect(latest?.deviceId).toBe(deviceId);
+  });
 });
