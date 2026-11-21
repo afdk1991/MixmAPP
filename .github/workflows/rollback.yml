@@ -1,0 +1,63 @@
+name: rollback
+
+# 一键回滚：把 current 软链切到上一个（或第 N 个）release，并同步回退 APP_VERSION。
+# 逻辑全部复用 deploy/rollback.sh（含版本号回退与重启后健康检查），CI 只负责串起来。
+# 与 deploy.yml 共用同一把 concurrency 锁与远端 flock，避免与发布互踩。
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: 回退几个版本（1 = 上一个 release，2 = 上两个）
+        required: true
+        default: '1'
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: 回滚生产
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    env:
+      SSH_READY: ${{ secrets.DEPLOY_SSH_KEY_B64 != '' }}
+      STEPS: ${{ inputs.steps }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 写入部署私钥
+        if: env.SSH_READY == 'true'
+        env:
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 回退 release 软链并重启
+        if: env.SSH_READY == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash /opt/mixmapp/deploy/rollback.sh ${STEPS}"
+
+      # 回滚后不知道目标版本号（可能退到旧号），只断言「线上是正式号且服务健康」。
+      - name: 回滚后线上断言（正式号 + healthz + 站点可达）
+        if: env.SSH_READY == 'true'
+        run: |
+          node scripts/deploy-engine.mjs --verify-only \
+            --expect-version=any \
+            --base=${{ vars.SITE_BASE_URL || 'https://www.mixm.top' }}
+
+      - name: 无 SSH 凭据时跳过
+        if: env.SSH_READY != 'true'
+        run: echo "SKIP 未配置 DEPLOY_SSH_KEY / DEPLOY_HOST / DEPLOY_USER，未执行回滚"

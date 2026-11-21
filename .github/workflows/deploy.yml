@@ -213,6 +213,17 @@ jobs:
             "LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
              STORAGE_DIR=/var/lib/mixmapp/storage node /opt/mixmapp/deploy/catalog-verify.mjs"
 
+      # 发布后版本断言：把「线上到底跑的是不是这一版」变成可失败的断言。
+      # 与自动部署引擎（scripts/deploy-engine.mjs）共用同一套判定，不再靠人工 curl 比对版本号。
+      - name: 发布后版本断言（meta / healthz / 站点，线上版本 == version.json）
+        if: env.SSH_READY == 'true'
+        env:
+          EXPECT_VERSION: ${{ steps.version.outputs.version_name }}
+        run: |
+          node scripts/deploy-engine.mjs --verify-only \
+            --expect-version="$EXPECT_VERSION" \
+            --base=${{ vars.SITE_BASE_URL || 'https://www.mixm.top' }}
+
       - name: 线上健康校验
         if: env.SSH_READY == 'true' && vars.HEALTH_BASE_URL != ''
         run: node scripts/healthcheck.mjs ${{ vars.HEALTH_BASE_URL }}
