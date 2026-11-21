@@ -12,6 +12,7 @@
         </view>
         <view class="cart-btn" hover-class="is-press" @tap="goCart">
           <text class="cart-text">购物车</text>
+          <text v-if="cartBadgeText" class="cart-badge mono">{{ cartBadgeText }}</text>
           <text class="cart-arrow mono">→</text>
         </view>
       </view>
@@ -96,7 +97,7 @@
       </view>
     </view>
 
-    <view v-if="loading" class="grid wrap">
+    <view v-if="loading && products.length === 0" class="grid wrap">
       <view v-for="i in 4" :key="i" class="card">
         <view class="sk cover-sk" />
         <view class="p-info">
@@ -333,6 +334,7 @@ import {
 } from '../../api/mall';
 import { PAGE_SIZE_OPTIONS as PAGE_SIZE_WHITELIST } from '@mixmapp/contracts';
 import { mallApi, productCover, coverTint, placeholderArt } from '../../api/client';
+import { cartBadgeText, refreshCartBadge, syncCartBadge } from '../../stores/cart-badge';
 import { ROUTES } from '../../routes';
 import { goTo, consumeTabQuery } from '../../navigation';
 
@@ -641,6 +643,27 @@ function selectFilter(key: FilterKey, value: string): void {
   refresh();
 }
 
+/**
+ * 请求看门狗：接口层已设 15s 超时，这里再加一层兜底。
+ * 万一个别端上 uni.request 回调丢失（页面切换/WebView 暂停），没有这层兜底
+ * `loading` 会永久停在 true，列表就一直卡在骨架屏、上拉也不会再触发加载。
+ */
+function withDeadline<T>(task: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('商品请求超时，请重试')), ms);
+    task.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 async function fetchPage(reset: boolean): Promise<void> {
   if (reset) {
     page.value = 1;
@@ -653,26 +676,31 @@ async function fetchPage(reset: boolean): Promise<void> {
   }
   try {
     // 可选登录态：登录后服务端才下发折后千支价与真实库存（源站 disbasePrc / bpInvQty 口径）
-    const list = await fetchMallProducts({
-      cat: activeCat.value || undefined,
-      ctgs: ctgs.value.length ? ctgs.value.join(',') : undefined,
-      dims: filters.dims || undefined,
-      lens: filters.lens || undefined,
-      brand: filters.brand || undefined,
-      std: filters.std || undefined,
-      grd: filters.grd || undefined,
-      mtl: filters.mtl || undefined,
-      ttt: filters.ttt || undefined,
-      trts: filters.trts || undefined,
-      keyword: keyword.value.trim() || undefined,
-      page: page.value,
-      pageSize: pageSize.value,
-    });
+    const list = await withDeadline(
+      fetchMallProducts({
+        cat: activeCat.value || undefined,
+        ctgs: ctgs.value.length ? ctgs.value.join(',') : undefined,
+        dims: filters.dims || undefined,
+        lens: filters.lens || undefined,
+        brand: filters.brand || undefined,
+        std: filters.std || undefined,
+        grd: filters.grd || undefined,
+        mtl: filters.mtl || undefined,
+        ttt: filters.ttt || undefined,
+        trts: filters.trts || undefined,
+        keyword: keyword.value.trim() || undefined,
+        page: page.value,
+        pageSize: pageSize.value,
+      }),
+      20000,
+    );
     // 接口异常或网关返回非 JSON 时保持空数组，避免模板读取 length 时报错白屏
     const rows = Array.isArray(list) ? list : [];
     products.value = reset ? rows : [...products.value, ...rows];
     if (rows.length < pageSize.value) noMore.value = true;
     else page.value += 1;
+    // 记录首屏成功时间，供 onShow 节流判断（避免重复 refresh 把列表打回骨架屏）
+    if (reset) lastLoadedAt = Date.now();
   } catch (e) {
     if (reset) {
       error.value = e instanceof Error ? e.message : '商品加载失败';
@@ -806,7 +834,8 @@ async function addToCart(product: MallProductDto): Promise<void> {
     return;
   }
   try {
-    await mallApi.addToCart(product.id, 1);
+    const cart = await mallApi.addToCart(product.id, 1);
+    syncCartBadge(cart);
     uni.showToast({ title: '已加入购物车', icon: 'success' });
   } catch (e) {
     const message = e instanceof Error ? e.message : '加入购物车失败';
@@ -826,15 +855,25 @@ onLoad((options) => {
   pendingCategory = c.trim();
 });
 
+/**
+ * 首屏节流：H5 上 onShow 会在切页 / 重进 / 部分滚动场景里重复触发，
+ * 之前每次 onShow 都无条件 refresh()，会把首屏反复拉成 loading 态，
+ * 列表一进页面就长期停在骨架屏。这里只在「没数据」或「距上次成功拉取超过 60s」时才重拉。
+ */
+let lastLoadedAt = 0;
+const REFRESH_THROTTLE_MS = 60_000;
+
 onShow(() => {
   // switchTab 不带 query：首页经临时通道转交的关键词/分类在这里一次性取回。
   const tq = consumeTabQuery(ROUTES.mall);
   if (tq.keyword) keyword.value = tq.keyword.trim();
   if (tq.category) pendingCategory = tq.category.trim();
   void loadLevelOne();
-  refresh();
+  if (tq.keyword || tq.category || !lastLoadedAt || Date.now() - lastLoadedAt > REFRESH_THROTTLE_MS) {
+    refresh();
+  }
+  void refreshCartBadge();
 });
-
 onReachBottom(() => {
   loadMore();
 });
@@ -935,6 +974,21 @@ function onShellRefresh(): void {
   margin-left: 8rpx;
   font-size: $fs-micro;
   color: $ink-4;
+}
+
+.cart-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28rpx;
+  height: 28rpx;
+  padding: 0 8rpx;
+  margin-left: 8rpx;
+  background: $brand;
+  border-radius: $r-pill;
+  font-size: 16rpx;
+  line-height: 1;
+  color: $on-solid;
 }
 
 .search {
