@@ -17,9 +17,9 @@
           <view class="home-head__actions">
             <view class="home-head__action" hover-class="is-press" @tap="go(ROUTES.cart)" aria-label="购物车">
               <image class="home-head__icon" src="/static/tab/cart.png" mode="aspectFit" />
-              <!-- 角标位：待数据层提供全局购物车数量后接入；无数据时不渲染 -->
-              <view v-if="cartBadge > 0" class="home-head__badge">
-                <text class="home-head__badge-num mono">{{ cartBadge }}</text>
+              <!-- 角标：全局购物车件数；0 不渲染，≥100 显 99+ -->
+              <view v-if="cartBadgeText" class="home-head__badge">
+                <text class="home-head__badge-num mono">{{ cartBadgeText }}</text>
               </view>
             </view>
           </view>
@@ -419,9 +419,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { onLoad, onPageScroll, onPullDownRefresh } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import { metaApi, mallApi, homeApi, productCover, coverTint, ApiError, applyMetaFlags, applyMetaThirdParty } from '../../api/client';
 import { session } from '../../stores/session';
+import { cartBadgeText, refreshCartBadge, syncCartBadge } from '../../stores/cart-badge';
 import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
@@ -484,8 +485,7 @@ const quickEntries = [
   { key: 'me', glyph: '', label: '通行证', url: ROUTES.me, icon: '/static/tab/me.png' },
 ];
 
-/** 购物车角标数量：暂无全局计数数据源，先留位，为 0 时不渲染角标。 */
-const cartBadge = ref(0);
+/** 购物车角标文案来自全局计数模块 stores/cart-badge（0 隐藏 / 1–99 数字 / 99+）。 */
 
 /* ---------- 目录与检索：真实商城数据（mallApi 契约，不加 mock） ---------- */
 /** 首页精选只展示 6 条（前端截断的展示口径）。 */
@@ -784,7 +784,8 @@ async function addToCart(product: MallProductDto): Promise<void> {
     return;
   }
   try {
-    await mallApi.addToCart(product.id, 1);
+    const cart = await mallApi.addToCart(product.id, 1);
+    syncCartBadge(cart);
     uni.showToast({ title: '已加入购物车', icon: 'success' });
   } catch (e) {
     const message = e instanceof Error ? e.message : '加入购物车失败';
@@ -830,6 +831,12 @@ onLoad(() => {
   void loadMeta();
   void loadMall();
   void loadHome();
+  void refreshCartBadge();
+});
+
+/** 每次回到首页（含从购物车 / 我的页返回）重新对齐一次全局角标。 */
+onShow(() => {
+  void refreshCartBadge();
 });
 
 /** 原生下拉刷新：同时刷新运行环境与精选目录，两者都落定后收起指示器 */

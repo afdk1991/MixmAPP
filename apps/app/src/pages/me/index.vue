@@ -302,6 +302,7 @@
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.cart)">
           <text class="link-title">购物车</text>
           <text class="link-desc">查看已选商品并结算</text>
+          <text v-if="cartBadgeText" class="link-badge mono">{{ cartBadgeText }}</text>
           <text class="link-arrow mono">→</text>
         </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.orders)">
@@ -412,6 +413,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { OAuthProviderId } from '@mixmapp/contracts';
 import { session, logout, refreshProfile, applySession } from '../../stores/session';
+import { cartBadgeText, clearCartBadge, refreshCartBadge } from '../../stores/cart-badge';
 import { meApi, authApi, ApiError, providerLive, readAdminToken, uploadImageBlob, mediaUrl } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
@@ -733,10 +735,12 @@ async function bindEmailSubmit(): Promise<void> {
 
 async function doLogout(): Promise<void> {
   await logout();
+  clearCartBadge();
   uni.showToast({ title: '已退出', icon: 'none' });
 }
 
 onShow(() => {
+  void refreshCartBadge();
   if (session.user) {
     void refreshProfile()
       .then(() => { refreshError.value = ''; syncProfileForm(); })
@@ -1165,6 +1169,21 @@ onShow(() => {
   margin-left: 14rpx;
   font-size: $fs-micro;
   color: $acc-2;
+}
+
+.link-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28rpx;
+  height: 28rpx;
+  padding: 0 8rpx;
+  margin-left: $sp-3;
+  background: $brand;
+  border-radius: $r-pill;
+  font-size: 16rpx;
+  line-height: 1;
+  color: $on-solid;
 }
 
 /* ---------- 显示与外观：三态分段选择 ---------- */

@@ -106,6 +106,7 @@ import type { FavoriteFolderDto, FavoriteItemDto } from '@mixmapp/contracts';
 import { mallApi } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
+import { showDangerModal } from '../../modal';
 
 const folders = ref<FavoriteFolderDto[]>([]);
 const items = ref<FavoriteItemDto[]>([]);
@@ -212,7 +213,7 @@ async function selectFolder(folderId: string): Promise<void> {
 }
 
 function askRemove(item: FavoriteItemDto): void {
-  uni.showModal({
+  showDangerModal({
     title: '移除收藏',
     content: `把「${item.title}」移出当前收藏夹？`,
     confirmText: '移除',
@@ -295,7 +296,7 @@ function askClear(): void {
     toast('收藏夹已经是空的');
     return;
   }
-  uni.showModal({
+  showDangerModal({
     title: '清空收藏夹',
     content: `清空「${activeFolder.value.name}」里的 ${activeFolder.value.itemCount} 个商品？收藏夹本身会保留。`,
     confirmText: '清空',

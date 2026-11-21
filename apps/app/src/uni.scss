@@ -22,6 +22,7 @@ $brand: var(--mx-brand);         // 品牌青（唯一强调色）
 $brand-deep: var(--mx-brand-deep);
 $brand-soft: var(--mx-brand-soft);
 $signal: var(--mx-signal);       // 错误 / 危险
+$danger: var(--mx-danger);       // 危险操作确认主按钮（删除 / 取消 / 清空）
 $amber: var(--mx-amber);         // 提醒
 
 /* 实心反白按钮（原先把 $ink 当底色用，深色下会和文字一起反转，故单独拆出） */

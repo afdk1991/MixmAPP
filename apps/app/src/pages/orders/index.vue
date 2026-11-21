@@ -115,6 +115,7 @@ import type { OrderDto } from '@mixmapp/contracts';
 import { mallApi, integrationsApi, providerState } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
+import { showDangerModal } from '../../modal';
 
 const orders = ref<OrderDto[]>([]);
 const loading = ref(false);
@@ -177,7 +178,7 @@ function cancelLine(order: OrderDto): string {
 
 function askCancel(order: OrderDto): void {
   if (cancelling.value) return;
-  uni.showModal({
+  showDangerModal({
     title: '取消订单',
     content: `确认取消订单 ${order.orderNo}？取消后不可恢复，库存将退回。`,
     confirmText: '确认取消',

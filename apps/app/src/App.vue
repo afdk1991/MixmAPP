@@ -195,6 +195,13 @@ image {
   }
 }
 
+/* 购物车 Tab 角标：沿用品牌青底 + 实心白字，与首页头部、我的页入口角标同一套令牌，
+ * 不新造色值；深浅色下白字在品牌青底上对比度均成立。 */
+.uni-tabbar__badge {
+  background: $brand !important;
+  color: $on-solid !important;
+}
+
 /* 桌面宽屏（≥1000px）改用 mx-bar 顶部导航，隐藏 uni-app 生成的底部 tabBar，
  * 避免标签栏在宽屏中央悬浮；移动端保持原样，不受影响。 */
 @media (min-width: 1000px) {

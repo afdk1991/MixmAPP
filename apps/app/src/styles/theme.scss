@@ -33,6 +33,9 @@
   --mx-brand-deep: #0a7a70;
   --mx-brand-soft: #e2f1ee;
   --mx-signal: #b3372a;
+  /* 危险操作确认主按钮（删除 / 取消 / 清空等不可逆动作）：复用 signal 的两套可读值，
+   * 随深浅色自适应，不在页面里散落裸色值。 */
+  --mx-danger: var(--mx-signal);
   /* 提醒色加深：旧值 #a4761c 在纸面仅 3.4–3.6:1，不达 AA；现值对 #fff/#f4f4f1/#ebece7 为 5.91/5.37/4.98。 */
   --mx-amber: #8a5a10;
 
@@ -97,6 +100,7 @@
   --mx-brand-deep: #6ee3d4;
   --mx-brand-soft: #12312c;
   --mx-signal: #e2695c;
+  --mx-danger: var(--mx-signal);
   --mx-amber: #e0a963;
 
   /* 深色底彩色前景：对 #171d1b / #121716 / #1b211f 均 >=8.2:1 */
@@ -212,7 +216,12 @@ html {
  * __btn_default{color:#353535}、__btn_primary{color:#007aff}）在最终 CSS 里排在
  * 本文件之后，同等权重会把上面的变量覆盖回去；而按钮文案还带着行内
  * style="color:..."。所以这里必须用 !important，才能同时压过「后置同权重规则」和
- * 「行内样式」两种来源。代价是页面无法再自定义 confirmColor/cancelColor（当前无此用法）。 */
+ * 「行内样式」两种来源。
+ *
+ * 副作用：行内 confirmColor 会被这里的 !important 压掉，页面不能再靠传 confirmColor
+ * 改主按钮颜色。危险确认（删除 / 取消 / 清空）改走显式危险态：由 src/modal.ts 的
+ * showDangerModal 在弹窗根节点挂 .mx-modal--danger，下面的危险态选择器接管主按钮色，
+ * 颜色取 --mx-danger 令牌；普通确认仍保持品牌青。 */
 .uni-modal {
   background-color: var(--mx-shell) !important;
   color: var(--mx-ink) !important;
@@ -244,6 +253,14 @@ html {
 
 .uni-modal__btn_primary {
   color: var(--mx-brand) !important;
+}
+
+/* 危险确认态：选择器与默认品牌态同为 !important、且排在其后，故能接管主按钮文字色。
+ * 类由 showDangerModal 挂在弹窗根节点（.mx-modal--danger）；同时兼容直接挂在按钮上的
+ * .mx-danger。颜色取 --mx-danger 令牌，深浅色自适应，不写裸色值。 */
+.mx-modal--danger .uni-modal__btn_primary,
+.uni-modal__btn_primary.mx-danger {
+  color: var(--mx-danger) !important;
 }
 
 .uni-modal__btn:active {

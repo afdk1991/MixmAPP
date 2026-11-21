@@ -88,8 +88,11 @@ public class MainActivity extends BridgeActivity {
             + "function report(){try{"
             + "var t=root.getAttribute('data-mx-theme');"
             + "var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;"
-            + "var v=(t==='dark'||t==='light')?t:(dark?'dark':'light');"
-            + "if(window.MixmShell&&window.MixmShell.notifyTheme)MixmShell.notifyTheme(v);"
+            + "var manual=(t==='dark'||t==='light');"
+            + "var v=manual?t:(dark?'dark':'light');"
+            + "var src=manual?'manual':'system';"
+            + "if(window.MixmShell&&window.MixmShell.notifyThemePref)MixmShell.notifyThemePref(v,src);"
+            + "else if(window.MixmShell&&window.MixmShell.notifyTheme)MixmShell.notifyTheme(v);"
             + "}catch(e){}}"
             + "try{new MutationObserver(report).observe(root,{attributes:true,attributeFilter:['data-mx-theme']});}catch(e){}"
             + "if(window.matchMedia){var m=window.matchMedia('(prefers-color-scheme: dark)');"
@@ -149,6 +152,11 @@ public class MainActivity extends BridgeActivity {
     private int lastPushedIme = -1;
     /** 页面自报主题："dark" / "light"；null 表示未自报，跟随系统 uiMode。 */
     private String webTheme = null;
+    /** 自报来源：manual（页面手动偏好）/ system（系统跟随）/ null（尚未自报）。 */
+    private String webThemeSource = null;
+    /** 上次已识别的系统夜间模式，用于 onConfigurationChanged 去重，避免抖动重复推送。 */
+    private boolean lastSystemNightSet = false;
+    private boolean lastSystemNight = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -373,6 +381,9 @@ public class MainActivity extends BridgeActivity {
             window.setNavigationBarContrastEnforced(false);
         }
         applySystemBarAppearance();
+        // 首帧基线记录系统夜间模式，避免后续首次 onConfigurationChanged 误判为变化。
+        lastSystemNightSet = true;
+        lastSystemNight = isNightMode(getResources().getConfiguration());
     }
 
     /**
@@ -400,11 +411,48 @@ public class MainActivity extends BridgeActivity {
 
     /** 页面观察者回调：记录自报主题并重放系统栏外观（回调来自 WebView binder 线程，先切到 UI 线程）。 */
     private void applyWebTheme(String theme) {
+        applyWebTheme(theme, "页面观察者");
+    }
+
+    /**
+     * 记录自报主题与来源并重放系统栏外观。
+     * source：manual（页面手动偏好）/ system（系统跟随）/ 原生推送来源标注，便于 logcat 取证。
+     */
+    private void applyWebTheme(String theme, String source) {
         webTheme = theme;
-        Log.d(TAG, "页面主题自报：" + theme);
+        webThemeSource = "manual".equals(source) ? "manual" : "system";
+        Log.d(TAG, "页面主题自报：" + theme + "（" + source + "）");
         runOnUiThread(this::applySystemBarAppearance);
     }
 
+    /**
+     * 系统 uiMode 变化时，不依赖 WebView 派发 matchMedia change：原生直接比对
+     * {@code uiMode & UI_MODE_NIGHT_MASK}，经桥把系统主题推给页面——写等价标记
+     * {@code data-mx-system-theme}，并走与页面自报同一套 webTheme 通道驱动系统栏图标明暗。
+     * 页面手动偏好（manual）不被系统切换覆盖；{@link #resolveNight()} 仅作首帧兜底。
+     */
+    private void pushSystemThemeOnConfig(Configuration newConfig) {
+        boolean night = isNightMode(newConfig);
+        if (lastSystemNightSet && lastSystemNight == night) return;
+        lastSystemNightSet = true;
+        lastSystemNight = night;
+        if ("manual".equals(webThemeSource)) {
+            Log.d(TAG, "系统 uiMode 切到 " + (night ? "dark" : "light") + "，页面为手动偏好，不覆盖");
+            return;
+        }
+        String theme = night ? "dark" : "light";
+        WebView webView = this.bridge != null ? this.bridge.getWebView() : null;
+        if (webView != null) {
+            String js = "(function(){try{var r=document.documentElement;"
+                    + "r.setAttribute('data-mx-system-theme','" + theme + "');"
+                    + "if(window.MixmShell&&window.MixmShell.notifyThemePref)window.MixmShell.notifyThemePref('"
+                    + theme + "','system');}catch(e){}})()";
+            webView.evaluateJavascript(js, null);
+        }
+        applyWebTheme(theme, "系统 uiMode 原生推送");
+    }
+
+    /** 兜底：仅在页面尚未自报主题（webTheme=null）的首帧/异常期回落系统 uiMode；正常路径由自报 webTheme 驱动。 */
     private boolean resolveNight() {
         if ("dark".equals(webTheme)) return true;
         if ("light".equals(webTheme)) return false;
@@ -425,6 +473,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        // 不依赖 WebView 派发 matchMedia change：原生比对 NIGHT_MASK，变化即把系统主题推给页面。
+        pushSystemThemeOnConfig(newConfig);
         // Activity 未重建：必须手动重放系统栏/窗口底色，否则切到深色后仍是深色图标
         // 压在深底上（几乎不可见），窗口底色也停留在旧值。
         applySystemBarAppearance();
@@ -773,7 +823,13 @@ public class MainActivity extends BridgeActivity {
     private final class ShellBridge {
         @android.webkit.JavascriptInterface
         public void notifyTheme(String theme) {
-            applyWebTheme(theme);
+            applyWebTheme(theme, "页面观察者");
+        }
+
+        /** 带来源的主题自报：source = manual（页面手动偏好）/ system（系统跟随）。 */
+        @android.webkit.JavascriptInterface
+        public void notifyThemePref(String theme, String source) {
+            applyWebTheme(theme, source == null ? "页面观察者" : source);
         }
     }
 }
