@@ -54,6 +54,7 @@ services/api ─┘   └─→ packages/ids（只依赖 node:crypto）
 - **测试不替代**：`test/postgres.integration.test.ts` 是唯一覆盖 SQL、唯一约束、外键级联与令牌轮换的真实库测试；CI 用 `postgres:16` service 容器跑它，并设 `REQUIRE_DATABASE_URL=1`——缺连接串会直接失败，不会静默跳过。
 - **本地 vs CI 的分工**：本地无库时这 4 例跳过（不假装通过），其余 22 例单元测试在内存驱动上跑；CI 才是「真库 + 全量」的判定点。
 - `PgStore` 用 `pg` 连接池 + 手写 SQL，表的 `snake_case` 在映射层转成 `camelCase`，不引 ORM，避免迁移和类型两套真相。
+- **商城演示沙箱 `MALL_DEMO_MODE`**（`config.ts` 读取，`/meta` 回读 `mall.demoMode`，无运行时管理面开关）：非测试环境默认 `on`。`on` 时下单只做地址/可售/数量/金额校验与预览，返回 `DEMO-` 前缀预览单（`demo=true`），**不写** `orders`/`order_items`、**不扣** `products.stock`、不清购物车、不调支付；`off` 才走真实落库 → 扣库存 → 幂等占位链路。注册/登录/加收藏等账号与购物车读写在两种模式下都正常落库，沙箱只拦「下单成交」这一步。
 
 数据表（`infra/sql/0001_init.sql`）：
 
