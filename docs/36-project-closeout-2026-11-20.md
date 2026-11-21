@@ -354,3 +354,18 @@ git commit -m "revert: 回滚 1be127b（角标、危险态、原生主题推送�
 ### 12.1 本轮门禁（编排线记录）
 
 `pnpm lint` ✓、`pnpm --filter @mixmapp/app typecheck` ✓（ACCEPTANCE 10.1，`gate-lint-round4.log`、`gate-typecheck-round4.log`）；壳产物体检通过（`gate-check-round4.log`）；`build:h5` / debug / release 本地构建 `BUILD SUCCESSFUL`（`gate-build-h5-round4.log`、`gate-build-debug-round4.log`、`gate-build-release-round4.log`）。`pnpm verify` 全绿（规则 / 类型 / 测试 / API 构建 / H5 构建，约 80.6s）为编排线本轮记录；验证轮次独立日志未留存在 `ui-review/`，verify 结论以该记录为准。
+
+## 13. 设备与网络快照（第五轮，2026-11-22）
+
+本轮在既有项目上纯新增「设备与网络快照」能力：端上采集设备号 / 机型 / 系统 / 网络类型 / 运营商，服务端补 IP（XFF 首跳）与采集时间，本人「我的 / 关于」页与后台会话视图按权限展示；契约冻结件为 `docs/39-device-context-2026-11-22.md`，落地位置、字段口径、复跑命令与证据索引见 **`docs/42-device-context-impl-2026-11-22.md`**。
+
+| 项 | 状态与证据 |
+| --- | --- |
+| 服务端 API 取证 | 内存驱动实例（端口 8121）：未登录 GET/POST 401；登录带 / 不带 device 200；两次上报同一 `deviceId`（`stability-check.json` `deviceIdStable: true`）；伪造 `ip` 被剥离；后台会话摘要 200、匿名 404。样例与脚本：`ui-review/device-2026-11-22/api/`（`collect.ps1`、`01`–`12` req/resp JSON、`server.log`） |
+| 前端 / 原生落地 | 统一读取 `apps/app/src/device.ts`；我的页 / 关于页 / 后台页展示；原生桥 `MainActivity.java` `getDeviceInfo()` 扩展。AVD 装机实拍：`ui-review/device-2026-11-22/avd-me-device-light.png`（浅色）/`avd-me-device-dark.png`（深色）/`avd-about-device.png`/`avd-me-device-guest.png`（未登录）/`avd-me-device-second.png`（冷启动复核）；线上 H5：`h5-prod-me-device.png`；后台会话视图：`admin-user-sessions.png`；分线报告 `report-api.md` / `report-frontend.md` / `report-native.md` / `report-device.md` |
+| 本机门禁 | `pnpm lint`、`pnpm verify`（规则 / 类型 / 测试 / API 构建 / H5 构建）全绿（verify 43.3s）；`build:h5` / `build:mp-weixin` / `build:harmony` 均 DONE Build complete；详见 docs/42 §7.1 与 `ui-review/device-2026-11-22/release/` |
+| 发布与 CI（已回填） | 提交 `83ca179`，CI 三绿：ci `44926948913`、Android `44926948908`、deploy `44926948942`；线上 release `/opt/mixmapp/releases/20261122005721`；线上 `GET/POST /device/context` 匿名均 401（旧版为 404）；线上主包 `/assets/index-DtAsuT32.js`（246,940 B，SHA-256 `b5372452…c79e3`），`device/context` / `mixmapp:device-id` / `reportContext` / `deviceId` 四指纹命中；debug APK `a95698c2…0444e`（4,736,066 B）、release `dce30b39…da47`（3,530,507 B）。证据：`ui-review/device-2026-11-22/release/PUSH-CI-PROD.md` 及同目录 30 份原始留档 |
+| 网络切换与平台限制 | 蜂窝态实测成立（默认网络 `MOBILE[NR]`/CELLULAR，UI 显示「移动网络 / T-Mobile」）；`svc data disable` 后桥正确回落 `none`（IP「不可用」/网络「未连接」）。AVD 无可用 Wi-Fi AP，Wi-Fi 侧无法关联实测，未伪造截图；Wi-Fi→移动的服务端口径以本地 `06→07` 两次上报与原生 `getActiveNetwork()+NetworkCapabilities` 代码路径为替代证据。端上 deviceId 与 shell `android_id` 不等属 Android 8+ SSAID 签名密钥作用域差异（非 BUG），稳定性以两次调用/冷启动同值闭环 |
+| 验收结论 | `ui-review/device-2026-11-22/ACCEPTANCE.md` 共 16 项：PASS 15 / PASS(降级说明) 1（模拟器 Wi-Fi 无法实测）/ FAIL 0 |
+
+边界：IP 与设备号仅本人 + 后台可见，不进公开页与他人视图；日志 IP / 设备号脱敏；新增字段全部可选 / nullable，不改既有协议语义、不动域名与版本号。代码已随 `83ca179` 入库并上线（迁移 `0021` 仅加列 / 加表、`if not exists` 幂等）；实施说明（`docs/42`）为 docs-only 提交，可用 `git revert` 按文件回退（docs/42 §10）。
