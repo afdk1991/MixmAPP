@@ -8,7 +8,8 @@
  * - preview / test / gray 分别用 0.0.0-preview.N / 0.0.0-test.N / 0.0.0-gray.N，后缀计数各自独立
  *   计数为 0 时展示裸后缀（0.0.0-preview / 0.0.0-test / 0.0.0-gray），即当前强制重置态
  * - 发布前不得占用正式版本号：没有真正对外发布，就不能把该号写进 released，也不能打 tag
- * - 正式发布态下展示层取「最新已发布正式号」，version 仅表示下一个待发布工作号
+ * - 正式发布态下，version 可以等于 released 的末项（表示线上跑的就是这一号）；
+ *   要继续出下一版，先 version:bump 把第三段 +1，工作号自然前进
  * - npm 包版本就是三段号本身；Android versionCode = 1 + major*10000 + minor*100 + patch
  * - 任何一处版本必须与 README 同步，不一致即门禁失败
  *
@@ -312,8 +313,11 @@ function check() {
   const { display, built, code } = syncReadOnly(state);
   const problems = [];
 
-  if (state.released.includes(state.version)) {
-    problems.push(`version.json 的 version ${state.version} 已登记为 released，工作号必须前进`);
+  // 工作号允许停留在「最新已发布号」上：线上跑的就是这一版，展示号必须与之一致；
+  // 但若停在更早的已发布号（说明新号已发、工作号没前进），则判红。
+  const lastReleased = state.released[state.released.length - 1];
+  if (state.released.includes(state.version) && state.version !== lastReleased) {
+    problems.push(`version.json 的 version ${state.version} 已登记为 released 且不是最新发布号，工作号必须前进`);
   }
 
   for (const file of PKG_FILES) {

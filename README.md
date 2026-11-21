@@ -10,7 +10,7 @@
 
 <!-- version:begin -->
 当前构建版本：**V0.0.2**（正式发布版本）
-已发布版本：`V0.0.1`
+已发布版本：`V0.0.1`、`V0.0.2`
 版本规约：三段式，基线 `0.0.0`；release 递增第三段（`0.0.0 → 0.0.1`，无后缀）；preview / test / gray 分别为 `0.0.0-preview.N` / `0.0.0-test.N` / `0.0.0-gray.N`（计数 0 时省略 `.N`），后缀计数各自独立；与 README 同步，细则见 [docs/19-versioning.md](docs/19-versioning.md)
 <!-- version:end -->
 
@@ -93,7 +93,7 @@ pnpm dev:h5
 | 展示字体 | 系统无衬线，800 字重 + 负字距            | 所有标题（弃用衬线）      |
 | 控件圆角 | `$r-control` 12rpx / 卡片 24rpx | 按钮、输入框、缩略图      |
 
-标志由 `apps/app/src/components/mx-logo/` 统一提供（方框 MX 连字 + 品牌青底线，`sm/md/lg`、`ink/light` 两套色调），顶栏、首屏、关于页共用同一份实现；应用图标由 `python scripts/brand-icon.py` 生成，母版见 `docs/brand/logo-1024.png`。
+标志由 `apps/app/src/components/mx-logo/` 统一提供（白底胶囊内 “MixmAPP” 整词 + 品牌青底线，`sm/md/lg`、`ink/light` 两套色调），顶栏、首屏、关于页共用同一份实现；应用图标与 H5 图标由 `python apps/mobile/branding/generate-icons.py` 从矢量源 `apps/mobile/branding/mixm-logo.svg` 派生（Android mipmap、启动屏、`static/` 图标、上架 512）。
 
 ## 界面预览（本地 H5 实测截图，390 × 844）
 

@@ -58,6 +58,7 @@
 
 - 展示号：`release` → `version`（无后缀）；`preview` / `test` / `gray` → `version-channel`，计数 > 0 时追加 `.N`。
 - `released` 只用于记录「哪些号真正对外发过」与 tag 校验；它不影响当前构建的展示号。
+- `version` 可以等于 `released` 的末项：那是「线上跑的就是这一号」的正常态，展示号与线上一致；要出下一版先 `version:bump` 把第三段 +1。`version:check` 只在「停在更早的已发布号」时报红。
 - `version` 是唯一递增位：release 走第三段，preview / test / gray 走各自后缀计数。
 - `build.gradle` 构建期直接解析根 `version.json` 计算 `versionName` / `versionCode`，不写字面量。
 
@@ -76,7 +77,7 @@ pnpm version:bump:gray      # 灰度：后缀计数 +1（0.0.0-gray → 0.0.0-gr
 pnpm version:release        # 正式发布：把当前号登记进 released（不改号），提示打 tag
 ```
 
-`version:release` 只做登记与文件同步，**不会自动打 tag**——tag 一旦推送会触发 `deploy` 上线，必须由发布流程显式执行，避免误触发。
+`version:release` 只做登记与文件同步，**不会自动打 tag**——tag 由发布流程显式创建。当前 `deploy.yml` 只监听 `main` 分支推送（tag 是不可变快照，不再触发生产部署），tag 推送只会跑 `ci.yml` 的门禁。
 
 ---
 
