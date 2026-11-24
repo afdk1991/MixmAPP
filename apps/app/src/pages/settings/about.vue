@@ -14,12 +14,13 @@
     <view class="sheet block">
       <text class="eyebrow">CAPABILITIES</text>
       <text class="block-title">服务端能力</text>
+      <text class="block-lede">能用什么由服务端下发，未配置的渠道不在页面占位。</text>
       <view class="rule" />
       <text v-if="!meta" class="hint">{{ error || '正在读取服务端能力…' }}</text>
       <view v-if="!meta && error" class="btn btn--ghost btn--sm retry" hover-class="is-press" @tap="reloadMeta">
         <text class="retry-text">重试</text>
       </view>
-      <view v-else class="cap-list">
+      <view v-else-if="capabilities.length" class="cap-list">
         <view v-for="cap in capabilities" :key="cap.key" class="cap">
           <view class="cap-left">
             <view class="cap-dot" :class="{ 'cap-dot--off': !cap.on }" />
@@ -28,12 +29,14 @@
           <text class="cap-val" :class="{ 'cap-val--off': !cap.on }">{{ cap.value }}</text>
         </view>
       </view>
+      <text v-else class="hint">当前环境没有可展示的第三方能力，登录、支付等渠道开通后会出现在这里。</text>
       <text v-if="meta" class="cap-note">发号策略：{{ meta.ids.current }}</text>
     </view>
 
     <view class="sheet block">
       <text class="eyebrow">RUNTIME</text>
       <text class="block-title">运行环境</text>
+      <text class="block-lede">同一套代码，按端注入不同的 API 基址与平台信息。</text>
       <view class="rule" />
       <view class="row"><text class="k">当前平台</text><text class="v">{{ platform }}</text></view>
       <view class="row"><text class="k">API 基址 · {{ apiBaseSource }}</text><text class="v v--mono mono">{{ apiBase }}</text></view>
@@ -43,6 +46,7 @@
     <view class="sheet block">
       <text class="eyebrow">DEVICE</text>
       <text class="block-title">本机信息</text>
+      <text class="block-lede">仅在登录态采集，用于设备风控与售后定位。</text>
       <view class="rule" />
       <block v-if="loggedIn && deviceSnapshot">
         <view class="row">
@@ -260,7 +264,15 @@ async function reloadMeta(): Promise<void> {
   font-size: $fs-h2;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  color: $ink;
+}
+
+.block-lede {
+  display: block;
+  margin-top: 10rpx;
+  font-size: $fs-meta;
+  line-height: 1.6;
+  color: $ink-3;
 }
 
 .block .rule {
@@ -341,7 +353,7 @@ async function reloadMeta(): Promise<void> {
 
 .retry-text {
   font-size: $fs-meta;
-  color: $acc-2;
+  color: $brand-deep;
 }
 
 /* ---------- 运行环境 ---------- */
@@ -388,7 +400,7 @@ async function reloadMeta(): Promise<void> {
 .device-copy {
   flex-shrink: 0;
   font-size: $fs-micro;
-  color: $acc-2;
+  color: $brand-deep;
 }
 
 .foot {

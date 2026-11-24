@@ -8,7 +8,7 @@
         <view class="head-text">
           <text class="head-eyebrow mono">ADMIN SURFACE</text>
           <text class="head-title">数据库落点</text>
-          <text class="head-sub mono">云服务器本机 PG = 权威 · CloudBase 云 PG = 可选备援</text>
+          <text class="head-sub mono">本机 PG 权威 · 云 PG 备援</text>
         </view>
         <view class="head-chip" :class="{ 'head-chip--off': !status }">
           <text class="head-chip-text mono">{{ status ? 'CONNECTED' : 'LOCKED' }}</text>
@@ -72,9 +72,9 @@
         <view class="row"><text class="k">驱动</text><text class="v mono">{{ status.driver }}</text></view>
         <view class="row"><text class="k">实际主机</text><text class="v mono">{{ status.host }}</text></view>
         <view class="row"><text class="k">连接串来源</text><text class="v mono">{{ status.source }}</text></view>
-        <view class="row row--last">
+        <view class="row row--last row--stack">
           <text class="k">云 PG 已配置</text>
-          <text class="v mono" :class="{ warn: !status.available.cloudbase.configured }">
+          <text class="v v--wrap mono" :class="{ warn: !status.available.cloudbase.configured }">
             {{ status.available.cloudbase.configured ? status.available.cloudbase.host : '未配置连接串' }}
           </text>
         </view>
@@ -90,8 +90,8 @@
         </view>
         <text class="hint">热切换，不重启进程。切换前会先建连接并 ping 验证，连不通就不切，旧库继续服务。</text>
         <view class="btn-row">
-          <button class="btn btn--deep btn--block" :loading="loading" @click="switchTo('cloudbase')">切到云 PG（备援）</button>
-          <button class="btn btn--ghost btn--block" :loading="loading" @click="switchTo('server')">切到服务器 PG（权威）</button>
+          <button class="btn btn--deep btn--block" :loading="loading" @click="switchTo('cloudbase')">切到云 PG</button>
+          <button class="btn btn--ghost btn--block" :loading="loading" @click="switchTo('server')">切到服务器 PG</button>
         </view>
       </view>
 
@@ -556,13 +556,13 @@ onLoad(() => {
   padding: 0 $sp-3 calc($sp-8 + env(safe-area-inset-bottom));
 }
 
-/* ---------- 深场页头：发丝线收边，直接切纸面 ---------- */
+/* ---------- 深场页头：用深场令牌，不在页面里写裸色值 ---------- */
 .head {
   box-sizing: border-box;
   padding: $sp-5 $sp-4 $sp-4;
   background:
     radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
-    linear-gradient(158deg, #0b0f0e 0%, #152622 62%, #17322c 120%);
+    linear-gradient(158deg, $deep 0%, $deep-2 62%, $deep-3 120%);
   border-bottom: 1rpx solid $on-deep-line;
 }
 
@@ -598,7 +598,8 @@ onLoad(() => {
 
 .head-sub {
   display: block;
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: anywhere;
   margin-top: 10rpx;
   font-size: $fs-meta;
   line-height: $lh-body;
@@ -629,20 +630,20 @@ onLoad(() => {
   padding-top: $sp-4;
 }
 
-/* ---------- 数字档案：2×2 栅格 ---------- */
+/* ---------- 数字档案：2×2 卡片，同一套白卡与阴影 ---------- */
 .metrics {
   display: flex;
   flex-wrap: wrap;
-  border-top: 1rpx solid $paper-2;
-  border-left: 1rpx solid $paper-2;
+  gap: 16rpx;
 }
 
 .metric {
-  width: 50%;
+  width: calc(50% - 8rpx);
   box-sizing: border-box;
   padding: $sp-3;
-  border-right: 1rpx solid $paper-2;
-  border-bottom: 1rpx solid $paper-2;
+  background: $shell;
+  border-radius: 20rpx;
+  box-shadow: $shadow-card;
 }
 
 .metric-k {
@@ -656,12 +657,12 @@ onLoad(() => {
 .metric-v {
   display: block;
   margin-top: 12rpx;
-  font-size: $fs-h2;
+  font-size: $fs-h3;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: 0;
   color: $ink;
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .metric-v--warn {
@@ -708,10 +709,18 @@ onLoad(() => {
   margin-top: $sp-3;
 }
 
+.btn-row .btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .btn {
-  min-height: 88rpx;
+  height: auto;
+  min-height: 84rpx;
+  padding: 14rpx 16rpx;
+  line-height: 1.35;
   border-radius: $r-control;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .hint {
@@ -736,7 +745,9 @@ onLoad(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 20rpx 0;
+  min-height: 88rpx;
+  box-sizing: border-box;
+  padding: 22rpx 0;
   border-bottom: 1rpx solid $paper-2;
 }
 
@@ -745,10 +756,29 @@ onLoad(() => {
   padding-bottom: 0;
 }
 
+/* 长连接串单独占一行，避免在窄屏右侧被折成「…:」+「5432」两截 */
+.row--stack {
+  display: block;
+}
+
+.row--stack .k {
+  width: auto;
+  margin-right: 0;
+}
+
+.v--wrap {
+  display: block;
+  margin-top: 6rpx;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 .k {
   flex-shrink: 0;
+  width: 168rpx;
   margin-right: $sp-3;
   font-size: $fs-micro;
+  line-height: 1.55;
   color: $ink-3;
 }
 
@@ -769,9 +799,11 @@ onLoad(() => {
 /* ---------- 渠道 / 合并记录行 ---------- */
 .prov-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: $sp-3;
-  padding: 20rpx 0;
+  min-height: 96rpx;
+  box-sizing: border-box;
+  padding: 22rpx 0;
   border-bottom: 1rpx solid $paper-2;
 }
 
@@ -852,5 +884,13 @@ onLoad(() => {
   font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $ink-4;
+}
+
+@media (min-width: 768px) {
+  .page {
+    max-width: 750px;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 </style>

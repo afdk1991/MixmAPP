@@ -78,6 +78,8 @@ $r-pill: 999rpx;        // 仅状态 chip 使用
 /* ---------- 阴影：两层，克制 ---------- */
 $shadow-card: 0 1rpx 2rpx rgba(17, 20, 19, 0.04), 0 12rpx 28rpx -18rpx rgba(17, 20, 19, 0.18);
 $shadow-lift: 0 2rpx 6rpx rgba(17, 20, 19, 0.05), 0 26rpx 56rpx -26rpx rgba(17, 20, 19, 0.26);
+/* 吸附底栏向上投影：只让栏与内容分层，不把整屏压暗 */
+$shadow-bar: 0 -10rpx 30rpx -24rpx rgba(17, 20, 19, 0.32);
 
 /* ---------- 字体：无衬线展示（粗重、负字距）+ 无衬线正文 + 等宽数据 ---------- */
 $font-display: 'Inter Tight', 'HarmonyOS Sans SC', 'PingFang SC', 'Helvetica Neue', 'Microsoft YaHei', sans-serif;

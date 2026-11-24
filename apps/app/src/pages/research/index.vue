@@ -29,7 +29,7 @@
           <view class="rs-qfoot">
             <text class="rs-count mono">{{ query.length }}/200</text>
             <view
-              class="btn btn--brand rs-start"
+              class="btn btn--primary rs-start"
               :class="{ 'btn--disabled': starting || !query.trim() }"
               hover-class="is-press"
               @tap="startResearch"
@@ -90,30 +90,24 @@
 
         <view v-else class="index-list">
           <view
-            v-for="task in history"
+            v-for="(task, ti) in history"
             :key="task.id"
             class="rs-hist-row"
             hover-class="is-press"
             @tap="openTask(task)"
           >
-            <view
-              class="rs-dot"
-              :class="{
-                'rs-dot--done': task.status === 'done',
-                'rs-dot--active': task.status !== 'done',
-              }"
-            />
+            <text class="rs-hist-no mono">{{ String(ti + 1).padStart(2, '0') }}</text>
             <view class="rs-hist-main">
               <text class="rs-hist-title">{{ task.query }}</text>
               <view class="rs-hist-meta">
+                <text class="rs-hist-tag mono" :class="{ 'rs-hist-tag--done': task.status === 'done' }">
+                  {{ task.status === 'done' ? '已完成' : '研究中' }}
+                </text>
                 <text class="micro">{{ relativeTime(task.createdAt) }}</text>
                 <text class="rs-hist-sep">·</text>
-                <text class="micro">{{ task.status === 'done' ? `${task.sourcesCount} 个来源` : '进行中' }}</text>
+                <text class="micro">{{ task.status === 'done' ? `${task.sourcesCount} 个来源` : '多轮检索中' }}</text>
               </view>
             </view>
-            <text class="rs-hist-tag mono" :class="{ 'rs-hist-tag--done': task.status === 'done' }">
-              {{ task.status === 'done' ? '已完成' : '研究中' }}
-            </text>
             <text class="index-arrow mono">→</text>
           </view>
         </view>
@@ -219,11 +213,10 @@ onPullDownRefresh(() => {
 
 /* ---------- 提问区 ---------- */
 .rs-hero {
-  padding: calc(40rpx + var(--mx-safe-top)) $sp-4 $sp-5;
+  padding: calc(40rpx + var(--mx-safe-top)) $sp-4 $sp-4;
   background:
-    radial-gradient(80% 120% at 94% 0%, rgba(15, 157, 143, 0.12), rgba(15, 157, 143, 0) 56%),
+    radial-gradient(80% 120% at 94% 0%, rgba(15, 157, 143, 0.1), rgba(15, 157, 143, 0) 56%),
     $paper;
-  border-bottom: 1rpx solid $paper-3;
 }
 
 .rs-title {
@@ -312,7 +305,7 @@ onPullDownRefresh(() => {
 .rs-start-text {
   font-size: $fs-meta;
   font-weight: 600;
-  color: $on-solid;
+  color: inherit;
 }
 
 .rs-samples {
@@ -362,7 +355,7 @@ onPullDownRefresh(() => {
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .sec-count {
@@ -374,72 +367,71 @@ onPullDownRefresh(() => {
 }
 
 .index-list {
-  margin-top: $sp-2;
+  margin-top: $sp-3;
 }
 
+/* 借鉴阅读型产品的「条目卡」：编号 + 主题 + 状态，白卡承载，
+ * 不再用点阵 + 分隔线把记录排成流水账。 */
 .rs-hist-row {
   display: flex;
-  align-items: center;
-  padding: $sp-3 0;
-  border-bottom: 1rpx solid $paper-2;
+  align-items: flex-start;
+  padding: $sp-3;
+  margin-bottom: $sp-3;
+  background: $shell;
+  border-radius: 24rpx;
+  box-shadow: $shadow-card;
 }
 
 .rs-hist-row:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
-.rs-dot {
-  width: 14rpx;
-  height: 14rpx;
+.rs-hist-no {
   flex-shrink: 0;
-  border-radius: 50%;
-  margin-right: $sp-3;
-}
-
-.rs-dot--done {
-  background: $brand;
-}
-
-.rs-dot--active {
-  background: $amber;
-  animation: pulse 1.6s ease-in-out infinite;
+  width: 48rpx;
+  margin-right: $sp-2;
+  font-size: $fs-micro;
+  line-height: 1.6;
+  letter-spacing: 1rpx;
+  color: $ink-4;
 }
 
 .rs-hist-main {
   flex: 1;
   min-width: 0;
-  margin-right: $sp-3;
+  margin-right: $sp-2;
 }
 
 .rs-hist-title {
-  display: block;
+  display: -webkit-box;
+  overflow: hidden;
   font-size: $fs-body;
   font-weight: 600;
   line-height: 1.4;
   color: $ink;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .rs-hist-meta {
   display: flex;
   align-items: center;
-  margin-top: 6rpx;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 12rpx;
 }
 
 .rs-hist-sep {
-  margin: 0 10rpx;
   color: $ink-4;
 }
 
 .rs-hist-tag {
   flex-shrink: 0;
-  padding: 4rpx 14rpx;
+  padding: 2rpx 12rpx;
   border-radius: $r-control;
   background: rgba(164, 118, 28, 0.12);
   font-size: $fs-micro;
-  letter-spacing: 1.5rpx;
+  letter-spacing: 1rpx;
   color: $amber;
 }
 
@@ -456,8 +448,11 @@ onPullDownRefresh(() => {
 .rs-skel-row {
   display: flex;
   align-items: center;
-  padding: $sp-3 0;
-  border-bottom: 1rpx solid $paper-2;
+  padding: $sp-3;
+  margin-bottom: $sp-3;
+  background: $shell;
+  border-radius: 24rpx;
+  box-shadow: $shadow-card;
 }
 
 .rs-skel-dot {

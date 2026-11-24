@@ -75,8 +75,7 @@
               @tap="go(q.url)"
             >
               <view class="quick-icon">
-                <image v-if="q.icon" class="quick-icon-img" :src="q.icon" mode="aspectFit" />
-                <text v-else class="quick-icon-glyph mono">{{ q.glyph }}</text>
+                <mx-icon :name="q.icon" :size="40" :tone="q.key === 'mall' ? 'brand' : 'ink2'" />
               </view>
               <text class="quick-label">{{ q.label }}</text>
             </view>
@@ -309,7 +308,14 @@
                     <text class="pick-cover-cat" :class="{ 'pick-cover-cat--on-tint': !!coverTint(product) }">
                       {{ cardMeta(product).split(' / ')[0] || '五金件' }}
                     </text>
-                    <text class="pick-cover-char" :class="{ 'pick-cover-char--on-tint': !!coverTint(product) }">{{ product.title.slice(0, 1) }}</text>
+                    <view class="pick-cover-mark">
+                      <mx-icon
+                        name="box"
+                        :size="44"
+                        tone="ink2"
+                        :on-tint="coverTint(product)"
+                      />
+                    </view>
                   </view>
                   <!-- 序号让「精选 6 件」有可数的节奏，也替商品网格建立统一的阅读起点 -->
                   <text class="pick-no mono">{{ String(index + 1).padStart(2, '0') }}</text>
@@ -427,6 +433,7 @@ import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
+import MxIcon from '../../components/mx-icon/mx-icon.vue';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
 import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue';
 import type { MallCategoryDto, MallProductDto } from '../../api/mall';
@@ -477,12 +484,13 @@ const passNo = computed(() => session.user?.accountNo ?? '');
 const passcardTitle = computed(() => (signedIn.value ? session.user?.nickname || '我的通行证' : '登录或注册'));
 
 /** 首屏 4 宫格快捷入口：商城 / 购物车 / 订单 / 通行证，全部走 ROUTES 常量。
- *  前三项与通行证复用 tab 既有图标；订单无现成图标，保留等宽字形兜底。 */
-const quickEntries = [
-  { key: 'mall', glyph: '', label: '商城', url: ROUTES.mall, icon: '/static/tab/mall.png' },
-  { key: 'cart', glyph: '', label: '购物车', url: ROUTES.cart, icon: '/static/tab/cart.png' },
-  { key: 'orders', glyph: '单', label: '订单', url: ROUTES.orders, icon: '' },
-  { key: 'me', glyph: '', label: '通行证', url: ROUTES.me, icon: '/static/tab/me.png' },
+ *  图标统一走自有线性图标组件，不再混用 tab 位图与首字兜底。 */
+type QuickIconName = 'bag' | 'cart' | 'receipt' | 'user';
+const quickEntries: { key: string; label: string; url: string; icon: QuickIconName }[] = [
+  { key: 'mall', label: '商城', url: ROUTES.mall, icon: 'bag' },
+  { key: 'cart', label: '购物车', url: ROUTES.cart, icon: 'cart' },
+  { key: 'orders', label: '订单', url: ROUTES.orders, icon: 'receipt' },
+  { key: 'me', label: '通行证', url: ROUTES.me, icon: 'user' },
 ];
 
 /** 购物车角标文案来自全局计数模块 stores/cart-badge（0 隐藏 / 1–99 数字 / 99+）。 */
@@ -1088,60 +1096,56 @@ function onShellRefresh(): void {
   gap: $sp-2;
 }
 
+/* 借鉴内容社区「服务磁贴」：白卡托底、软阴影、图标有独立底色，
+ * 不再用发丝描边把四个入口切成表格。 */
 .quick-cell {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10rpx;
-  padding: $sp-2 8rpx;
+  gap: 12rpx;
+  padding: $sp-3 8rpx $sp-2;
   background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-card;
+  border: 0;
+  border-radius: 28rpx;
+  box-shadow: $shadow-card;
 }
 
 .quick-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: $r-control;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 22rpx;
+  background: $paper-2;
 }
 
-.quick-icon-img {
-  width: 40rpx;
-  height: 40rpx;
-}
-
-/* 无现成图标的入口（订单）：等宽字形兜底，中性灰、无底色块，与其余图标位同尺寸同重量 */
-.quick-icon-glyph {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: $ink-3;
+/* 第一个入口（商城）用品牌浅底把主路径单独点亮 */
+.quick-cell:nth-child(1) .quick-icon {
+  background: $brand-soft;
 }
 
 .quick-label {
   font-size: $fs-meta;
+  font-weight: 600;
   line-height: 1.2;
-  color: $ink-2;
+  color: $ink;
   white-space: nowrap;
 }
 
 /* ---------- 压缩版通行证卡（≤120px） ---------- */
+/* 借鉴 SaaS 官网「深色转化卡」：整站唯一的深场 CTA，把登录/通行证
+ * 从普通白卡提升为与首屏同源的强视觉块，其余卡片继续留白。 */
 .passcard {
   display: flex;
   align-items: center;
-  gap: $sp-2;
+  gap: $sp-3;
   margin-top: $sp-3;
-  padding: $sp-3;
-  background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-card;
+  padding: $sp-4;
+  background: linear-gradient(112deg, $deep 0%, $deep-3 100%);
+  border: 0;
+  border-radius: 32rpx;
+  box-shadow: $shadow-lift;
 }
 
 .passcard__main {
@@ -1157,16 +1161,16 @@ function onShellRefresh(): void {
 
 .passcard__tag {
   padding: 4rpx 12rpx;
-  border: 1rpx solid $paper-3;
+  border: 1rpx solid $on-deep-line;
   border-radius: $r-pill;
   font-size: 18rpx;
   letter-spacing: $ls-label;
-  color: $acc-1;
+  color: $brand-on-deep;
 }
 
 .passcard__no {
   font-size: 20rpx;
-  color: $ink-3;
+  color: $on-deep-3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1175,10 +1179,10 @@ function onShellRefresh(): void {
 .passcard__title {
   display: block;
   margin-top: 8rpx;
-  font-size: $fs-body;
-  font-weight: 600;
+  font-size: $fs-h3;
+  font-weight: 700;
   line-height: 1.25;
-  color: $ink;
+  color: $on-deep;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1189,16 +1193,23 @@ function onShellRefresh(): void {
   margin-top: 4rpx;
   font-size: $fs-micro;
   line-height: 1.4;
-  color: $ink-3;
+  color: $on-deep-2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .passcard__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
+  width: 56rpx;
+  height: 56rpx;
+  border: 1rpx solid $on-deep-line;
+  border-radius: 50%;
   font-size: $fs-body;
-  color: $ink-4;
+  color: $on-deep;
 }
 
 /* ---------- 运营位：3 列编辑卡，移动端单列；无图也不塌 ---------- */
@@ -1492,44 +1503,47 @@ function onShellRefresh(): void {
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: $sp-1;
-  margin-top: $sp-2;
+  gap: $sp-2;
+  margin-top: $sp-3;
 }
 
+/* 借鉴电商「类目卡」：白底、无描边、靠留白分块；选中态整块品牌色，
+ * 一眼能看出当前在看哪一类，而不是只换一行字色。 */
 .cat-card {
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
+  gap: 8rpx;
   box-sizing: border-box;
-  min-height: 120rpx;
-  padding: 16rpx 18rpx;
+  min-height: 136rpx;
+  padding: 20rpx;
   background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-control;
+  border: 0;
+  border-radius: 22rpx;
+  box-shadow: $shadow-card;
 }
 
 .cat-card--active {
-  background: $solid;
-  border-color: $solid;
+  background: $brand-deep;
+  box-shadow: none;
 }
 
 .cat-no {
   font-size: 18rpx;
-  color: $acc-2;
+  color: $ink-4;
 }
 
 .cat-name {
-  font-size: $fs-meta;
+  font-size: 28rpx;
   font-weight: 600;
-  line-height: 1.25;
-  color: $acc-1;
+  line-height: 1.3;
+  color: $ink;
   overflow-wrap: break-word;
 }
 
 .cat-count {
   margin-top: auto;
   font-size: 18rpx;
-  color: $acc-2;
+  color: $ink-4;
 }
 
 .cat-card--active .cat-no,
@@ -1612,15 +1626,17 @@ function onShellRefresh(): void {
   flex-direction: column;
   overflow: hidden;
   background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-card;
+  border: 0;
+  border-radius: 28rpx;
+  box-shadow: $shadow-card;
 }
 
-/* 用 padding-top 撑 4:3，兼容旧 WebView；图片绝对定位铺满 */
+/* 借鉴得物/小红书：方图封面，商品图占满上半张卡，信息区留白收口。
+ * 仍用 padding-top 撑比例，兼容旧 WebView；图片绝对定位铺满。 */
 .pick-cover {
   position: relative;
   width: 100%;
-  padding-top: 75%;
+  padding-top: 100%;
   background: $paper-2;
 }
 
@@ -1643,18 +1659,12 @@ function onShellRefresh(): void {
   height: 100%;
 }
 
-.pick-cover-char {
-  font-family: $font-display;
-  font-size: 64rpx;
-  font-weight: 800;
-  color: $ink-4;
+.pick-cover-mark {
+  margin-top: 6rpx;
+  display: flex;
 }
 
-.pick-cover-char--on-tint {
-  color: $on-deep;
-}
-
-/* 无图封面：不再留一块空框，改成「首字 + 类目」的文字封面；
+/* 无图封面：不再留一块空框，改成「类目 + 自有线性图标」的文字封面；
  * 高度与有图封面一致，保证同一行卡片对齐，不因缺图塌下去。 */
 .pick-cover--text .pick-cover-ph {
   flex-direction: column;
@@ -1662,11 +1672,6 @@ function onShellRefresh(): void {
   justify-content: center;
   box-sizing: border-box;
   padding: 0 $sp-2;
-}
-
-.pick-cover--text .pick-cover-char {
-  font-size: 52rpx;
-  line-height: 1;
 }
 
 .pick-cover-cat {
@@ -1690,10 +1695,10 @@ function onShellRefresh(): void {
   left: 12rpx;
   top: 12rpx;
   padding: 4rpx 10rpx;
-  background: $shell;
-  border-radius: 6rpx;
+  background: $deep;
+  border-radius: 8rpx;
   font-size: 16rpx;
-  color: $acc-1;
+  color: $on-deep;
 }
 
 .pick-cover-tag {
@@ -1718,10 +1723,11 @@ function onShellRefresh(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56rpx;
-  height: 56rpx;
-  background: $solid;
+  width: 64rpx;
+  height: 64rpx;
+  background: $brand-deep;
   border-radius: 50%;
+  box-shadow: $shadow-card;
 }
 
 .pick-add-text {
@@ -1749,9 +1755,9 @@ function onShellRefresh(): void {
 .pick-name {
   display: -webkit-box;
   overflow: hidden;
-  font-size: $fs-meta;
+  font-size: 30rpx;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.4;
   color: $ink;
   overflow-wrap: break-word;
   -webkit-box-orient: vertical;
@@ -1802,7 +1808,7 @@ function onShellRefresh(): void {
 
 .pick-amount {
   font-family: $font-display;
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $acc-4;
@@ -1828,7 +1834,7 @@ function onShellRefresh(): void {
 /* 骨架：与真实卡同结构，加载完不跳版 */
 .pick-sk-cover {
   width: 100%;
-  padding-top: 75%;
+  padding-top: 100%;
 }
 
 .pick-sk-line {
@@ -2192,6 +2198,12 @@ function onShellRefresh(): void {
 
   .pick-name {
     font-size: 16px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .pick-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

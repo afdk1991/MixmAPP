@@ -7,43 +7,63 @@
       <text class="title">隐私政策与权限说明</text>
       <text class="sub mono">版本 {{ policyVersion }} · 更新于 2026-11-24 · 上一版 2026-11-15</text>
       <view class="rule" />
+
+      <!-- 长文导航：横向 chips，点一下滚到对应章节，不占正文高度 -->
+      <scroll-view class="toc" scroll-x show-scrollbar="false">
+        <view class="toc-inner">
+          <view
+            v-for="(item, i) in SECTIONS"
+            :key="item.id"
+            class="toc-item"
+            hover-class="is-press"
+            @tap="jumpTo(item.id)"
+          >
+            <text class="toc-no mono">{{ String(i + 1).padStart(2, '0') }}</text>
+            <text class="toc-label">{{ item.label }}</text>
+          </view>
+        </view>
+      </scroll-view>
     </view>
 
     <!-- ===== 本版变更 ===== -->
-    <view class="sec sec--change">
+    <view id="s1" class="sec sec--change">
       <text class="sec-name">本版变更要点</text>
       <text class="para">1. 新增「二、设备与网络信息」：逐字段披露设备标识、机型、系统版本、IP、网络类型、运营商、采集时间的来源、用途与可见范围。</text>
       <text class="para">2. 新增「三、IP 地址的产生方式与限制」：IP 由服务端在请求到达时记录，并如实说明当前实现取转发头首跳、存在被伪造的可能。</text>
-      <text class="para">3. 收集清单改为表格，补入支付流水与运行日志两组。</text>
+      <text class="para">3. 收集清单改为逐条披露卡，补入支付流水与运行日志两组。</text>
       <text class="para">4. 权限清单按安装包实测重写：修正上一版「不申请位置」的表述——填写收货地址时可选调用，且 App 内当前不可用。</text>
       <text class="para">5. 新增信息的可见范围、分项保存期限、未成年人保护、安全事件通知、政策变更与生效、联系方式。</text>
     </view>
 
-    <!-- ===== 一、收集清单（表格） ===== -->
-    <view class="sec">
+    <!-- ===== 一、收集清单（逐条披露卡） ===== -->
+    <view id="s2" class="sec">
       <text class="sec-name">一、我们收集什么</text>
-      <text class="para">下表为当前版本的全部收集项。表格里不出现的内容，本应用不收集。</text>
+      <text class="para">下面逐条列出当前版本的全部收集项。没有列出的内容，本应用不收集。</text>
       <view class="tbl">
-        <view class="tbl-head">
-          <text class="th c1">字段</text>
-          <text class="th c2">来源</text>
-          <text class="th c3">用途</text>
-          <text class="th c4">必需</text>
-          <text class="th c5">期限</text>
-        </view>
-        <view v-for="row in collectionRows" :key="row.field" class="tbl-row">
-          <text class="td c1">{{ row.field }}</text>
-          <text class="td c2">{{ row.source }}</text>
-          <text class="td c3">{{ row.purpose }}</text>
-          <text class="td c4">{{ row.required }}</text>
-          <text class="td c5">{{ row.keep }}</text>
+        <view v-for="row in collectionRows" :key="row.field" class="rec">
+          <view class="rec-top">
+            <text class="rec-field">{{ row.field }}</text>
+            <text class="rec-req" :class="{ 'rec-req--opt': row.required.includes('可选') }">{{ row.required }}</text>
+          </view>
+          <view class="rec-meta">
+            <text class="rec-k mono">来源</text>
+            <text class="rec-v">{{ row.source }}</text>
+          </view>
+          <view class="rec-meta">
+            <text class="rec-k mono">用途</text>
+            <text class="rec-v">{{ row.purpose }}</text>
+          </view>
+          <view class="rec-meta">
+            <text class="rec-k mono">期限</text>
+            <text class="rec-v">{{ row.keep }}</text>
+          </view>
         </view>
       </view>
       <text class="para para--note">「必需」指不提供即无法完成对应功能；标「可选」的项不提供不影响其他功能。</text>
     </view>
 
     <!-- ===== 二、设备与网络信息（新增专节） ===== -->
-    <view class="sec">
+    <view id="s3" class="sec">
       <text class="sec-name">二、设备与网络信息</text>
       <text class="para">登录状态下，应用会上报一次「设备与网络快照」。逐字段说明如下。</text>
       <view class="prow">
@@ -75,7 +95,7 @@
     </view>
 
     <!-- ===== 三、IP 口径 ===== -->
-    <view class="sec">
+    <view id="s4" class="sec">
       <text class="sec-name">三、IP 地址的产生方式与限制</text>
       <text class="para">IP 由服务端在请求到达时记录，客户端无法指定。当前实现读取反向代理转发头（X-Forwarded-For）的第一跳，转发头缺失时回落到建立连接的直连地址。</text>
       <text class="para">需要说明的限制：转发头由请求方携带，可被伪造。也就是说，在有人刻意构造请求的情况下，当前记录的 IP 可能不等于真实来源。我们正在改为只取直连地址；在改造完成前，IP 只作为辅助线索，不作为限制账号的唯一依据。</text>
@@ -83,7 +103,7 @@
     </view>
 
     <!-- ===== 四、权限（原第二节，实测重写） ===== -->
-    <view class="sec">
+    <view id="s5" class="sec">
       <text class="sec-name">四、应用申请的权限</text>
       <view class="perm">
         <text class="perm-k mono">网络 · 必需</text>
@@ -105,7 +125,7 @@
     </view>
 
     <!-- ===== 五、使用（原第三节） ===== -->
-    <view class="sec">
+    <view id="s6" class="sec">
       <text class="sec-name">五、信息如何使用</text>
       <text class="para">1. 提供账号、商城、订单与售后功能。</text>
       <text class="para">2. 账号安全：识别异常登录、区分设备、发现同一设备上的异常行为。</text>
@@ -115,7 +135,7 @@
     </view>
 
     <!-- ===== 六、第三方（原第四节扩写） ===== -->
-    <view class="sec">
+    <view id="s7" class="sec">
       <text class="sec-name">六、第三方与委托处理</text>
       <text class="para">当前版本，短信验证码、一键登录、地图、推送、AI、对象存储与支付渠道均处于未启用或开发态：短信验证码由服务端控制台输出，不发生对外短信发送；地图、推送、AI 与服务端存储为开发态实现；微信支付与支付宝均未启用。未启用时不向任何第三方传输个人信息。</text>
       <text class="para">某能力启用后，我们将按下列原则委托处理，并在本页更新受托方名称、处理目的与字段范围后再生效：仅传输完成该功能所必需的最小字段；签署数据处理约定；要求受托方不得超范围使用；涉及跨境传输的，另行告知并取得同意。</text>
@@ -123,7 +143,7 @@
     </view>
 
     <!-- ===== 七、可见范围 ===== -->
-    <view class="sec">
+    <view id="s8" class="sec">
       <text class="sec-name">七、谁能看到你的信息</text>
       <text class="para">本人：在「我的」「订单」「收藏」「购物车」「关于与能力」等页面查看自己的资料、订单与设备快照。</text>
       <text class="para">运营人员：仅在后台登录后，按单个用户查看账号概览、订单、收藏数量与最近会话摘要（最多 10 条）。后台入口需要独立的令牌或会话，未登录时相关接口一律返回 404，不暴露接口是否存在。</text>
@@ -131,7 +151,7 @@
     </view>
 
     <!-- ===== 八、保存期限与安全（原第五节扩写） ===== -->
-    <view class="sec">
+    <view id="s9" class="sec">
       <text class="sec-name">八、保存期限与安全</text>
       <view class="prow">
         <text class="prow-k mono">登录凭证</text>
@@ -157,7 +177,7 @@
     </view>
 
     <!-- ===== 九、你的权利（原第六节扩写） ===== -->
-    <view class="sec">
+    <view id="s10" class="sec">
       <text class="sec-name">九、你的权利</text>
       <view class="prow">
         <text class="prow-k mono">查阅</text>
@@ -192,26 +212,26 @@
     </view>
 
     <!-- ===== 十、未成年人 ===== -->
-    <view class="sec">
+    <view id="s11" class="sec">
       <text class="sec-name">十、未成年人保护</text>
       <text class="para">本应用不面向未满 14 周岁的儿童单独提供服务。当前版本未设置年龄校验环节；如你是未成年人，应在监护人的同意和指导下使用，并由监护人阅读本政策。监护人如发现未成年人未经同意提交了信息，可通过下方联系方式要求删除。</text>
     </view>
 
     <!-- ===== 十一、事件通知 ===== -->
-    <view class="sec">
+    <view id="s12" class="sec">
       <text class="sec-name">十一、信息安全事件通知</text>
       <text class="para">如发生个人信息泄露、篡改或丢失，我们会评估影响范围，通过本页公告与应用内提示告知受影响的用户，并按法律要求向监管部门报告。当前版本未启用推送通道，因此通知以页面公告为准。</text>
     </view>
 
     <!-- ===== 十二、变更与生效 ===== -->
-    <view class="sec">
+    <view id="s13" class="sec">
       <text class="sec-name">十二、政策变更与生效</text>
       <text class="para">本政策自 2026-11-24 起生效。发生实质变更（新增收集项、扩大用途、新增受托方）时，我们会升级页首版本号，旧版本的同意记录随即失效，并在注册环节要求重新勾选同意；本页顶部同时保留上一版日期与本版变更要点。</text>
       <text class="para">当前同意环节设在注册提交前。已登录的老用户不会在启动时被强制拦截，但每次进入本页看到的都是最新版本；如监管或应用商店要求启动即展示，我们会把同意环节前移到启动时。</text>
     </view>
 
     <!-- ===== 十三、联系 ===== -->
-    <view class="sec">
+    <view id="s14" class="sec">
       <text class="sec-name">十三、联系我们</text>
       <text class="para">运营主体：以 ICP 备案登记主体为准，备案号为 苏ICP备2025161175号-2，主体名称与统一社会信用代码可在工信部备案系统按该备案号查询（本站页脚提供备案链接）。公安备案号为 苏公网安备32072202010511号。</text>
       <text class="para">开发者反馈渠道：公开仓库 issue（github.com/afdk1991/MixmAPP/issues）。应用内暂未提供在线客服或邮箱入口，涉及账号与数据的请求请注明账号编号，以便核对。</text>
@@ -234,13 +254,44 @@
 import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { ROUTES } from '../../routes';
+import { goTo } from '../../navigation';
 import { PRIVACY_POLICY_VERSION, recordPrivacyConsent } from '../../privacy';
 
 /** gate = 首启同意模式（无返回栏、底部固定同意条）；否则为回看模式 */
 const gate = ref(false);
 const policyVersion = PRIVACY_POLICY_VERSION;
 
-/** 收集清单：字段 / 来源 / 用途 / 是否必需 / 保存期限。改这里即可整页同步。 */
+/** 章节锚点：目录 chips 与正文 id 一一对应，改章节时两处一起改 */
+const SECTIONS = [
+  { id: 's1', label: '本版变更' },
+  { id: 's2', label: '收集清单' },
+  { id: 's3', label: '设备与网络' },
+  { id: 's4', label: 'IP 口径' },
+  { id: 's5', label: '应用权限' },
+  { id: 's6', label: '如何使用' },
+  { id: 's7', label: '第三方' },
+  { id: 's8', label: '可见范围' },
+  { id: 's9', label: '保存与安全' },
+  { id: 's10', label: '你的权利' },
+  { id: 's11', label: '未成年人' },
+  { id: 's12', label: '事件通知' },
+  { id: 's13', label: '变更生效' },
+  { id: 's14', label: '联系我们' },
+] as const;
+
+/** 目录跳转：先取目标相对视口的位置，再叠加当前滚动量，跨 H5 / 壳内都能落位。 */
+function jumpTo(id: string): void {
+  const query = uni.createSelectorQuery();
+  query.select(`#${id}`).boundingClientRect();
+  query.selectViewport().scrollOffset(() => {});
+  query.exec((res: any[]) => {
+    const rect = res?.[0];
+    const viewport = res?.[1];
+    if (!rect || !viewport) return;
+    const top = Math.max(0, Number(viewport.scrollTop || 0) + Number(rect.top || 0) - 12);
+    uni.pageScrollTo({ scrollTop: top, duration: 260 });
+  });
+}
 type CollectionRow = {
   field: string;
   source: string;
@@ -377,13 +428,13 @@ function exitApp(): void {
   }
   uni.showToast({ title: '可直接关闭当前页面', icon: 'none' });
 }
-/** 隐私政策第九节的两条自助入口（本机数据面板 / 注销账号页）。 */
+
 function goLocalData(): void {
-  uni.navigateTo({ url: ROUTES.localData });
+  goTo(ROUTES.localData);
 }
 
 function goAccountDelete(): void {
-  uni.navigateTo({ url: ROUTES.accountDelete });
+  goTo(ROUTES.accountDelete);
 }
 </script>
 
@@ -421,16 +472,59 @@ function goAccountDelete(): void {
   color: $ink-3;
 }
 
+/* 长文目录：横向 chips，一屏内可扫完，点按滚到对应章节 */
+.toc {
+  width: 100%;
+  margin-top: $sp-3;
+  white-space: nowrap;
+}
+
+.toc-inner {
+  display: flex;
+  width: max-content;
+  gap: 12rpx;
+  padding: 2rpx 2rpx 6rpx;
+}
+
+.toc-item {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  height: 56rpx;
+  padding: 0 18rpx;
+  background: $shell;
+  border-radius: $r-pill;
+  box-shadow: $shadow-card;
+  white-space: nowrap;
+}
+
+.toc-no {
+  flex-shrink: 0;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $brand-deep;
+}
+
+.toc-label {
+  flex-shrink: 0;
+  font-size: $fs-micro;
+  color: $ink-2;
+  white-space: nowrap;
+}
+
 .sec {
   margin-top: $sp-5;
 }
 
-/* 变更要点用浅底块，和正文区分开 */
+/* 变更要点用白卡 + 左侧品牌条，和正文的纯文字区分开 */
 .sec--change {
   margin-top: $sp-4;
-  padding: $sp-3;
+  padding: $sp-3 $sp-3 $sp-3 calc($sp-3 + 6rpx);
   border-radius: $r-card;
-  background: $paper-2;
+  background: $shell;
+  box-shadow: $shadow-card;
+  border-left: 6rpx solid $brand-deep;
 }
 
 .sec-name {
@@ -457,44 +551,73 @@ function goAccountDelete(): void {
   color: $ink-3;
 }
 
-/* ---------- 收集清单表格 ---------- */
+/* ---------- 收集清单：字段卡 ---------- */
+/* 五列表格在 390px 宽下每列只剩几十像素，改成「字段 + 来源/用途/期限」的
+ * 披露卡：一条收集项一张卡，手机上能读、也能逐条引用。 */
 .tbl {
-  margin-top: $sp-2;
-  border-top: 1rpx solid $paper-3;
+  margin-top: $sp-3;
 }
 
-.tbl-head,
-.tbl-row {
+.rec {
+  padding: $sp-3;
+  margin-bottom: $sp-2;
+  background: $shell;
+  border-radius: $r-card;
+  box-shadow: $shadow-card;
+}
+
+.rec-top {
   display: flex;
-  align-items: stretch;
-  border-bottom: 1rpx solid $paper-3;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $sp-2;
 }
 
-.tbl-head {
-  background: $paper-2;
+.rec-field {
+  flex: 1;
+  min-width: 0;
+  font-size: $fs-meta;
+  font-weight: 600;
+  line-height: 1.4;
+  color: $ink;
 }
 
-.th {
-  padding: 12rpx 6rpx;
+.rec-req {
+  flex-shrink: 0;
+  padding: 2rpx 12rpx;
+  border-radius: $r-control;
+  background: rgba(164, 118, 28, 0.12);
   font-size: $fs-micro;
-  letter-spacing: $ls-label;
-  color: $ink-3;
-  text-transform: uppercase;
+  letter-spacing: 1rpx;
+  color: $amber;
 }
 
-.td {
-  padding: 14rpx 6rpx;
+.rec-req--opt {
+  background: $brand-soft;
+  color: $brand-deep;
+}
+
+.rec-meta {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 10rpx;
+}
+
+.rec-k {
+  flex: 0 0 64rpx;
   font-size: $fs-micro;
-  line-height: 1.5;
+  letter-spacing: 1rpx;
+  color: $ink-4;
+}
+
+.rec-v {
+  flex: 1;
+  min-width: 0;
+  font-size: $fs-micro;
+  line-height: 1.6;
   color: $ink-2;
   word-break: break-word;
 }
-
-.c1 { flex: 0 0 24%; }
-.c2 { flex: 0 0 20%; }
-.c3 { flex: 0 0 22%; }
-.c4 { flex: 0 0 14%; }
-.c5 { flex: 1 1 20%; }
 
 /* ---------- 字段块 ---------- */
 .prow {
@@ -582,6 +705,13 @@ function goAccountDelete(): void {
 }
 
 @media (min-width: 768px) {
+  .page {
+    max-width: 750px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
   .gate-bar {
     left: 50%;
     right: auto;

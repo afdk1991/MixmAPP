@@ -19,7 +19,7 @@
       >
         <text class="folder-name">{{ folder.name }}</text>
         <text class="folder-count mono">{{ folder.itemCount }}</text>
-        <view v-if="folder.isDefault" class="folder-flag">
+        <view v-if="folder.isDefault && !folder.name.includes('默认')" class="folder-flag">
           <text class="folder-flag-text mono">默认</text>
         </view>
       </view>
@@ -74,16 +74,16 @@
             :src="coverOf(item)"
             mode="aspectFill"
             lazy-load
+            @error="markBroken(coverOf(item))"
           />
           <view v-else class="fav-cover-placeholder">
-            <text class="fav-cover-char">{{ item.title.slice(0, 1) }}</text>
+            <mx-icon name="box" :size="52" tone="ink2" :on-tint="coverTint({ cover: item.cover })" />
           </view>
         </view>
         <view class="fav-body">
           <text class="fav-title" hover-class="is-press" @tap="openDetail(item)">{{ item.title }}</text>
-          <text v-if="item.unit" class="fav-unit mono">{{ item.unit }}</text>
           <view class="fav-foot">
-            <text v-if="item.available" class="fav-price mono">¥{{ price(item.priceFen) }}</text>
+            <text v-if="item.available" class="fav-price mono">¥{{ price(item.priceFen) }}<text v-if="item.unit" class="fav-unit"> / {{ item.unit }}</text></text>
             <text v-else class="fav-off mono">商品已下架</text>
             <view class="fav-remove" hover-class="is-press" @tap="askRemove(item)">
               <text class="fav-remove-text mono">移除</text>
@@ -103,10 +103,11 @@
 import { computed, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import type { FavoriteFolderDto, FavoriteItemDto } from '@mixmapp/contracts';
-import { mallApi } from '../../api/client';
+import { mallApi, productCover, coverTint } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import { showDangerModal } from '../../modal';
+import MxIcon from '../../components/mx-icon/mx-icon.vue';
 
 const folders = ref<FavoriteFolderDto[]>([]);
 const items = ref<FavoriteItemDto[]>([]);
@@ -115,6 +116,8 @@ const loading = ref(false);
 const error = ref('');
 /** 正在进行的夹级操作：set-default / copy / clear，用于按钮态与防重 */
 const busy = ref('');
+/** 取图失败的封面，退回自有占位图标（色值 cover 不能直接塞进 image） */
+const broken = ref<Set<string>>(new Set());
 
 const activeFolder = computed<FavoriteFolderDto | undefined>(() =>
   folders.value.find((f) => f.id === activeId.value),
@@ -130,17 +133,22 @@ function price(fen: number): string {
   return (fen / 100).toFixed(2);
 }
 
-/** 有图用图；无图（cover 是色值或空）退回首字占位，与商城列表同口径 */
+/** 有图用图；无图（cover 是色值或空）退回自有占位图标，与商城列表同口径 */
 function coverOf(item: FavoriteItemDto): string {
-  const cover = item.cover ?? '';
-  if (!cover) return item.images?.[0] ?? '';
-  return /^data:/.test(cover) ? cover : cover;
+  const src = productCover(item);
+  if (!src) return '';
+  return broken.value.has(src) ? '' : src;
+}
+
+function markBroken(src: string): void {
+  if (!src) return;
+  broken.value = new Set(broken.value).add(src);
 }
 
 /** 无图商品的占位底色：cover 是十六进制色值时直接用 */
 function tintOf(item: FavoriteItemDto): Record<string, string> {
-  const cover = item.cover ?? '';
-  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(cover) ? { background: cover } : {};
+  const tint = coverTint(item);
+  return tint ? { background: tint } : {};
 }
 
 function toast(title: string): void {
@@ -346,7 +354,7 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .sub {
@@ -371,17 +379,16 @@ onShow(() => {
   padding: 0 24rpx;
   border-radius: $r-pill;
   background: $shell;
-  border: 1rpx solid $paper-3;
+  box-shadow: $shadow-card;
 }
 
 .folder--on {
-  background: $ink;
-  border-color: $ink;
+  background: $brand-deep;
 }
 
 .folder-name {
   font-size: $fs-meta;
-  color: $acc-1;
+  color: $ink;
   max-width: 320rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -394,7 +401,7 @@ onShow(() => {
 .folder-count {
   margin-left: 12rpx;
   font-size: $fs-micro;
-  color: $acc-2;
+  color: $ink-4;
 }
 
 .folder--on .folder-count {
@@ -406,15 +413,23 @@ onShow(() => {
   margin-left: 12rpx;
   padding: 2rpx 12rpx;
   border-radius: $r-pill;
-  background: $brand;
+  background: $brand-soft;
   display: inline-flex;
   align-items: center;
+}
+
+.folder--on .folder-flag {
+  background: rgba(244, 244, 241, 0.22);
 }
 
 .folder-flag-text {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
-  color: $shell;
+  color: $brand-deep;
+}
+
+.folder--on .folder-flag-text {
+  color: $on-solid;
 }
 
 /* ---------- 夹操作 ---------- */
@@ -458,13 +473,6 @@ onShow(() => {
   justify-content: center;
 }
 
-.fav-cover-char {
-  font-family: $font-display;
-  font-size: 52rpx;
-  font-weight: 800;
-  color: $ink-4;
-}
-
 .fav-body {
   flex: 1;
   min-width: 0;
@@ -475,6 +483,7 @@ onShow(() => {
 
 .fav-title {
   font-size: 30rpx;
+  font-weight: 600;
   line-height: 1.35;
   color: $ink;
   display: -webkit-box;
@@ -485,8 +494,9 @@ onShow(() => {
 }
 
 .fav-unit {
-  margin-top: 8rpx;
+  margin-left: 6rpx;
   font-size: $fs-micro;
+  font-weight: 400;
   color: $ink-4;
 }
 
@@ -510,14 +520,13 @@ onShow(() => {
 }
 
 .fav-remove {
-  padding: 8rpx 20rpx;
-  border-radius: $r-pill;
-  background: $paper-2;
+  padding: 2rpx 0;
+  background: transparent;
 }
 
 .fav-remove-text {
   font-size: $fs-micro;
-  color: $ink-2;
+  color: $ink-4;
 }
 
 /* ---------- 骨架 / 空态 ---------- */

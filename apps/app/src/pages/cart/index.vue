@@ -63,21 +63,30 @@
               lazy-load
               @error="markBroken(coverOf(line))"
             />
-            <block v-else>
-              <view class="cover-scrim" />
-              <text class="cover-char" :class="{ 'cover-char--on-tint': !!coverTint({ cover: line.cover }) }">{{ line.title.slice(0, 1) }}</text>
-            </block>
+            <mx-icon
+              v-else
+              name="box"
+              :size="56"
+              tone="ink2"
+              :on-tint="coverTint({ cover: line.cover })"
+            />
           </view>
           <view class="info">
             <view class="name-row">
               <text class="name">{{ line.title }}</text>
+              <view class="remove" hover-class="is-press" @tap="remove(line.productId)">
+                <text class="remove-text mono">移除</text>
+              </view>
+            </view>
+            <!-- 状态与行级优惠单独一行：长标题 + 徽章 + 移除挤在一行会把标题压碎 -->
+            <view class="tag-row">
               <!-- 四态徽章：R 需求 / L 缺货 / A 到货 / X 下架，文案优先用服务端下发口径 -->
               <text class="state-badge" :class="`state-badge--${lineStatusOf(line).toLowerCase()}`">{{
                 line.lineStatusText || CART_LINE_STATUS_TEXT[lineStatusOf(line)].label
               }}</text>
-              <view class="remove" hover-class="is-press" @tap="remove(line.productId)">
-                <text class="remove-text mono">移除</text>
-              </view>
+              <text v-if="isSelectable(line) && lineDiscountFen(line) > 0" class="discount-tag mono">
+                {{ lineDiscountLabel(line) }}
+              </text>
             </view>
             <view class="unit-row">
               <text v-if="lineStatusOf(line) === 'X'" class="unit unit--gone mono">已下架 · 请移除</text>
@@ -86,20 +95,17 @@
               <text v-else-if="isStockUnconfirmedLine(line)" class="unit unit--pending mono">货源待确认 · 可结算</text>
               <template v-else>
                 <text class="unit mono">¥{{ lineUnitPrice(line) }} / {{ line.unitName || '件' }}</text>
-                <text v-if="line.packLabel" class="stock mono">{{ line.packLabel }} · {{ line.quantity }}支</text>
+                <text v-if="line.packLabel" class="stock mono">{{ line.packLabel }} · {{ line.quantity }}{{ line.unitName || '件' }}</text>
                 <text v-else class="stock mono">{{ isBulkStock(line.stock) ? '现货' : `库存 ${line.stock}` }}</text>
               </template>
             </view>
-            <!-- 行级优惠：商城 / 特价取优后的一层，不叠加 -->
-            <text v-if="isSelectable(line) && lineDiscountFen(line) > 0" class="discount-tag mono">
-              {{ lineDiscountLabel(line) }}
-            </text>
             <view class="line-foot">
               <view v-if="isSelectable(line)" class="stepper">
                 <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity - stepOf(line))">
                   <text class="step-text mono">−</text>
                 </view>
-                <text class="count mono">{{ line.packQty ?? line.quantity }}</text>
+                <!-- 步进器展示的是「包装数」，不能拿 packQty（每包支数）当数量，否则 2 盒会显示成 2000 -->
+                <text class="count mono">{{ line.quantity }}</text>
                 <view class="step" hover-class="is-press" @tap="changeQty(line.productId, line.quantity + stepOf(line))">
                   <text class="step-text mono">+</text>
                 </view>
@@ -140,21 +146,22 @@
           <text class="summary-k">商品小计</text>
           <text class="summary-v mono">¥{{ price(pricing.subtotalFen) }}</text>
         </view>
-        <view class="summary-row">
+        <view v-if="pricing.mallDiscountFen > 0" class="summary-row">
           <text class="summary-k">商城优惠</text>
           <text class="summary-v summary-v--off mono">-¥{{ price(pricing.mallDiscountFen) }}</text>
         </view>
-        <view class="summary-row">
+        <view v-if="pricing.tejiaDiscountFen > 0" class="summary-row">
           <text class="summary-k">特价优惠</text>
           <text class="summary-v summary-v--off mono">-¥{{ price(pricing.tejiaDiscountFen) }}</text>
         </view>
+        <text v-if="pricing.discountTotalFen === 0" class="summary-none">本单暂无优惠</text>
         <!-- 满减档位未启用时命中数为 0：不展示满减行，也不展示「已享受满减」提示 -->
         <view v-if="pricing.manjianDiscountFen > 0" class="summary-row">
           <text class="summary-k">满减优惠</text>
           <text class="summary-v summary-v--off mono">-¥{{ price(pricing.manjianDiscountFen) }}</text>
         </view>
         <text v-if="pricing.manjianTip" class="summary-tip">{{ pricing.manjianTip }}</text>
-        <view class="summary-row summary-row--total">
+        <view v-if="pricing.discountTotalFen > 0" class="summary-row summary-row--total">
           <text class="summary-k">优惠合计</text>
           <text class="summary-v summary-v--off mono">-¥{{ price(pricing.discountTotalFen) }}</text>
         </view>
@@ -393,6 +400,7 @@ import { mallApi, mediaUrl, productCover, coverTint, isDemoOrderMode, integratio
 import { addressApi } from '../../api/address';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
+import MxIcon from '../../components/mx-icon/mx-icon.vue';
 
 /** 图片加载失败的封面：记住 URL，避免同一张坏图反复重试。 */
 const brokenCovers = ref<Set<string>>(new Set());
@@ -1047,7 +1055,7 @@ onShow(() => {
   min-height: 100vh;
   background: $paper;
   /* tabBar 页面：预留固定结算条 + 原生底部标签栏 + 安全区 + 软键盘，内容不被遮挡 */
-  padding: 0 $sp-3 calc(320rpx + var(--mx-tabbar-h) + var(--mx-safe-bottom) + var(--mx-ime-bottom));
+  padding: 0 $sp-3 calc(240rpx + var(--mx-tabbar-h) + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
 .head {
@@ -1062,7 +1070,7 @@ onShow(() => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .sub {
@@ -1079,13 +1087,16 @@ onShow(() => {
 
 .line {
   display: flex;
-  padding: $sp-3 0;
-  border-bottom: 1rpx solid $paper-3;
+  padding: $sp-3 $sp-2 $sp-3 $sp-3;
+  margin-bottom: $sp-2;
+  background: $shell;
+  border-radius: 24rpx;
+  box-shadow: $shadow-card;
 }
 
 /* 行勾选：只有 A 到货行可点，R/L/X 显示为禁用态 */
 .tick {
-  width: 64rpx;
+  width: 56rpx;
   height: 148rpx;
   display: flex;
   align-items: center;
@@ -1105,8 +1116,8 @@ onShow(() => {
 }
 
 .tick-box--on {
-  background: $solid;
-  border-color: $solid;
+  background: $brand-deep;
+  border-color: $brand-deep;
 }
 
 .tick-box--off {
@@ -1175,14 +1186,13 @@ onShow(() => {
   position: relative;
   width: 148rpx;
   height: 148rpx;
-  border-radius: $r-control;
+  border-radius: 20rpx;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   background: $paper-2;
-  border: 1rpx solid $paper-3;
 }
 
 .cover-img {
@@ -1191,25 +1201,6 @@ onShow(() => {
   top: 0;
   width: 100%;
   height: 100%;
-}
-
-.cover-scrim {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: linear-gradient(150deg, rgba(17, 20, 19, 0.02), rgba(17, 20, 19, 0.08));
-}
-
-.cover-char {
-  position: relative;
-  z-index: 2;
-  font-family: $font-display;
-  font-size: 56rpx;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  color: $ink;
 }
 
 .info {
@@ -1229,11 +1220,11 @@ onShow(() => {
   min-width: 0;
   padding-right: $sp-2;
   font-family: $font-display;
-  font-size: 34rpx;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
+  font-size: 30rpx;
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 1.35;
-  color: $acc-2;
+  color: $ink;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1255,14 +1246,25 @@ onShow(() => {
   color: $ink-3;
 }
 
-.unit-row {
+.tag-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 8rpx;
+}
+
+.tag-row .discount-tag {
+  margin-top: 0;
+}
+
+.unit-row {
+  display: block;
   margin-top: 8rpx;
 }
 
 .unit {
+  display: block;
   font-size: 26rpx;
   color: $ink-3;
 }
@@ -1321,10 +1323,10 @@ onShow(() => {
 /* ---------- 三层优惠汇总 ---------- */
 .summary {
   margin: $sp-3 0 $sp-4;
-  padding: $sp-3;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-card;
-  background: $paper-2;
+  padding: $sp-4 $sp-3;
+  border-radius: 24rpx;
+  background: $shell;
+  box-shadow: $shadow-card;
 }
 
 .summary-head {
@@ -1349,6 +1351,13 @@ onShow(() => {
 .summary-pick {
   display: block;
   margin-top: 4rpx;
+  font-size: 24rpx;
+  color: $ink-4;
+}
+
+.summary-none {
+  display: block;
+  margin-top: 10rpx;
   font-size: 24rpx;
   color: $ink-4;
 }
@@ -1412,11 +1421,11 @@ onShow(() => {
 }
 
 .step {
-  width: 88rpx;
-  height: 88rpx;
+  width: 80rpx;
+  height: 72rpx;
   border: 1rpx solid $paper-3;
-  border-radius: $r-control;
-  background: $paper-2;
+  border-radius: $r-pill;
+  background: $shell;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1431,7 +1440,8 @@ onShow(() => {
   width: 84rpx;
   text-align: center;
   font-size: 30rpx;
-  color: $acc-2;
+  font-weight: 600;
+  color: $ink;
 }
 
 .subtotal {
@@ -1452,6 +1462,8 @@ onShow(() => {
 }
 
 .stock {
+  display: block;
+  margin-top: 2rpx;
   font-size: 26rpx;
   color: $ink-4;
 }
@@ -1471,7 +1483,7 @@ onShow(() => {
   font-size: 40rpx;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .checkout .hint {
@@ -1659,12 +1671,12 @@ onShow(() => {
 .bar-btn {
   height: 88rpx;
   padding: 0 48rpx;
-  border-radius: $r-control;
-  background: $solid;
+  border-radius: $r-pill;
+  background: $brand-deep;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12rpx 28rpx -16rpx rgba(13, 25, 23, 0.5);
+  box-shadow: 0 12rpx 28rpx -16rpx rgba(10, 122, 112, 0.55);
 }
 
 .bar-btn--busy {

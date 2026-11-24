@@ -519,7 +519,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 }
 
 .mode-tab--on .mode-line {
-  background: $brand;
+  background: $brand-deep;
 }
 
 /* ---------- 表单 ---------- */
@@ -551,7 +551,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   height: 96rpx;
   padding: 0 24rpx;
   border-radius: $r-control;
-  background: $solid;
+  background: $brand-deep;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -673,8 +673,8 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   font-size: $fs-body;
   font-weight: 800;
   letter-spacing: 2rpx;
-  /* .submit 是 .btn--deep（底色 $solid）：深色下底色变浅，文字必须用 $on-solid */
-  color: $on-solid;
+  /* 常态由 .btn--deep 给定反白色；禁用态由 .btn--disabled 退成墨色，不能写死白色 */
+  color: inherit;
 }
 
 .secondary {
@@ -773,9 +773,9 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   height: 88rpx;
   margin-bottom: 14rpx;
   padding: 0 24rpx;
-  border: 1rpx solid $paper-3;
   border-radius: $r-control;
   background: $shell;
+  box-shadow: $shadow-card;
   display: flex;
   align-items: center;
   justify-content: space-between;

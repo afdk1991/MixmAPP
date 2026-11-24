@@ -55,8 +55,13 @@
 
         <view class="items">
           <view v-for="item in order.items" :key="item.productId + item.title" class="item">
-            <text class="item-title">{{ item.title }}</text>
-            <text class="item-qty mono">×{{ item.quantity }}</text>
+            <view class="item-cover">
+              <mx-icon name="box" :size="40" tone="ink2" />
+            </view>
+            <view class="item-main">
+              <text class="item-title">{{ item.title }}</text>
+              <text class="item-qty mono">×{{ item.quantity }}</text>
+            </view>
             <text class="item-price mono">¥{{ price(item.subtotalFen) }}</text>
           </view>
         </view>
@@ -81,7 +86,7 @@
         <view v-else class="action-row">
           <view
             v-if="order.status === 'pending'"
-            class="btn btn--deep btn--sm pay-btn"
+            class="btn btn--primary btn--sm pay-btn"
             :class="{ 'btn--disabled': paying === order.orderNo }"
             hover-class="is-press"
             @tap="pay(order)"
@@ -116,6 +121,7 @@ import { mallApi, integrationsApi, providerState } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import { showDangerModal } from '../../modal';
+import MxIcon from '../../components/mx-icon/mx-icon.vue';
 
 const orders = ref<OrderDto[]>([]);
 const loading = ref(false);
@@ -290,7 +296,7 @@ onLoad((options) => {
   font-weight: 800;
   letter-spacing: $ls-tight;
   line-height: $lh-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .sub {
@@ -310,7 +316,9 @@ onLoad((options) => {
 }
 
 .ticket--active {
-  border-color: rgba(15, 157, 143, 0.5);
+  box-shadow:
+    0 0 0 2rpx rgba(15, 157, 143, 0.35),
+    $shadow-card;
 }
 
 .ticket-head {
@@ -327,10 +335,10 @@ onLoad((options) => {
 
 .tk-no {
   min-width: 0;
-  font-size: 28rpx;
+  font-size: 26rpx;
   letter-spacing: 1rpx;
   word-break: break-all;
-  color: $acc-2;
+  color: $ink-3;
 }
 
 .tk-date {
@@ -403,11 +411,11 @@ onLoad((options) => {
 }
 
 .status-chip--shipped {
-  background: $brand;
+  background: $brand-soft;
 }
 
 .status-chip--shipped .status-chip-text {
-  color: $shell;
+  color: $brand-deep;
 }
 
 .status-chip--completed {
@@ -442,12 +450,27 @@ onLoad((options) => {
   border-bottom: none;
 }
 
-.item-title {
+.item-cover {
+  width: 88rpx;
+  height: 88rpx;
+  flex-shrink: 0;
+  margin-right: 16rpx;
+  border-radius: 16rpx;
+  background: $paper-2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-main {
   flex: 1;
   min-width: 0;
-  font-size: 30rpx;
+}
+
+.item-title {
+  font-size: 28rpx;
   line-height: 1.35;
-  color: $acc-2;
+  color: $ink-2;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -456,9 +479,9 @@ onLoad((options) => {
 }
 
 .item-qty {
-  width: 80rpx;
-  text-align: right;
-  font-size: 26rpx;
+  display: block;
+  margin-top: 4rpx;
+  font-size: 24rpx;
   color: $ink-4;
 }
 

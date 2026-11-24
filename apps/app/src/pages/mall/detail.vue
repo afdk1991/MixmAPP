@@ -30,7 +30,9 @@
           <view class="hero-scrim" />
           <view class="hero-ring" />
           <view class="hero-ring hero-ring--sm" />
-          <text class="hero-char">{{ product.title.slice(0, 1) }}</text>
+          <view class="hero-mark">
+            <mx-icon name="box" :size="120" tone="ondeep" />
+          </view>
         </template>
         <text v-if="product.brand" class="hero-tag mono">{{ product.brand }}</text>
         <text class="hero-serial mono">NO. {{ product.id.slice(0, 8).toUpperCase() }}</text>
@@ -52,7 +54,7 @@
             mode="aspectFill"
             @error="markBroken(img)"
           />
-          <view v-else class="thumb-ph"><text class="thumb-ph-char mono">—</text></view>
+          <view v-else class="thumb-ph"><mx-icon name="box" :size="40" tone="ink2" /></view>
         </view>
       </view>
 
@@ -296,6 +298,7 @@ import {
 import { mallApi, mediaUrl, productCover, coverTint, placeholderArt } from '../../api/client';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
+import MxIcon from '../../components/mx-icon/mx-icon.vue';
 
 const product = ref<MallProductDto | null>(null);
 const productId = ref('');
@@ -393,11 +396,11 @@ const totalText = computed(() =>
   product.value ? priceText(lineTotalFen(product.value, totalPieces.value)) : '0.00',
 );
 
-/** 折扣标签：100 也是源站给出的合法折扣（无折扣），照常显示 100%；只有源站没有该字段才留空。 */
+/** 折扣标签：100% 等于无折扣，不占位；有真实折扣才显示百分比。 */
 const discountLabel = computed(() => {
   const pct = product.value?.discountPct;
-  if (pct == null || !Number.isFinite(pct) || pct <= 0) return '';
-  return pct < 100 ? `${pct}% 折扣` : `${pct}%`;
+  if (pct == null || !Number.isFinite(pct) || pct <= 0 || pct >= 100) return '';
+  return `${pct}% 折扣`;
 });
 
 /** 登录可见门禁（源站 disbasePrc / bpInvQty / invStatus）：询价商品仍走询价口径 */
@@ -721,15 +724,11 @@ onLoad((options) => {
   background: rgba(11, 15, 14, 0.32);
 }
 
-.hero-char {
+/* 无实物图时用自有线性图标居中，替代首字，避免大字号汉字被当成品牌字 */
+.hero-mark {
   position: relative;
   z-index: 2;
-  font-family: $font-display;
-  font-size: 140rpx;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  line-height: 1;
-  color: $on-deep;
+  display: flex;
 }
 
 .hero-serial {
@@ -782,11 +781,6 @@ onLoad((options) => {
   background: $paper-2;
 }
 
-.thumb-ph-char {
-  font-size: 30rpx;
-  color: $ink-4;
-}
-
 /* ---------- 正文层 ---------- */
 .body {
   position: relative;
@@ -819,8 +813,8 @@ onLoad((options) => {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  /* 放在规则末尾：mixin 内含 @supports 嵌套规则，避免 Sass mixed-decls 告警 */
-  @include mx-gradient-text;
+  /* 商品标题走墨色：渐变字在长标题上会牺牲可读性，只留给首屏品牌语 */
+  color: $ink;
 }
 
 .subtitle {
@@ -962,7 +956,7 @@ onLoad((options) => {
   font-size: $fs-h2;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .section-rule {
@@ -1307,10 +1301,12 @@ onLoad((options) => {
   color: $acc-4;
 }
 
+/* 借鉴电商吸底购买栏：左价格、右双按钮；主按钮用品牌深青，
+ * 与页面里唯一的强调色一致，深浅主题都保持可读。 */
 .bar-btn {
   height: 88rpx;
-  padding: 0 30rpx;
-  border-radius: $r-control;
+  padding: 0 34rpx;
+  border-radius: $r-pill;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1328,8 +1324,8 @@ onLoad((options) => {
 }
 
 .bar-btn--primary {
-  background: $solid;
-  box-shadow: 0 12rpx 28rpx -16rpx rgba(13, 25, 23, 0.5);
+  background: $brand-deep;
+  box-shadow: $shadow-card;
 }
 
 .bar-btn-text {

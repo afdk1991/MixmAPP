@@ -352,9 +352,8 @@ html body textarea::placeholder {
 /* ---------- 外壳 ---------- */
 .sheet {
   background: $shell;
-  border: 1rpx solid $paper-3;
   border-radius: $r-card;
-  box-shadow: none;
+  box-shadow: $shadow-card;
 }
 
 .sheet--flat {
@@ -386,7 +385,8 @@ html body textarea::placeholder {
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  /* 分节标题统一用墨色：渐变字只留给首屏主标题，避免同页两种标题语言 */
+  color: $ink;
 }
 
 /* ---------- 按钮 ---------- */
@@ -414,10 +414,17 @@ html body textarea::placeholder {
     color: $on-solid;
   }
 
+  /* 交易主 CTA：加购、结算、下单统一用品牌深青，和详情页吸底栏一致 */
+  &--primary {
+    background: $brand-deep;
+    color: $on-solid;
+  }
+
   &--ghost {
     background: $shell;
-    color: $acc-2;
-    border: 1rpx solid $paper-3;
+    color: $ink-2;
+    /* 纸色描边在白卡与纸色页面上都几乎不可见，改用墨色 16% 的细边 */
+    border: 1rpx solid rgba(15, 47, 42, 0.16);
   }
 
   &--quiet {
@@ -438,7 +445,10 @@ html body textarea::placeholder {
   }
 
   &--disabled {
-    opacity: 0.42;
+    /* 不可用/进行中不用半透明：半透明会让白字落在浅底上读不出，统一退成中性面 */
+    background: $paper-3;
+    color: $ink-3;
+    box-shadow: none;
   }
 }
 

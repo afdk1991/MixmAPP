@@ -75,7 +75,7 @@
         <view class="row">
           <text class="k">设备号</text>
           <view class="v device-id">
-            <text class="device-id-text mono">{{ deviceSnapshot?.deviceId || '—' }}</text>
+            <text class="device-id-text mono">{{ shortDeviceId(deviceSnapshot?.deviceId) }}</text>
             <text class="device-copy mono" hover-class="is-press" @tap="copyDeviceId">复制</text>
           </view>
         </view>
@@ -154,10 +154,12 @@
         <view class="avatar-row">
           <view class="avatar">
             <image v-if="avatarPreview" class="avatar-img" :src="avatarPreview" mode="aspectFill" />
-            <mx-logo v-else size="md" tone="light" sub="AVATAR" />
+            <view v-else class="avatar-mark">
+              <mx-icon name="user" :size="56" tone="brand" />
+            </view>
           </view>
           <view class="avatar-actions">
-            <button class="btn btn--ghost" :loading="avatarUploading" hover-class="is-press" @tap="pickAvatar">
+            <button class="btn btn--ghost btn--sm btn--block" :loading="avatarUploading" hover-class="is-press" @tap="pickAvatar">
               <text class="btn-text">{{ avatarUploading ? '上传中…' : '更换头像' }}</text>
             </button>
             <text class="hint">JPG / PNG / WebP，≤ 5MB；未配置云存储时落到本机存储回退。</text>
@@ -334,28 +336,40 @@
           <text class="sec-title">入口</text>
         </view>
         <view class="rule" />
-        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.mall)">
-          <text class="link-title">去商城</text>
-          <text class="link-desc">商品 · 购物车 · 订单</text>
-          <text class="link-arrow mono">→</text>
+        <!-- 借鉴电商/社区个人页的「四宫格入口」：高频购物动作先做成磁贴，
+             低频设置仍保留为下面的列表行，两类信息的密度分开。 -->
+        <view class="tile-grid">
+          <view class="tile" hover-class="is-press" @tap="go(ROUTES.mall)">
+            <view class="tile-glyph">
+              <mx-icon name="bag" :size="30" tone="brand" />
+            </view>
+            <text class="tile-label">去商城</text>
+            <text class="tile-desc">挑商品 · 看分类</text>
+          </view>
+          <view class="tile" hover-class="is-press" @tap="go(ROUTES.cart)">
+            <view class="tile-glyph">
+              <mx-icon name="cart" :size="30" tone="brand" />
+            </view>
+            <text class="tile-label">购物车</text>
+            <text class="tile-desc">已选商品与结算</text>
+            <text v-if="cartBadgeText" class="tile-badge mono">{{ cartBadgeText }}</text>
+          </view>
+          <view class="tile" hover-class="is-press" @tap="go(ROUTES.orders)">
+            <view class="tile-glyph">
+              <mx-icon name="receipt" :size="30" tone="brand" />
+            </view>
+            <text class="tile-label">通行证订单</text>
+            <text class="tile-desc">下单后看进度</text>
+          </view>
+          <view class="tile" hover-class="is-press" @tap="go(ROUTES.favorites)">
+            <view class="tile-glyph">
+              <mx-icon name="bookmark" :size="30" tone="brand" />
+            </view>
+            <text class="tile-label">收藏夹</text>
+            <text class="tile-desc">商品与分类整理</text>
+          </view>
         </view>
-        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.cart)">
-          <text class="link-title">购物车</text>
-          <text class="link-desc">查看已选商品并结算</text>
-          <text v-if="cartBadgeText" class="link-badge mono">{{ cartBadgeText }}</text>
-          <text class="link-arrow mono">→</text>
-        </view>
-        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.orders)">
-          <text class="link-title">通行证订单</text>
-          <text class="link-desc">下单后可查看进度</text>
-          <text class="link-arrow mono">→</text>
-        </view>
-        <!-- 收藏夹（0019）：默认收藏夹由服务端首次访问时懒创建 -->
-        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.favorites)">
-          <text class="link-title">收藏夹</text>
-          <text class="link-desc">收藏的商品 · 分类整理</text>
-          <text class="link-arrow mono">→</text>
-        </view>
+
         <view v-if="aiLive" class="link-row" hover-class="is-press" @tap="go(ROUTES.assistant)">
           <text class="link-title">智能助手</text>
           <text class="link-desc">通用 AI 对话（开发态回显）</text>
@@ -369,16 +383,6 @@
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
           <text class="link-title">隐私政策与权限说明</text>
           <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>
-          <text class="link-arrow mono">→</text>
-        </view>
-        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.accountDelete)">
-          <text class="link-title">注销账号</text>
-          <text class="link-desc">永久删除账号与服务端个人数据</text>
-          <text class="link-arrow mono">→</text>
-        </view>
-        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.localData)">
-          <text class="link-title">本机数据</text>
-          <text class="link-desc">本机存储分类 · 分类清理与一键清空</text>
           <text class="link-arrow mono">→</text>
         </view>
         <view class="link-row link-row--last" hover-class="is-press" @tap="go(ROUTES.about)">
@@ -482,6 +486,7 @@ import {
   type ThemePref,
 } from '../../theme';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
+import MxIcon from '../../components/mx-icon/mx-icon.vue';
 
 /* 主题三态：默认「跟随系统」，与历史行为一致；手动选择由 theme.ts 持久化。 */
 const THEME_OPTIONS: Array<{ key: ThemePref; label: string }> = [
@@ -620,6 +625,12 @@ async function loadDeviceContext(): Promise<void> {
   } finally {
     deviceReporting.value = false;
   }
+}
+
+/** 设备号只在中段省略展示，完整值仍由「复制」拿到，避免 UUID 在行尾折断成两行 */
+function shortDeviceId(id?: string): string {
+  if (!id) return '—';
+  return id.length <= 22 ? id : `${id.slice(0, 8)}…${id.slice(-6)}`;
 }
 
 function copyDeviceId(): void {
@@ -1105,20 +1116,19 @@ onShow(() => {
 }
 
 .sec-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: block;
   margin-bottom: $sp-2;
 }
 
 .sec-title {
   display: block;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   font-family: $font-display;
-  font-size: $fs-h2;
+  font-size: $fs-h3;
   font-weight: 800;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  line-height: 1.25;
+  color: $ink;
 }
 
 .rule {
@@ -1220,8 +1230,8 @@ onShow(() => {
   font-size: $fs-meta;
   font-weight: 600;
   letter-spacing: 2rpx;
-  /* 只用于 .btn--deep（底色 $solid）：深色下底色变浅，文字必须跟着切到 $on-solid */
-  color: $on-solid;
+  /* 跟随按钮底色：deep 为反白，ghost 为墨色，避免白字落在白底上 */
+  color: inherit;
 }
 
 .btn-text--dark {
@@ -1256,6 +1266,15 @@ onShow(() => {
   border: 1rpx solid $paper-3;
 }
 
+.avatar-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: $brand-soft;
+}
+
 .avatar-img {
   width: 100%;
   height: 100%;
@@ -1272,9 +1291,73 @@ onShow(() => {
   display: none;
 }
 
-/* ---------- 入口行：发丝线分隔，不叠卡片 ---------- */
-.link-row {
+/* ---------- 四宫格入口：借鉴电商/社区个人页的磁贴 ---------- */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $sp-2;
+  margin: $sp-3 0 $sp-4;
+}
+
+.tile {
+  position: relative;
   display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  padding: $sp-3;
+  background: $shell;
+  border-radius: 24rpx;
+  box-shadow: $shadow-card;
+}
+
+.tile-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56rpx;
+  height: 56rpx;
+  margin-bottom: 6rpx;
+  background: $brand-soft;
+  border-radius: 18rpx;
+}
+
+.tile-label {
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.3;
+  color: $ink;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-desc {
+  font-size: $fs-micro;
+  line-height: 1.4;
+  color: $ink-3;
+}
+
+.tile-badge {
+  position: absolute;
+  right: 18rpx;
+  top: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32rpx;
+  height: 32rpx;
+  padding: 0 10rpx;
+  background: $brand-deep;
+  border-radius: $r-pill;
+  font-size: 16rpx;
+  line-height: 1;
+  color: $on-solid;
+}
+
+/* ---------- 入口行：发丝线分隔，不叠卡片；标题独占一行，说明落到第二行 ---------- */
+.link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   padding: $sp-3 0;
   border-bottom: 1rpx solid $paper-2;
@@ -1285,30 +1368,32 @@ onShow(() => {
 }
 
 .link-title {
+  grid-column: 1;
+  grid-row: 1;
   font-family: $font-display;
   font-size: $fs-h3;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: $ls-tight;
-  color: $acc-2;
-  flex: 1;
+  color: $ink;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .link-desc {
-  flex: 1;
-  margin-left: $sp-3;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin-top: 6rpx;
   font-size: $fs-micro;
+  line-height: 1.5;
   color: $ink-3;
-  text-align: right;
+  text-align: left;
 }
 
 .link-arrow {
+  grid-column: 2;
+  grid-row: 1;
   margin-left: 14rpx;
   font-size: $fs-micro;
-  color: $acc-2;
+  color: $ink-4;
 }
 
 .link-badge {

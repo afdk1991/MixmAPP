@@ -135,10 +135,13 @@
   right: 0;
   z-index: 80;
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
   padding: 12rpx $sp-3 calc(12rpx + var(--mx-sticky-offset, 0px) + var(--mx-safe-bottom));
   padding-right: calc(#{$sp-3} + var(--mx-safe-right));
   background: $shell;
   border-top: 1rpx solid $paper-3;
+  box-shadow: $shadow-bar;
 }
 
 /* tabBar 页用这个修饰类，等价于把 offset 提到标签栏高度 */

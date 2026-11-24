@@ -160,7 +160,14 @@
             />
             <view v-else class="cover-placeholder" :style="tintOf(product)">
               <view class="cover-ring" />
-              <text class="cover-char" :class="{ 'cover-char--on-tint': !!coverTint(product) }">{{ product.title.slice(0, 1) }}</text>
+              <view class="cover-mark">
+                <mx-icon
+                  name="box"
+                  :size="56"
+                  tone="ink2"
+                  :on-tint="coverTint(product)"
+                />
+              </view>
             </view>
             <text v-if="product.brand" class="cover-tag mono">{{ product.brand }}</text>
             <view
@@ -200,17 +207,20 @@
                 <text v-if="baseThousandText(product)" class="p-thousand-item mono">
                   千支面价 ¥{{ baseThousandText(product) }}
                 </text>
-                <text v-if="discountPctText(product)" class="p-thousand-item mono">
+                <text
+                  v-if="discountPctText(product) && discountPctText(product) !== '100'"
+                  class="p-thousand-item mono"
+                >
                   {{ discountPctText(product) }}% 折扣
                 </text>
-                <!-- 未登录：disbasePrc 在源站渲染为「登录可见」，不暴露折后价 -->
+                <!-- 未登录：折后价与库存在源站同为「登录可见」，合并成一处提示，避免重复两行 -->
                 <text
                   v-if="isLoginGated(product)"
                   class="p-thousand-item p-thousand-item--gated mono"
                   hover-class="is-press"
                   @tap.stop="goLogin"
                 >
-                  折后千支价 {{ LOGIN_VISIBLE_TEXT }}
+                  价格与库存 {{ LOGIN_VISIBLE_TEXT }}
                 </text>
                 <text v-else-if="discountThousandText(product)" class="p-thousand-item p-thousand-item--strong mono">
                   折后千支 ¥{{ discountThousandText(product) }}
@@ -221,17 +231,15 @@
                 <view v-if="isInquiryProduct(product)" class="status-chip status-chip--inquiry">
                   <text class="status-chip-text mono">询价待报</text>
                 </view>
-                <!-- 未登录：bpInvQty（库存）与 invStatus（库存状态）同为「登录可见」占位 -->
-                <view v-else-if="isLoginGated(product)" class="status-chip status-chip--pending">
-                  <text class="status-chip-text mono">库存 · {{ LOGIN_VISIBLE_TEXT }}</text>
-                </view>
+                <!-- 未登录的价格/库存占位已在上方合并成一处，这里不再重复 -->
                 <view v-else-if="isOutOfStock(product)" class="status-chip status-chip--oos">
                   <text class="status-chip-text mono">缺货</text>
                 </view>
                 <view v-else-if="isStockUnconfirmed(product)" class="status-chip status-chip--pending">
                   <text class="status-chip-text mono">货源待确认</text>
                 </view>
-                <view v-else class="status-chip status-chip--stock">
+                <!-- 未登录时库存本身不可见，别再按本地 0 值渲染「余 0」造成自相矛盾 -->
+                <view v-else-if="!isLoginGated(product)" class="status-chip status-chip--stock">
                   <text class="status-chip-text mono">{{ isBulkStock(product.stock) ? '在售' : `在售 · 余 ${product.stock}` }}</text>
                 </view>
               </view>
@@ -311,6 +319,7 @@
 import { computed, reactive, ref } from 'vue';
 import { onLoad, onPageScroll, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
 import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue';
+import MxIcon from '../../components/mx-icon/mx-icon.vue';
 import type { MallCategoryNodeDto, MallProductDto, MallSpecOptionsDto } from '../../api/mall';
 import {
   breadcrumbLabel,
@@ -1368,31 +1377,24 @@ function onShellRefresh(): void {
 .wrap {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
 }
 
+/* 借鉴得物商品卡：整卡无描边、软阴影、方图铺满，信息区留白收口。
+ * 原来卡顶那条青→蓝→紫渐变细条已移除——彩色只留给价格与状态。 */
 .card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 48.6%;
   margin-bottom: $sp-4;
   background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-card;
+  border: 0;
+  border-radius: 28rpx;
   overflow: hidden;
   box-shadow: $shadow-card;
   transition: transform 0.16s ease;
-}
-
-/* 卡片顶部彩色细条：青→靛蓝→紫，与标题渐变同源，作为彩色体系的描边装饰 */
-.card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 4rpx;
-  background: $grad-title;
-  z-index: 4;
 }
 
 /* ---------- 平板 / 折叠屏展开态：商品网格三栏 ---------- */
@@ -1402,16 +1404,33 @@ function onShellRefresh(): void {
   }
 }
 
+/* ---------- 桌面端：四栏，单卡限宽避免大屏拉成横幅 ---------- */
+@media (min-width: 1200px) {
+  .wrap {
+    justify-content: flex-start;
+    column-gap: 32rpx;
+  }
+
+  .card {
+    width: calc((100% - 96rpx) / 4);
+    max-width: 320px;
+  }
+
+  .cover {
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+}
+
 .cover {
   position: relative;
   width: 100%;
-  height: 300rpx;
+  height: 320rpx;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   background: $paper-2;
-  border-bottom: 1rpx solid $paper-3;
 }
 
 .cover-img {
@@ -1448,34 +1467,26 @@ function onShellRefresh(): void {
 
 .cover-tag {
   position: absolute;
-  left: 20rpx;
-  top: 20rpx;
+  left: 16rpx;
+  top: 16rpx;
   z-index: 2;
+  max-width: 62%;
+  overflow: hidden;
+  padding: 6rpx 14rpx;
   font-size: $fs-micro;
-  letter-spacing: 2rpx;
-  text-transform: uppercase;
-  color: $acc-1;
+  letter-spacing: 1rpx;
+  color: $ink;
   background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: 6rpx;
-  padding: 4rpx 10rpx;
+  border-radius: $r-pill;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.cover-char {
+/* 自有商品无实物图时后端 cover 是品牌色：占位块铺该底色，图标改深场反白。 */
+.cover-mark {
   position: relative;
   z-index: 2;
-  font-family: $font-display;
-  font-size: 84rpx;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  line-height: 1;
-  color: $ink;
-}
-
-/* 自有商品无实物图时后端 cover 是品牌色：占位块铺该底色，首字改白。 */
-.cover-char--on-tint {
-  color: $on-deep;
-  opacity: 0.92;
+  display: flex;
 }
 
 .cover-add {
@@ -1483,14 +1494,14 @@ function onShellRefresh(): void {
   right: 16rpx;
   bottom: 16rpx;
   z-index: 3;
-  width: 88rpx;
-  height: 88rpx;
+  width: 76rpx;
+  height: 76rpx;
   border-radius: 50%;
-  background: $shell;
-  border: 1rpx solid $paper-3;
+  background: $brand-deep;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: $shadow-card;
 }
 
 .cover-add--inquiry {
@@ -1498,25 +1509,28 @@ function onShellRefresh(): void {
 }
 
 .cover-add-text {
-  font-size: 36rpx;
+  font-size: 34rpx;
   line-height: 1;
-  color: $ink;
+  color: $on-solid;
+}
+
+.cover-add--inquiry .cover-add-text {
+  color: $brand-deep;
 }
 
 .p-info {
-  padding: $sp-3;
+  padding: $sp-3 $sp-3 $sp-4;
   display: flex;
   flex-direction: column;
-  min-height: 176rpx;
 }
 
 .p-name {
   font-family: $font-display;
   font-size: 30rpx;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: $ls-tight;
   line-height: 1.4;
-  color: $acc-2;
+  color: $ink;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -1529,7 +1543,7 @@ function onShellRefresh(): void {
   display: block;
   margin-top: 6rpx;
   font-size: $fs-micro;
-  color: $acc-6;
+  color: $ink-3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1559,9 +1573,10 @@ function onShellRefresh(): void {
 }
 
 .p-amount {
-  font-family: $font-mono;
-  font-size: 40rpx;
+  font-family: $font-display;
+  font-size: 42rpx;
   font-weight: 800;
+  letter-spacing: $ls-tight;
   color: $acc-4;
 }
 
@@ -1632,6 +1647,8 @@ function onShellRefresh(): void {
 .p-thousand-item--gated {
   color: $amber;
   text-decoration: underline;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 /* 状态 chip：仅状态用 pill 圆角 */
@@ -1684,7 +1701,7 @@ function onShellRefresh(): void {
 
 /* ---------- 骨架 ---------- */
 .cover-sk {
-  height: 300rpx;
+  height: 320rpx;
   border-radius: 0;
 }
 

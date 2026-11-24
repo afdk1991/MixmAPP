@@ -6,7 +6,7 @@
       <view class="empty-mark mono">!</view>
       <text class="empty-title">研究报告没打开</text>
       <text class="empty-sub">网络可能不可用，请重试；记录仍在列表里。</text>
-      <view class="btn btn--brand empty-btn" hover-class="is-press" @tap="reloadTask">
+      <view class="btn btn--primary empty-btn" hover-class="is-press" @tap="reloadTask">
         <text class="empty-btn-text">重新加载</text>
       </view>
       <view class="btn btn--ghost empty-btn" hover-class="is-press" @tap="backToList">
@@ -18,7 +18,7 @@
       <view class="empty-mark">!</view>
       <text class="empty-title">未找到该研究</text>
       <text class="empty-sub">记录可能已失效，返回重新发起一次研究。</text>
-      <view class="btn btn--brand empty-btn" hover-class="is-press" @tap="backToList">
+      <view class="btn btn--primary empty-btn" hover-class="is-press" @tap="backToList">
         <text class="empty-btn-text">返回研究记录</text>
       </view>
     </view>
@@ -110,11 +110,14 @@
 
         <view v-else class="report">
           <view
-            v-for="section in visibleSections"
+            v-for="(section, si) in visibleSections"
             :key="section.id"
             class="report-sec"
           >
-            <text class="report-h" :class="section.level === 3 ? 'report-h--sub' : ''">{{ section.heading }}</text>
+            <view class="report-head">
+              <text class="report-no mono">{{ String(si + 1).padStart(2, '0') }}</text>
+              <text class="report-h" :class="section.level === 3 ? 'report-h--sub' : ''">{{ section.heading }}</text>
+            </view>
             <text
               v-for="(p, pi) in section.paragraphs"
               :key="pi"
@@ -379,12 +382,14 @@ onUnload(() => stopTimer());
 }
 
 /* ---------- 问题重述 ---------- */
+/* 与列表页的条目卡同一套：白卡 + 编号式 eyebrow + 状态 chip，
+ * 详情不再另起一套深色通栏，读起来是同一条记录的展开。 */
 .rs-head {
-  padding: calc(36rpx + var(--mx-safe-top)) $sp-4 $sp-4;
-  background:
-    radial-gradient(80% 120% at 94% 0%, rgba(15, 157, 143, 0.12), rgba(15, 157, 143, 0) 56%),
-    $paper;
-  border-bottom: 1rpx solid $paper-3;
+  margin: $sp-3;
+  padding: $sp-4;
+  background: $shell;
+  border-radius: $r-card;
+  box-shadow: $shadow-card;
 }
 
 .rs-head-top {
@@ -394,12 +399,16 @@ onUnload(() => stopTimer());
 }
 
 .rs-state {
+  padding: 4rpx 14rpx;
+  border-radius: $r-control;
+  background: rgba(164, 118, 28, 0.12);
   font-size: $fs-micro;
-  letter-spacing: 2rpx;
+  letter-spacing: 1rpx;
   color: $amber;
 }
 
 .rs-state--done {
+  background: $brand-soft;
   color: $brand-deep;
 }
 
@@ -474,7 +483,7 @@ onUnload(() => stopTimer());
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: $ls-tight;
-  @include mx-gradient-text;
+  color: $ink;
 }
 
 .sec-count {
@@ -580,10 +589,25 @@ onUnload(() => stopTimer());
 }
 
 .report-sec {
-  margin-bottom: $sp-5;
+  margin-bottom: $sp-6;
+}
+
+.report-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.report-no {
+  flex-shrink: 0;
+  margin-top: 4rpx;
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-4;
 }
 
 .report-h {
+  flex: 1;
   display: block;
   font-family: $font-display;
   font-size: $fs-h3;
@@ -594,8 +618,8 @@ onUnload(() => stopTimer());
 }
 
 .report-h--sub {
+  margin-top: 0;
   font-size: $fs-body;
-  margin-top: $sp-3;
 }
 
 .report-p {
@@ -730,9 +754,9 @@ onUnload(() => stopTimer());
   gap: 16rpx;
   padding: 10rpx;
   background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-control;
-  box-shadow: $shadow-lift;
+  border: 0;
+  border-radius: $r-card;
+  box-shadow: $shadow-bar;
 }
 
 /* 顶部渐隐遮罩：让经过 dock 的内容“溶入”操作坞，避免硬切截断感 */
@@ -753,16 +777,15 @@ onUnload(() => stopTimer());
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: $r-control;
+  border-radius: $r-pill;
 }
 
 .dock-btn--brand {
-  background: $brand;
+  background: $brand-deep;
 }
 
 .dock-btn--ghost {
-  background: $shell;
-  border: 1rpx solid $paper-3;
+  background: transparent;
 }
 
 .dock-btn--disabled {
