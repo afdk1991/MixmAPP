@@ -413,14 +413,18 @@ LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
 
 ---
 
-## 11. hznzcn 手动同步（非定时，按需执行）
+## 11. hznzcn 源站（已停用，禁止再读取/抓取）
+
+> **项目规则（2026-11-24）：不再读取 `https://www.hznzcn.com`（含 www/m 镜像与图床）。**
+> CLI 入口已加守卫：`--site hznzcn` 直接退出码 65，`catalog:sync:hznzcn` npm 脚本已移除。
+> 已入库的 `hzn:*` 商品保留不动；下文历史命令仅作背景留档，**不要执行**。
 
 ### 11.1 策略
 
 | 源 | 触发方式 | 说明 |
 |---|---|---|
 | `egluosi` | 定时，每日 02:30（Asia/Shanghai） | 唯一进 crontab 的源，`/opt/mixmapp/catalog-sync/run.sh`，默认全量全分类幂等累积 |
-| `hznzcn` | **仅手动** | 已从定时摘除；不进 `SITES` 默认值，手动跑也不会顺带跑 egluosi |
+| `hznzcn` | **已停用** | 不再抓取；本地 CLI 守卫拦截，生产 cron 默认 `SITES=egluosi`，不会触发 |
 
 服务器实际生效值（不是仓库文件）：
 

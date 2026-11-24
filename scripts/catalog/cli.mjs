@@ -364,6 +364,14 @@ async function runInspect() {
 
 // ------------------------------------------------------------------ main
 const command = cfg.command;
+
+// 项目规则：hznzcn 源站已停用，禁止再读取 https://www.hznzcn.com（含 www/m 镜像）。
+// 已入库的 hzn 商品保留不动；如需恢复，先解除本守卫并确认源站许可。
+if (cfg.site === 'hznzcn') {
+  console.error('[catalog] hznzcn 源站已按项目规则停用：不再读取 https://www.hznzcn.com。已入库的 hzn 商品保留不动。');
+  process.exit(65);
+}
+
 // 站点适配层：egluosi 走既有 sync；hznzcn 走自己的采集/映射，共用 ingest 入库
 const runSyncForSite = cfg.site === 'hznzcn' ? () => runHznzcnSync(cfg) : runSync;
 const runner = command === 'inspect' ? runInspect : command === 'sync' ? runSyncForSite : null;

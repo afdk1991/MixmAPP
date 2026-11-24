@@ -91,12 +91,12 @@ export function loadConfig(argv = process.argv) {
 
 export function usage() {
   return [
-    'catalog 采集器（egluosi / hznzcn 双货源站）',
+    'catalog 采集器（egluosi 货源站；hznzcn 已停用）',
     '',
     '  pnpm catalog:sync     [选项]   全量抓取 → 比对 → 幂等入库',
     '  pnpm catalog:inspect  [选项]   只读对账：单件/按品牌规格查源站，不写库',
     '',
-    '  --site <name>        货源站：egluosi（默认）| hznzcn',
+    '  --site <name>        货源站：egluosi（默认）；hznzcn 已停用，CLI 守卫拒绝执行',
     '  --base-url <url>     站点基址（默认 https://eg.egluosi.com）',
     '  --concurrency <n>    详情并发（默认 1）',
     '  --delay-ms <n>       详情请求间隔毫秒（默认 250；hznzcn 强制 ≥2500）',

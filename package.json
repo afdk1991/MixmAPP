@@ -22,7 +22,6 @@
     "verify": "node scripts/verify.mjs",
     "db:migrate": "pnpm --filter @mixmapp/api db:migrate",
     "catalog:sync": "node scripts/catalog/cli.mjs sync",
-    "catalog:sync:hznzcn": "node scripts/catalog/cli.mjs sync --site hznzcn --resume --per-cat 40 --delay-ms 2500 --storage-dir storage",
     "catalog:inspect": "node scripts/catalog/cli.mjs inspect",
     "catalog:reimage": "node scripts/catalog/reimage.mjs",
     "ops:health": "node scripts/healthcheck.mjs",
