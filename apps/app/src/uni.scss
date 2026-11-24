@@ -25,6 +25,15 @@ $signal: var(--mx-signal);       // 错误 / 危险
 $danger: var(--mx-danger);       // 危险操作确认主按钮（删除 / 取消 / 清空）
 $amber: var(--mx-amber);         // 提醒
 
+/* 语义软底 / 遮罩：从各页重复出现的裸 rgba 抽上来，光/深双档由 theme.scss 切换 */
+$amber-soft: var(--mx-amber-soft);       // 琥珀提示软底（缺货 / 待办 / 变更要点）
+$signal-soft: var(--mx-signal-soft);     // 信号错误描边（表单错误行）
+$brand-wash: var(--mx-brand-wash);        // 品牌色轻 wash（深场光斑远端）
+$brand-wash-strong: var(--mx-brand-wash-strong); // 品牌色强 wash（深场光斑近端）
+$scrim: var(--mx-scrim);                  // 模态 / 抽屉遮罩
+$scrim-shadow: var(--mx-scrim-shadow);    // 抽屉 / 浮层侧投影黑
+$fav: var(--mx-fav);                      // 收藏激活红（仅此一处语义使用）
+
 /* 实心反白按钮（原先把 $ink 当底色用，深色下会和文字一起反转，故单独拆出） */
 $solid: var(--mx-solid);
 $on-solid: var(--mx-on-solid);
@@ -66,6 +75,7 @@ $on-deep: var(--mx-on-deep);                            // 深场主文字
 $on-deep-2: var(--mx-on-deep-2);                        // 深场次级文字
 $on-deep-3: var(--mx-on-deep-3);                        // 深场说明 / 禁用
 $on-deep-line: var(--mx-on-deep-line);                  // 深场发丝线
+$on-deep-soft: var(--mx-on-deep-soft);                  // 深场低透明白（chip 底 / 分隔）
 $brand-on-deep: var(--mx-brand-on-deep);                // 深场上的品牌青（提亮保证对比）
 $amber-on-deep: var(--mx-amber-on-deep);                // 深场上的提醒色
 
@@ -73,6 +83,8 @@ $amber-on-deep: var(--mx-amber-on-deep);                // 深场上的提醒色
 $r-shell: 40rpx;        // 大区块 / 通行证
 $r-card: 24rpx;         // 常规卡片
 $r-control: 12rpx;      // 输入框 / 按钮 / 小标签
+$r-sm: 16rpx;           // 次级卡片 / 同意框
+$r-xs: 8rpx;            // 小徽标 / 骨架线 / 勾选框
 $r-pill: 999rpx;        // 仅状态 chip 使用
 
 /* ---------- 阴影：两层，克制 ---------- */
@@ -95,6 +107,7 @@ $fs-h3: 40rpx;          // 卡片标题
 $fs-body: 34rpx;        // 正文
 $fs-meta: 30rpx;        // 说明
 $fs-micro: 26rpx;       // 最小标签
+$fs-xs: 24rpx;          // 附注 / 徽章（micro 之下一档）
 
 /* ---------- 行高 ---------- */
 $lh-tight: 1.18;
@@ -114,6 +127,11 @@ $sp-4: 32rpx;
 $sp-5: 40rpx;
 $sp-6: 48rpx;
 $sp-8: 64rpx;
+
+/* ---------- 动效时长 ---------- */
+$dur-fast: var(--mx-dur-fast);   // 按压 / 微提示
+$dur-base: var(--mx-dur-base);   // 通用过渡
+$dur-slow: var(--mx-dur-slow);   // 抽屉 / 浮层进场
 
 /* ---------- 兼容旧变量名 ---------- */
 $mixmapp-ink: $ink;

@@ -63,10 +63,25 @@
   --mx-on-deep-line: rgba(244, 244, 241, 0.18);
   --mx-brand-on-deep: #8fe9dd;
   --mx-amber-on-deep: #e0a963;
+  --mx-on-deep-soft: rgba(244, 244, 241, 0.08);
 
   /* 实心反白按钮：浅色=墨黑底浅字，深色=浅底深字（不再复用会反转的 $ink） */
   --mx-solid: #111413;
   --mx-on-solid: #f4f4f1;
+
+  /* 语义软底 / 遮罩（光色档） */
+  --mx-amber-soft: rgba(138, 90, 16, 0.12);
+  --mx-signal-soft: rgba(179, 55, 42, 0.28);
+  --mx-brand-wash: rgba(15, 157, 143, 0.1);
+  --mx-brand-wash-strong: rgba(15, 157, 143, 0.26);
+  --mx-scrim: rgba(0, 0, 0, 0.55);
+  --mx-scrim-shadow: rgba(0, 0, 0, 0.35);
+  --mx-fav: #e11d48;
+
+  /* 动效时长 */
+  --mx-dur-fast: 0.12s;
+  --mx-dur-base: 0.16s;
+  --mx-dur-slow: 0.25s;
 
   /* 骨架屏 */
   --mx-sk-base: #ebece7;
@@ -122,6 +137,17 @@
 
   --mx-solid: #eceee9;
   --mx-on-solid: #0f1413;
+
+  --mx-on-deep-soft: rgba(244, 244, 241, 0.08);
+
+  /* 语义软底 / 遮罩（深色档） */
+  --mx-amber-soft: rgba(224, 169, 99, 0.14);
+  --mx-signal-soft: rgba(226, 105, 92, 0.3);
+  --mx-brand-wash: rgba(15, 157, 143, 0.16);
+  --mx-brand-wash-strong: rgba(15, 157, 143, 0.3);
+  --mx-scrim: rgba(0, 0, 0, 0.62);
+  --mx-scrim-shadow: rgba(0, 0, 0, 0.45);
+  --mx-fav: #ff7a9c;
 
   --mx-sk-base: #1b211f;
   --mx-sk-sheen: #242c29;

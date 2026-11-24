@@ -401,7 +401,7 @@ onUnload(() => stopTimer());
 .rs-state {
   padding: 4rpx 14rpx;
   border-radius: $r-control;
-  background: rgba(164, 118, 28, 0.12);
+  background: $amber-soft;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $amber;
@@ -445,7 +445,7 @@ onUnload(() => stopTimer());
 .rs-demo-badge {
   margin-right: $sp-2;
   padding: 2rpx 12rpx;
-  border-radius: 999rpx;
+  border-radius: $r-pill;
   background: $brand-soft;
   color: $brand-deep;
   font-size: $fs-micro;
@@ -727,7 +727,7 @@ onUnload(() => stopTimer());
 .rs-skel-bar {
   height: 34rpx;
   width: 50%;
-  border-radius: 8rpx;
+  border-radius: $r-xs;
   margin-bottom: $sp-3;
 }
 
@@ -735,7 +735,7 @@ onUnload(() => stopTimer());
   height: 24rpx;
   width: 100%;
   margin-top: 14rpx;
-  border-radius: 8rpx;
+  border-radius: $r-xs;
 }
 
 .rs-skel-line--short {

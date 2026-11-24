@@ -1696,7 +1696,7 @@ function onShellRefresh(): void {
   top: 12rpx;
   padding: 4rpx 10rpx;
   background: $deep;
-  border-radius: 8rpx;
+  border-radius: $r-xs;
   font-size: 16rpx;
   color: $on-deep;
 }
@@ -1755,7 +1755,7 @@ function onShellRefresh(): void {
 .pick-name {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 600;
   line-height: 1.4;
   color: $ink;
@@ -1808,7 +1808,7 @@ function onShellRefresh(): void {
 
 .pick-amount {
   font-family: $font-display;
-  font-size: 40rpx;
+  font-size: $fs-h3;
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $acc-4;

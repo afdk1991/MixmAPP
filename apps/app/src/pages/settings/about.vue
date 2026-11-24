@@ -219,7 +219,7 @@ async function reloadMeta(): Promise<void> {
   overflow: hidden;
   padding: $sp-6 $sp-5 $sp-5;
   background:
-    radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
+    radial-gradient(120% 90% at 88% -14%, $brand-wash-strong, rgba(15, 157, 143, 0) 58%),
     linear-gradient(158deg, $deep 0%, $deep-2 62%, $deep-3 120%);
   border-radius: $r-shell;
 }

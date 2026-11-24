@@ -112,7 +112,7 @@ async function send(): Promise<void> {
 .sub {
   display: block;
   margin-top: 10rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $acc-6;
 }
@@ -165,7 +165,7 @@ async function send(): Promise<void> {
 }
 
 .bubble-text {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   line-height: 1.55;
   color: $ink;
   white-space: pre-wrap;
@@ -198,7 +198,7 @@ async function send(): Promise<void> {
   padding: 0 24rpx;
   border-radius: $r-control;
   background: $paper-2;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   color: $ink;
 }
 

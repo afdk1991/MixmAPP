@@ -495,7 +495,7 @@ onShow(() => {
 .sub {
   display: block;
   margin-top: 10rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $ink-3;
 }
@@ -590,7 +590,7 @@ onShow(() => {
   width: 160rpx;
   height: 160rpx;
   flex-shrink: 0;
-  border-radius: 16rpx;
+  border-radius: $r-sm;
   overflow: hidden;
   background: $paper-2;
 }
@@ -617,7 +617,7 @@ onShow(() => {
 }
 
 .fav-title {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 600;
   line-height: 1.35;
   color: $ink;
@@ -680,7 +680,7 @@ onShow(() => {
 .sk-cover {
   width: 160rpx;
   height: 160rpx;
-  border-radius: 16rpx;
+  border-radius: $r-sm;
 }
 
 .sk-body {

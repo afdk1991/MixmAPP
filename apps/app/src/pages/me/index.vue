@@ -985,7 +985,7 @@ onShow(() => {
   z-index: 2;
   display: block;
   margin-top: 10rpx;
-  font-size: 40rpx;
+  font-size: $fs-h3;
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0;
@@ -1338,7 +1338,7 @@ onShow(() => {
   gap: 4rpx;
   padding: $sp-3;
   background: $shell;
-  border-radius: 24rpx;
+  border-radius: $r-card;
   box-shadow: $shadow-card;
 }
 
@@ -1354,7 +1354,7 @@ onShow(() => {
 }
 
 .tile-label {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 700;
   line-height: 1.3;
   color: $ink;

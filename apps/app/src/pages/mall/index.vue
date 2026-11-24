@@ -1276,7 +1276,7 @@ function onShellRefresh(): void {
 
 .cat-entry-arrow {
   margin-left: 12rpx;
-  font-size: 34rpx;
+  font-size: $fs-body;
   color: $acc-2;
 }
 
@@ -1291,7 +1291,7 @@ function onShellRefresh(): void {
   bottom: 0;
   left: 0;
   z-index: 900;
-  background: rgba(0, 0, 0, 0.55);
+  background: $scrim;
 }
 
 .drawer {
@@ -1306,7 +1306,7 @@ function onShellRefresh(): void {
   max-width: 640rpx;
   padding-top: calc(var(--mx-safe-top) + 20rpx);
   background: $shell;
-  box-shadow: 8rpx 0 40rpx rgba(0, 0, 0, 0.35);
+  box-shadow: 8rpx 0 40rpx $scrim-shadow;
   transform: translateX(-100%);
   transition: transform 0.24s ease;
 }
@@ -1323,7 +1323,7 @@ function onShellRefresh(): void {
 
 .drawer-head-title {
   font-family: $font-display;
-  font-size: 40rpx;
+  font-size: $fs-h3;
   font-weight: 700;
   letter-spacing: 2rpx;
   color: $acc-1;
@@ -1366,7 +1366,7 @@ function onShellRefresh(): void {
 
 .drawer-mark {
   width: 30rpx;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   line-height: 1;
   color: $brand-deep;
 }
@@ -1404,7 +1404,7 @@ function onShellRefresh(): void {
 }
 
 .drawer-chev {
-  font-size: 34rpx;
+  font-size: $fs-body;
   color: $ink-4;
 }
 
@@ -1620,7 +1620,7 @@ function onShellRefresh(): void {
 }
 
 .cover-fav--on .cover-fav-text {
-  color: #e11d48;
+  color: $fav;
 }
 
 /* 自有商品无实物图时后端 cover 是品牌色：占位块铺该底色，图标改深场反白。 */
@@ -1650,7 +1650,7 @@ function onShellRefresh(): void {
 }
 
 .cover-add-text {
-  font-size: 34rpx;
+  font-size: $fs-body;
   line-height: 1;
   color: $on-solid;
 }
@@ -1667,7 +1667,7 @@ function onShellRefresh(): void {
 
 .p-name {
   font-family: $font-display;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 700;
   letter-spacing: $ls-tight;
   line-height: 1.4;
@@ -1708,7 +1708,7 @@ function onShellRefresh(): void {
 }
 
 .p-cur {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $acc-4;
   margin-right: 2rpx;
 }

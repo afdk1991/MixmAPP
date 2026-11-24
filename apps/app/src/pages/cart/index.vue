@@ -1117,7 +1117,7 @@ onShow(() => {
 .sub {
   display: block;
   margin-top: 10rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $acc-6;
 }
@@ -1144,7 +1144,7 @@ onShow(() => {
   padding: $sp-3 $sp-2 $sp-3 $sp-3;
   margin-bottom: $sp-2;
   background: $shell;
-  border-radius: 24rpx;
+  border-radius: $r-card;
   box-shadow: $shadow-card;
 }
 
@@ -1162,7 +1162,7 @@ onShow(() => {
   width: 40rpx;
   height: 40rpx;
   border: 1rpx solid $paper-3;
-  border-radius: 8rpx;
+  border-radius: $r-xs;
   background: $paper-2;
   display: flex;
   align-items: center;
@@ -1179,7 +1179,7 @@ onShow(() => {
 }
 
 .tick-mark {
-  font-size: 24rpx;
+  font-size: $fs-xs;
   font-weight: 700;
   color: $on-solid;
 }
@@ -1232,7 +1232,7 @@ onShow(() => {
 .discount-tag {
   display: inline-block;
   margin-top: 6rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $amber;
 }
 
@@ -1274,7 +1274,7 @@ onShow(() => {
   min-width: 0;
   padding-right: $sp-2;
   font-family: $font-display;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1.35;
@@ -1295,7 +1295,7 @@ onShow(() => {
 }
 
 .remove-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-3;
 }
@@ -1319,7 +1319,7 @@ onShow(() => {
 
 .unit {
   display: block;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
@@ -1338,7 +1338,7 @@ onShow(() => {
 }
 
 .inquiry-hint {
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $ink-4;
 }
 
@@ -1369,7 +1369,7 @@ onShow(() => {
 .inquiry-banner-sub {
   display: block;
   margin-top: 8rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.6;
   color: $ink-3;
 }
@@ -1378,7 +1378,7 @@ onShow(() => {
 .summary {
   margin: $sp-3 0 $sp-4;
   padding: $sp-4 $sp-3;
-  border-radius: 24rpx;
+  border-radius: $r-card;
   background: $shell;
   box-shadow: $shadow-card;
 }
@@ -1398,21 +1398,21 @@ onShow(() => {
 }
 
 .summary-op {
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $brand-deep;
 }
 
 .summary-pick {
   display: block;
   margin-top: 4rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $ink-4;
 }
 
 .summary-none {
   display: block;
   margin-top: 10rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $ink-4;
 }
 
@@ -1424,7 +1424,7 @@ onShow(() => {
 }
 
 .summary-k {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
@@ -1441,7 +1441,7 @@ onShow(() => {
 .summary-tip {
   display: block;
   margin-top: 8rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $amber;
 }
 
@@ -1486,14 +1486,14 @@ onShow(() => {
 }
 
 .step-text {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   color: $ink;
 }
 
 .count {
   width: 84rpx;
   text-align: center;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 600;
   color: $ink;
 }
@@ -1504,13 +1504,13 @@ onShow(() => {
 }
 
 .subtotal-k {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
   margin-right: 6rpx;
 }
 
 .subtotal-v {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 800;
   color: $acc-4;
 }
@@ -1518,7 +1518,7 @@ onShow(() => {
 .stock {
   display: block;
   margin-top: 2rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
 }
 
@@ -1534,7 +1534,7 @@ onShow(() => {
   display: block;
   margin-top: 12rpx;
   font-family: $font-display;
-  font-size: 40rpx;
+  font-size: $fs-h3;
   font-weight: 800;
   letter-spacing: $ls-tight;
   color: $ink;
@@ -1569,14 +1569,14 @@ onShow(() => {
 
 .addr-name {
   font-family: $font-display;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 800;
   color: $ink;
 }
 
 .addr-phone {
   margin-left: $sp-2;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
@@ -1584,7 +1584,7 @@ onShow(() => {
   margin-left: auto;
   padding: 2rpx 12rpx;
   border: 1rpx solid $brand-deep;
-  border-radius: 999rpx;
+  border-radius: $r-pill;
   font-size: 22rpx;
   color: $brand-deep;
 }
@@ -1592,7 +1592,7 @@ onShow(() => {
 .addr-text {
   display: block;
   margin-top: 8rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.5;
   color: $ink-3;
 }
@@ -1605,7 +1605,7 @@ onShow(() => {
 
 .addr-op {
   margin-left: $sp-3;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $brand-deep;
 }
 
@@ -1615,7 +1615,7 @@ onShow(() => {
 }
 
 .addr-add-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $brand-deep;
 }
 
@@ -1639,7 +1639,7 @@ onShow(() => {
   padding: 0 24rpx;
   height: 68rpx;
   border: 1rpx solid $paper-3;
-  border-radius: 999rpx;
+  border-radius: $r-pill;
   background: $paper-2;
   display: flex;
   align-items: center;
@@ -1651,7 +1651,7 @@ onShow(() => {
 }
 
 .chip-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink;
 }
 
@@ -1688,7 +1688,7 @@ onShow(() => {
 }
 
 .form-btn-text {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 600;
   letter-spacing: 1rpx;
   color: $ink;
@@ -1708,7 +1708,7 @@ onShow(() => {
 
 .bar-label {
   display: block;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-4;
 }
@@ -1716,7 +1716,7 @@ onShow(() => {
 .bar-price {
   display: block;
   margin-top: 4rpx;
-  font-size: 40rpx;
+  font-size: $fs-h3;
   font-weight: 800;
   line-height: 1.1;
   color: $acc-4;
@@ -1742,12 +1742,12 @@ onShow(() => {
 }
 
 .bar-price--muted {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   color: $ink-4;
 }
 
 .bar-btn-text {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 600;
   letter-spacing: 1rpx;
   color: $on-solid;

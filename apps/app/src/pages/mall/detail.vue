@@ -699,7 +699,7 @@ onLoad((options) => {
   right: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(160deg, rgba(244, 244, 241, 0.02) 10%, rgba(244, 244, 241, 0.08) 100%);
+  background: linear-gradient(160deg, rgba(244, 244, 241, 0.02) 10%, $on-deep-soft 100%);
 }
 
 .hero-ring {
@@ -727,7 +727,7 @@ onLoad((options) => {
   color: $on-deep-2;
   padding: 6rpx 14rpx;
   border: 1rpx solid $on-deep-line;
-  border-radius: 8rpx;
+  border-radius: $r-xs;
   background: rgba(11, 15, 14, 0.32);
 }
 
@@ -799,7 +799,7 @@ onLoad((options) => {
 .crumbs {
   display: block;
   margin-top: 12rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   letter-spacing: 1rpx;
   line-height: 1.6;
   white-space: pre-line;
@@ -829,7 +829,7 @@ onLoad((options) => {
   width: 100%;
   max-width: 100%;
   margin-top: 10rpx;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   line-height: 1.6;
   white-space: pre-line;
   word-break: break-all;
@@ -854,7 +854,7 @@ onLoad((options) => {
 }
 
 .cur {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-2;
   margin-right: 4rpx;
 }
@@ -872,19 +872,19 @@ onLoad((options) => {
 
 .price-note {
   margin-left: 12rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
 .price-unit {
   margin-left: 8rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $ink-3;
 }
 
 .price-old {
   margin-left: 14rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
   text-decoration: line-through;
 }
@@ -926,7 +926,7 @@ onLoad((options) => {
 
 .meta-item {
   margin-right: 24rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 
@@ -1001,7 +1001,7 @@ onLoad((options) => {
 .desc {
   display: block;
   margin-top: 14rpx;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   line-height: 1.8;
   white-space: pre-line;
   color: $ink-2;
@@ -1044,14 +1044,14 @@ onLoad((options) => {
 }
 
 .step-text {
-  font-size: 34rpx;
+  font-size: $fs-body;
   color: $ink;
 }
 
 .count {
   width: 84rpx;
   text-align: center;
-  font-size: 34rpx;
+  font-size: $fs-body;
   color: $acc-2;
 }
 
@@ -1125,7 +1125,7 @@ onLoad((options) => {
 
 .pkg-line {
   margin-top: 10rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $ink-3;
 }
 
@@ -1160,7 +1160,7 @@ onLoad((options) => {
 }
 
 .unit-tab-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-2;
 }
 
@@ -1182,7 +1182,7 @@ onLoad((options) => {
 }
 
 .qty-sum-value {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 700;
   color: $ink;
 }
@@ -1228,7 +1228,7 @@ onLoad((options) => {
 }
 
 .promo-text {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-2;
 }
 
@@ -1285,7 +1285,7 @@ onLoad((options) => {
 
 .bar-label {
   display: block;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $ink-4;
 }
@@ -1293,7 +1293,7 @@ onLoad((options) => {
 .bar-state {
   display: block;
   margin-top: 2rpx;
-  font-size: 34rpx;
+  font-size: $fs-body;
   font-weight: 800;
   letter-spacing: 1rpx;
   color: $ink;
@@ -1302,7 +1302,7 @@ onLoad((options) => {
 .bar-price {
   display: block;
   margin-top: 4rpx;
-  font-size: 40rpx;
+  font-size: $fs-h3;
   font-weight: 800;
   line-height: 1.1;
   color: $acc-4;
@@ -1336,7 +1336,7 @@ onLoad((options) => {
 }
 
 .bar-btn-text {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   font-weight: 600;
   letter-spacing: 0.5rpx;
   color: $on-solid;

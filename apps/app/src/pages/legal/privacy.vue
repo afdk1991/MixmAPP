@@ -586,7 +586,7 @@ function goAccountDelete(): void {
   flex-shrink: 0;
   padding: 2rpx 12rpx;
   border-radius: $r-control;
-  background: rgba(164, 118, 28, 0.12);
+  background: $amber-soft;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $amber;
