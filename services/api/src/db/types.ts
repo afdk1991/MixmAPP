@@ -119,6 +119,8 @@ export type DeletionCascadeCounts = {
   ordersAnonymized: number;
   paymentsAnonymized: number;
   revokedSessions: number;
+  /** 账号合并审计记录中快照被覆写为墓碑的条数（行保留，不整行删除） */
+  mergeRecordsRedacted: number;
 };
 
 /** 后台会话摘要（/admin/console/users/:id/sessions）：令牌只返哈希前缀，不返原文。 */export type AdminUserSessionSummary = {

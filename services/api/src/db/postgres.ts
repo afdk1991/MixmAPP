@@ -57,6 +57,37 @@ type PoolLike = Queryable & {
 const toDate = (v: unknown): Date => (v instanceof Date ? v : new Date(v as string));
 const toDateOrNull = (v: unknown): Date | null => (v == null ? null : toDate(v));
 
+/**
+ * 注销级联计数适配层：delete_account() 返回的 jsonb 在直连 PG 下是对象，
+ * 经 CloudBase PG 网关时可能被序列化成 JSON 字符串。两种形态都在这里归一；
+ * 数值字段缺失 / 非法时回退 0，不抛错。
+ */
+export function parseDeletionCascadeCounts(candidate: unknown): DeletionCascadeCounts {
+  let raw: Row = {};
+  if (typeof candidate === 'string') {
+    try {
+      raw = JSON.parse(candidate) as Row;
+    } catch {
+      raw = {};
+    }
+  } else if (candidate && typeof candidate === 'object') {
+    raw = candidate as Row;
+  }
+  const num = (v: unknown): number => Number(v ?? 0);
+  return {
+    binds: num(raw['binds']),
+    devices: num(raw['devices']),
+    addresses: num(raw['addresses']),
+    favorites: num(raw['favorites']),
+    carts: num(raw['carts']),
+    pushTokens: num(raw['pushTokens']),
+    ordersAnonymized: num(raw['ordersAnonymized']),
+    paymentsAnonymized: num(raw['paymentsAnonymized']),
+    revokedSessions: num(raw['revokedSessions']),
+    mergeRecordsRedacted: num(raw['mergeRecordsRedacted']),
+  };
+}
+
 function mapUser(row: Row): UserRecord {
   return {
     id: row['id'] as string,
@@ -384,29 +415,7 @@ export class PgStore implements Store {
      */
     erase: async (userId: string): Promise<DeletionCascadeCounts> => {
       const res = await this.pool.query('select delete_account($1) as result', [userId]);
-      const candidate = res.rows[0]?.['result'];
-      let raw: Row = {};
-      if (typeof candidate === 'string') {
-        try {
-          raw = JSON.parse(candidate) as Row;
-        } catch {
-          raw = {};
-        }
-      } else if (candidate && typeof candidate === 'object') {
-        raw = candidate as Row;
-      }
-      const num = (v: unknown): number => Number(v ?? 0);
-      return {
-        binds: num(raw['binds']),
-        devices: num(raw['devices']),
-        addresses: num(raw['addresses']),
-        favorites: num(raw['favorites']),
-        carts: num(raw['carts']),
-        pushTokens: num(raw['pushTokens']),
-        ordersAnonymized: num(raw['ordersAnonymized']),
-        paymentsAnonymized: num(raw['paymentsAnonymized']),
-        revokedSessions: num(raw['revokedSessions']),
-      };
+      return parseDeletionCascadeCounts(res.rows[0]?.['result']);
     },
   };
 

@@ -18,6 +18,8 @@ export type DeletionResult = {
   deleted: true;
   revokedSessions: number;
   ordersAnonymized: number;
+  /** 合并审计快照被覆写为墓碑的条数（行保留，不进 purged 小计） */
+  mergeRecordsRedacted: number;
   purged: {
     binds: number;
     devices: number;
@@ -124,6 +126,7 @@ export class AccountDeletionService {
       deleted: true,
       revokedSessions: counts.revokedSessions,
       ordersAnonymized: counts.ordersAnonymized,
+      mergeRecordsRedacted: counts.mergeRecordsRedacted,
       purged: {
         binds: counts.binds,
         devices: counts.devices,

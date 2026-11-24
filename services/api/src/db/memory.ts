@@ -181,6 +181,20 @@ export class MemoryStore implements Store {
       const pushTokens = await this.pushTokens.deleteByUser(userId);
       await this.mall.orderRequests.deleteByUser(userId);
       this.challengeList = this.challengeList.filter((c) => c.userId !== userId);
+
+      // 合并审计行不整行删除：命中被删账号的行保留审计骨架，快照覆写为最小墓碑，
+      // 避免旧快照里残留被删账号的 openId / 购物车行 / 地址等可识别文本。
+      let mergeRecordsRedacted = 0;
+      const redactedAt = new Date().toISOString();
+      for (const merge of this.mergeList) {
+        if (merge.primaryUserId !== userId && merge.secondaryUserId !== userId) continue;
+        merge.snapshot = {
+          redacted: true,
+          redactedAt,
+        } as unknown as AccountMergeRecord['snapshot'];
+        mergeRecordsRedacted += 1;
+      }
+
       await this.users.delete(userId);
       return {
         binds,
@@ -192,6 +206,7 @@ export class MemoryStore implements Store {
         ordersAnonymized,
         paymentsAnonymized,
         revokedSessions,
+        mergeRecordsRedacted,
       };
     },
   };

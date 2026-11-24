@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { sha256Hex } from '../src/lib/crypto.js';
 import type {
+  AccountMergeRecord,
   AddressRecord,
   CartItemRecord,
   FavoriteFolderRecord,
@@ -487,5 +488,92 @@ describe('注销方式可选性查询', () => {
     });
     expect(phoneOptions.json().data.methods).toEqual(expect.arrayContaining(['sms', 'device']));
     expect(phoneOptions.json().data.phone).toBe('138****3333');
+  });
+});
+
+describe('账号注销：合并审计快照脱敏', () => {
+  it('命中被删账号的合并行保留审计骨架、快照覆写为墓碑，无 openId / 手机号 / 地址残留', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    const store = ctx.store;
+    const survivor = await registerEmailUser(app, 'merge-survivor@mixm.app', 'Passw0rd!x');
+    const doomed = await registerEmailUser(app, 'merge-doomed@mixm.app', 'Passw0rd!x');
+    const doomedId = doomed.user.id;
+
+    // 快照里埋可识别文本：第三方 openId、手机号、收货地址，注销后必须随墓碑一并消失。
+    const snapshotPayload = {
+      takenAt: now().toISOString(),
+      primary: { id: survivor.user.id, nickname: '存续账号' },
+      secondary: {
+        id: doomedId,
+        nickname: '待删账号',
+        phone: '13900007777',
+        bio: '宁波市鄞州区敏感地址 88 号',
+      },
+      bindings: [
+        {
+          id: 'bind-m-1',
+          userId: doomedId,
+          provider: 'wechat',
+          openId: 'wx-openid-redact-777',
+          unionId: null,
+          nickname: null,
+          avatarUrl: null,
+          createdAt: now(),
+        },
+      ],
+      carts: [],
+      orderIds: [],
+      paymentIds: [],
+      pushTokenIds: [],
+      refreshTokenHashes: [],
+    };
+
+    await store.merges.insert({
+      id: 'merge-1',
+      mergeKey: 'merge-key-redact-1',
+      primaryUserId: survivor.user.id,
+      secondaryUserId: doomedId,
+      reason: 'bind_phone',
+      status: 'completed',
+      snapshot: snapshotPayload as unknown as AccountMergeRecord['snapshot'],
+      moved: null,
+      conflictStrategy: {},
+      error: null,
+      createdAt: now(),
+      completedAt: now(),
+      rolledBackAt: null,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/me/account/delete',
+      headers: authHeader(doomed.tokens.accessToken),
+      payload: { method: 'password', password: 'Passw0rd!x', confirm: '注销' },
+    });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.deleted).toBe(true);
+    expect(data.mergeRecordsRedacted).toBe(1);
+
+    // 审计行保留：id / merge_key / status / reason 等骨架不动。
+    const merge = await store.merges.findByKey('merge-key-redact-1');
+    expect(merge).not.toBeNull();
+    expect(merge!.id).toBe('merge-1');
+    expect(merge!.mergeKey).toBe('merge-key-redact-1');
+    expect(merge!.status).toBe('completed');
+    expect(merge!.reason).toBe('bind_phone');
+
+    // 快照已是最小墓碑，可识别文本全部消失。
+    expect(merge!.snapshot).toMatchObject({ redacted: true });
+    expect(typeof (merge!.snapshot as unknown as { redactedAt: unknown }).redactedAt).toBe('string');
+    const snapshotText = JSON.stringify(merge!.snapshot);
+    expect(snapshotText).not.toContain('wx-openid-redact-777');
+    expect(snapshotText).not.toContain('13900007777');
+    expect(snapshotText).not.toContain('宁波市鄞州区敏感地址 88 号');
+
+    // 存续主账号不受影响，被删账号行已物理清除。
+    expect(await store.users.findById(survivor.user.id)).not.toBeNull();
+    expect(await store.users.findById(doomedId)).toBeNull();
   });
 });
