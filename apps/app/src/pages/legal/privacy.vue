@@ -46,29 +46,29 @@
     <view class="sec">
       <text class="sec-name">二、设备与网络信息</text>
       <text class="para">登录状态下，应用会上报一次「设备与网络快照」。逐字段说明如下。</text>
-      <view class="field">
-        <text class="field-k mono">设备标识</text>
-        <text class="field-v">Android 应用取系统分配给本应用的 ANDROID_ID；取不到时改用本机首次生成的持久随机串。网页与小程序使用保存在本地的随机 UUID。用途：同一账号识别不同设备、游客账号在同一设备复用、异常登录识别。不用于广告追踪——当前版本未接入任何广告或统计 SDK。</text>
+      <view class="prow">
+        <text class="prow-k mono">设备标识</text>
+        <text class="prow-v">Android 应用取系统分配给本应用的 ANDROID_ID；取不到时改用本机首次生成的持久随机串。网页与小程序使用保存在本地的随机 UUID。用途：同一账号识别不同设备、游客账号在同一设备复用、异常登录识别。不用于广告追踪——当前版本未接入任何广告或统计 SDK。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">机型 / 系统名 / 系统版本</text>
-        <text class="field-v">Android 读取系统属性；网页端从浏览器 User-Agent 尽力解析，解析不到留空，不填假值。用途：故障定位与兼容性排查。</text>
+      <view class="prow">
+        <text class="prow-k mono">机型 / 系统名 / 系统版本</text>
+        <text class="prow-v">Android 读取系统属性；网页端从浏览器 User-Agent 尽力解析，解析不到留空，不填假值。用途：故障定位与兼容性排查。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">网络类型</text>
-        <text class="field-v">Wi-Fi / 移动网络 / 以太网 / 未连接。取不到一律记为「未连接」，不猜测。用途：区分网络问题与账号问题。</text>
+      <view class="prow">
+        <text class="prow-k mono">网络类型</text>
+        <text class="prow-v">Wi-Fi / 移动网络 / 以太网 / 未连接。取不到一律记为「未连接」，不猜测。用途：区分网络问题与账号问题。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">运营商</text>
-        <text class="field-v">仅 Android 原生壳可读取运营商名称；网页与小程序取不到时留空。用途：判断网络侧故障。</text>
+      <view class="prow">
+        <text class="prow-k mono">运营商</text>
+        <text class="prow-v">仅 Android 原生壳可读取运营商名称；网页与小程序取不到时留空。用途：判断网络侧故障。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">IP 地址</text>
-        <text class="field-v">只由服务端产生，客户端上报的同名字段一律丢弃（见第三节）。用途：异常登录识别与安全审计。</text>
+      <view class="prow">
+        <text class="prow-k mono">IP 地址</text>
+        <text class="prow-v">只由服务端产生，客户端上报的同名字段一律丢弃（见第三节）。用途：异常登录识别与安全审计。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">采集时间</text>
-        <text class="field-v">取服务端写入时间，不采信客户端上报的时间。用途：判断快照新鲜度。</text>
+      <view class="prow">
+        <text class="prow-k mono">采集时间</text>
+        <text class="prow-v">取服务端写入时间，不采信客户端上报的时间。用途：判断快照新鲜度。</text>
       </view>
       <text class="para">写入位置：每个账号、每台设备仅保留最近一条快照；登录令牌记录中同时保存该次登录的设备快照；运营后台的写操作审计另记操作者 IP 与浏览器标识。</text>
       <text class="para">可见范围：仅在「星际联邦通行证 → 设备与网络」与「关于与能力 → 本机信息」向本人展示，以及运营后台的「用户最近会话」向已登录的管理员展示。不进入任何公开页面，不对外提供，不用于广告投放。</text>
@@ -133,25 +133,25 @@
     <!-- ===== 八、保存期限与安全（原第五节扩写） ===== -->
     <view class="sec">
       <text class="sec-name">八、保存期限与安全</text>
-      <view class="field">
-        <text class="field-k mono">登录凭证</text>
-        <text class="field-v">刷新凭证自签发起 30 天到期，退出登录即在本机清除；服务端只保存凭证的哈希，不保存原文。应用已关闭系统自动备份，避免凭据随设备迁移被带出。</text>
+      <view class="prow">
+        <text class="prow-k mono">登录凭证</text>
+        <text class="prow-v">刷新凭证自签发起 30 天到期，退出登录即在本机清除；服务端只保存凭证的哈希，不保存原文。应用已关闭系统自动备份，避免凭据随设备迁移被带出。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">设备与网络快照</text>
-        <text class="field-v">每账号每设备仅保留最近一次，新快照覆盖旧快照；当前没有自动清除任务，账号注销时随账号数据一并删除。</text>
+      <view class="prow">
+        <text class="prow-k mono">设备与网络快照</text>
+        <text class="prow-v">每账号每设备仅保留最近一次，新快照覆盖旧快照；当前没有自动清除任务，账号注销时随账号数据一并删除。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">同意记录</text>
-        <text class="field-v">本机记录与账号记录同步保存，用于证明同意发生在何时、哪个版本；随账号存续保留。</text>
+      <view class="prow">
+        <text class="prow-k mono">同意记录</text>
+        <text class="prow-v">本机记录与账号记录同步保存，用于证明同意发生在何时、哪个版本；随账号存续保留。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">订单与收货信息</text>
-        <text class="field-v">为履约、售后与对账长期保留，当前没有自动清理任务。</text>
+      <view class="prow">
+        <text class="prow-k mono">订单与收货信息</text>
+        <text class="prow-v">为履约、售后与对账长期保留，当前没有自动清理任务。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">运行日志</text>
-        <text class="field-v">服务端访问日志写入容器标准输出，其中 IP 与设备号已脱敏；保留天数由部署环境的日志轮转设置决定，仓库内没有固定天数配置。</text>
+      <view class="prow">
+        <text class="prow-k mono">运行日志</text>
+        <text class="prow-v">服务端访问日志写入容器标准输出，其中 IP 与设备号已脱敏；保留天数由部署环境的日志轮转设置决定，仓库内没有固定天数配置。</text>
       </view>
       <text class="para">安全措施：全站 HTTPS；密码仅保存哈希；后台会话 Cookie 设置为不可被脚本读取、仅同站发送；后台令牌与会话校验失败一律返回 404。</text>
     </view>
@@ -159,33 +159,33 @@
     <!-- ===== 九、你的权利（原第六节扩写） ===== -->
     <view class="sec">
       <text class="sec-name">九、你的权利</text>
-      <view class="field">
-        <text class="field-k mono">查阅</text>
-        <text class="field-v">「星际联邦通行证」页可查看账号资料、设备与网络信息；「订单」「收藏」「购物车」页可查看对应数据；「关于与能力」页可查看本机信息与服务端能力状态。</text>
+      <view class="prow">
+        <text class="prow-k mono">查阅</text>
+        <text class="prow-v">「星际联邦通行证」页可查看账号资料、设备与网络信息；「订单」「收藏」「购物车」页可查看对应数据；「关于与能力」页可查看本机信息与服务端能力状态。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">复制</text>
-        <text class="field-v">设备号与订单编号旁提供「复制」按钮，可把数据带走留存。</text>
+      <view class="prow">
+        <text class="prow-k mono">复制</text>
+        <text class="prow-v">设备号与订单编号旁提供「复制」按钮，可把数据带走留存。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">更正</text>
-        <text class="field-v">昵称、用户名、密码可在「星际联邦通行证」页修改；收货地址可在购物车页新增、编辑、删除。</text>
+      <view class="prow">
+        <text class="prow-k mono">更正</text>
+        <text class="prow-v">昵称、用户名、密码可在「星际联邦通行证」页修改；收货地址可在购物车页新增、编辑、删除。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">删除</text>
-        <text class="field-v">收藏、购物车条目与收货地址可在对应页面直接删除；本地缓存可在系统设置中清除应用数据。</text>
+      <view class="prow">
+        <text class="prow-k mono">删除</text>
+        <text class="prow-v">收藏、购物车条目与收货地址可在对应页面直接删除；本地缓存可在系统设置中清除应用数据。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">注销账号</text>
-        <text class="field-v">应用内目前没有自助注销入口。如需删除账号及其数据，请通过下方联系方式提出，我们在核实身份后处理；处理范围包括账号资料、订单与收货信息、设备快照与登录凭证。</text>
+      <view class="prow">
+        <text class="prow-k mono">注销账号</text>
+        <text class="prow-v">应用内目前没有自助注销入口。如需删除账号及其数据，请通过下方联系方式提出，我们在核实身份后处理；处理范围包括账号资料、订单与收货信息、设备快照与登录凭证。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">撤回同意</text>
-        <text class="field-v">退出登录并清除应用数据即可撤回本机同意；撤回后仍可浏览部分页面，但无法使用账号、下单与订单功能。注册时未勾选同意则不会创建账号。</text>
+      <view class="prow">
+        <text class="prow-k mono">撤回同意</text>
+        <text class="prow-v">退出登录并清除应用数据即可撤回本机同意；撤回后仍可浏览部分页面，但无法使用账号、下单与订单功能。注册时未勾选同意则不会创建账号。</text>
       </view>
-      <view class="field">
-        <text class="field-k mono">投诉举报</text>
-        <text class="field-v">可通过下方公开仓库的 issue 渠道提交；涉及备案主体的投诉，可按页脚备案号在工信部备案系统查询主体后向监管部门反映。</text>
+      <view class="prow">
+        <text class="prow-k mono">投诉举报</text>
+        <text class="prow-v">可通过下方公开仓库的 issue 渠道提交；涉及备案主体的投诉，可按页脚备案号在工信部备案系统查询主体后向监管部门反映。</text>
       </view>
     </view>
 
@@ -487,24 +487,24 @@ function exitApp(): void {
 .c5 { flex: 1 1 20%; }
 
 /* ---------- 字段块 ---------- */
-.field {
+.prow {
   padding: $sp-2 0;
   border-top: 1rpx solid $paper-3;
 }
 
-.field:last-of-type {
+.prow:last-of-type {
   border-bottom: 1rpx solid $paper-3;
   margin-bottom: $sp-2;
 }
 
-.field-k {
+.prow-k {
   display: block;
   font-size: $fs-micro;
   letter-spacing: $ls-label;
   color: $brand-deep;
 }
 
-.field-v {
+.prow-v {
   display: block;
   margin-top: 8rpx;
   font-size: $fs-meta;
