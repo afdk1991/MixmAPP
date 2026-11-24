@@ -314,3 +314,108 @@
 7. **OAuth 重新授权未实现**：作为无密码无手机账号的等价校验方式，本轮未接入「重新授权换 openId」复核；当前以设备一次性票据兜底。
 8. **`.env.example` 补登已完成**：`RETENTION_SWEEP_MINUTES`、`RETENTION_REFRESH_TOKEN_DAYS`、`RETENTION_OAUTH_STATE_DAYS`、`RETENTION_SMS_CODE_DAYS`、`RETENTION_DELETION_CHALLENGE_DAYS`、`RETENTION_DEVICE_SNAPSHOT_DAYS`、`RETENTION_CART_DAYS`、`RETENTION_ORDER_PII_DAYS` 已连同注释与默认值写入 `.env.example`，与 `config.ts` 的默认值一致（不再是待办项）。
 9. **本地化缺口**：搜索历史、浏览记录、购物车草稿尚无本机落盘 key；既有收藏 / 购物车 / 地址 / 快照仍留服务端支撑多端与下单，是否进一步本地化需结合多端一致性需求另议。
+
+## 11. 收口记录（2026-11-24）
+
+本章记录本轮上线、迁移、定论与遗留，事实均来自 deploy 转绿后的只读核验与仓库真实输出，数字未改动；前 10 章为初稿口径，与本章冲突处以本章为准。
+
+### 11.1 上线事实
+
+- **推送**：`git push origin main` 成功，范围 `8fbdac8..da70f46`。**未执行** `git pull --rebase --autostash`，理由是 push 前 `git fetch` 得到 behind=0 / ahead=4，无需 rebase；这也避免了触碰工作区 33 项并行线未提交文件。
+- **四条提交**：
+
+| 提交 | 说明 | 文件数 |
+| --- | --- | --- |
+| `f1b6f81` | feat(api): 账号自助注销（密码/短信/设备票据三级校验 + 单事务级联 + 订单留行脱敏）与按期限留存清理任务 | 22 文件 |
+| `2d131fc` | feat(app): 注销账号页与本机数据自助面板（分级身份校验、纯本地分类清理；隐私政策第八九节同步，版本号 2026-11-24.1） | 8 文件 |
+| `95468b6` | feat(app): 隐私政策第八九节自助注销/本机数据口径 + 通行证页两条入口（blob 级剥离，仅本轮内容） | 2 文件 |
+| `da70f46` | feat(api): 注销时合并审计快照墓碑化（0023）+ 网关 jsonb 级联计数解析与单测 | 7 文件 |
+
+- **三条流水线全部 success**（headSha `da70f46a2c66d08ca0f52501085ef7b67f92f2d4`）：
+
+| 流水线 | Run ID | 结论 | 耗时 | URL |
+| --- | --- | --- | --- | --- |
+| ci | 45418613914 | success | 70s | https://github.com/afdk1991/MixmAPP/actions/runs/45418613914 |
+| deploy | 45418614008 | success | 398s | https://github.com/afdk1991/MixmAPP/actions/runs/45418614008 |
+| Android | 45418614614 | success | 126s | https://github.com/afdk1991/MixmAPP/actions/runs/45418614614 |
+
+各 job 均 success、无跳过：ci 的「门禁（规则/类型/单元测试/真实库集成/构建/健康检查）」，deploy 的「构建发布包」与「API + H5 原子发布（腾讯云服务器）」，Android 的「apk」。
+
+### 11.2 线上只读核验（deploy 转绿之后）
+
+- `GET https://api.mixm.top/mixmapp/api/v1/healthz` → **200**，`{"status":"ok"}`，`Content-Length: 15`。
+- **已知限制**：healthz 不返回 version 字段（响应体与响应头都没有），无法用它核对后端版本；前端产物 `version.DOIV2F3S.js` 为 `0.0.2`，与仓库 `version.json`（0.0.2 / release）一致。
+- `GET …/me/account/deletion-options` 无 Authorization → **401** `{"error":{"code":"UNAUTHORIZED","message":"请先登录","requestId":"6f65090f-879f-42de-b17a-72078fce94fb"}}`；带 `Bearer invalid-token` → **401** `登录已失效，请重新登录`（非 500）。→ 新路由已注册、鉴权生效。
+- **H5 产物在线**：首页 `https://www.mixm.top/` 200，引用入口 `/assets/index-BfLikM9Z.js` 247,982 字符；枚举其 `__vite__mapDeps.viteFileDeps` 后下载 26 个 chunk 全部 200。
+
+| chunk | 大小 / 状态 | 核验要点 |
+| --- | --- | --- |
+| `pages-settings-account-delete.B3Ff9PLP.js` | 11,278 B / 200 | 「注销账号」命中 5 次，含 `deletionOptions()` / `deleteChallenge()` / `delete()`、短信动作 `"delete"`、二次确认口令「注销」 |
+| `pages-settings-local-data.C_B7getp.js` | 8,350 B / 200 | 「本机数据」清理面板 |
+| `pages-me-me.wXdGYYNO.js` | 26,393 B / 200 | 通行证页入口行 |
+| `pages-legal-privacy.xORbeN-H.js` | 22,606 B / 200 | 隐私政策页 |
+
+入口路由表含 `accountDelete:"/pages/settings/account-delete"`、`localData:"/pages/settings/local-data"`。
+
+- **深链接** `GET https://www.mixm.top/pages/settings/account-delete` → **200** `text/html` 1,253 B（Nginx history 回退返回 SPA index.html），HTML 内联 `window.__MIXMAPP_API_BASE__="https://api.mixm.top/mixmapp/api/v1"`。
+
+### 11.3 生产库 0022 / 0023：已由服务内置迁移 runner 自动应用，未手工执行 DDL
+
+**结论：0022 / 0023 已由服务内置迁移 runner 在本次 deploy 重启时自动应用，未手工执行 DDL。** 本节同时更正第 10 章待办第 3 条的初稿假设（「生产库迁移未执行」）。
+
+- **环境**：`115.159.159.11`，库 `mixmapp`，PostgreSQL **14.24**（客户端/服务端大版本一致），`DB_TARGET=server`，`DATABASE_URL` 为直连 `postgres://`。
+- **备份（执行前完成，退出码均 0）**：
+  - `/root/mixmapp-backups/pre-0022-20261124-225939.dump` — 2,500,712 字节，`pg_dump -Fc`，`pg_restore -l` 列出 235 个 TOC 项（可读）。
+  - `/root/mixmapp-backups/pre-0022-20261124-225939.schema.sql` — 59,120 字节，纯结构。
+- **决定性证据**：`schema_migrations` 表记录 `0022_account_deletion_retention.sql`（22:56:14.462）与 `0023_account_merge_redaction.sql`（22:56:14.546）；`mixmapp-api` 的 `ActiveEnterTimestamp` 同为 22:56:14，落在绿色 deploy（14:50:37Z–14:57:15Z = 22:50:37–22:57:15 CST）窗口内。
+- **迁移前后对比**（均只读，基线在 22:59 采集，此时已应用）：
+
+| 项 | 基线 | 核验 | 目标 |
+| --- | --- | --- | --- |
+| `deletion_challenges` / `account_merges` / `orders` | 均在 | 均在 | 满足 |
+| `users.deleted_at` 可空 | YES | YES | 满足 |
+| `orders` / `payments` 外键 `confdeltype` | `n` | `n` | SET NULL 满足 |
+| `delete_account(text)` | 存在 1 参 | 存在 1 参，函数体含 `account_merges` 引用与 `mergeRecordsRedacted`（0023 标记） | 满足 |
+| 留存索引 5 + 挑战索引 1 | 全在 | 全在 | 满足 |
+| `users` / `orders` 行数 | 4 / 0 | 4 / 0 | 数据未变 |
+
+- **健康检查**：机内 `127.0.0.1:8080/api/v1/healthz` **200**；外网 `https://api.mixm.top/mixmapp/api/v1/healthz` **200**。
+- **未重复执行 DDL 的理由**：库已在 0023 目标态，重跑会先 `create or replace` 回退到 0022 函数体再由 0023 恢复，且 `ALTER TABLE … DROP/ADD CONSTRAINT` 有短时锁窗口，属冗余风险；一切破坏性语句均未重试。
+- **新发现的机制与治理风险**：原计划假设「deploy.yml 无迁移步骤、需手工 `RUN_MIGRATIONS=1`」不成立——服务启动时会自动应用未记录的 `infra/sql/*.sql`（即 schema 随部署自动前进，无人工闸门）。风险：任何被合并进 main 的 SQL 都会在下次 deploy 直接落生产。**建议（未实现）**：deploy 前置「迁移 dry-run + 只前进校验」，失败阻断发布。
+
+### 11.4 余下三项定论
+
+1. **account_merges 与注销：决定不整行删除。** 表真实列为 `primary_user_id` / `secondary_user_id`（无 nickname/accountNo 等冗余 PII 列），可识别内容只在 `snapshot` jsonb；注销命中任一列时把 `snapshot` 覆写为墓碑 `{"redacted": true, "redactedAt": "<ISO>"}`，保留 `id`/`merge_key`/`reason`/`status`/`moved`/`conflict_strategy`/`error`/时间戳等审计骨架。理由：整行删除会摧毁仍在存续的另一方账号的合并审计链。落地：`infra/sql/0023_account_merge_redaction.sql`（`create or replace` 同函数 + 墓碑分支）、`memory.ts` 的 `erase` 同步、`account-deletion.ts` 响应顶层透出 `mergeRecordsRedacted`。
+2. **网关 jsonb 计数偏小兼容：已做，且有验证记录。** 把计数解析抽成可单测纯函数 `parseDeletionCascadeCounts(candidate)`（`postgres.ts`），对象 / JSON 字符串两种形态归一、字段缺失回退 0、非法 JSON 不抛；`test/deletion-cascade-parse.test.ts` 5 个用例（JSON 字符串形态、对象形态、缺字段回退 0、`null`/`undefined`/`{}` 全 0、非法字符串不抛且全 0），不进生产分支。
+3. **OAuth 重新授权校验：本轮未实现。** 要求：注销前对绑定第三方账号的用户追加一次重新授权以证明控制权。此处明确标注**未实现**，列入遗留清单（见 11.6），不得含糊为「已支持」。
+
+### 11.5 独立干净检出闸门（CI 不会红的证据）
+
+- `git worktree add F:\合并项目\MixmAPP-clean-check`（detached，先 `95468b6` 后快进到 `da70f46`），6 个 `node_modules` 用 junction 复用、未重装。
+- 在 clean-check 内三条命令均 **exit 0**：`pnpm typecheck`、`node scripts/build-h5.mjs`、`pnpm test`（最后 api **186 passed / 11 skipped**，ids 11 passed）。日志无 `error TS` / `failed` / `✗`；唯一非阻断告警是 vitest 多包并行的 `WebSocket server error: Port is already in use`。
+- **junction 风险判定**：被依赖图实际解析的只有 `@mixmapp/contracts`、`@mixmapp/ids`，两侧内容一致（仅 LF/CRLF 差异，归一化后 mismatch=0）；`@mixmapp/app`/`api`/`mobile` 未被任何包声明为依赖。clean-check `git status` 为空，`apps/app/dist` 与 6 个 `node_modules` 均在 `.gitignore` 内。
+
+### 11.6 遗留清单（每条显式标注状态）
+
+| # | 事项 | 状态 | 备注 |
+| --- | --- | --- | --- |
+| 1 | OAuth 重新授权校验 | **未实现** | 注销前对绑定第三方账号的用户追加一次重新授权以证明控制权；当前以设备一次性票据兜底 |
+| 2 | deploy 的迁移人工闸门 / dry-run 只前进校验 | **未实现** | 新增风险项，见 11.3；当前 schema 随部署自动前进，无人工闸门 |
+| 3 | healthz 暴露服务端版本号 | **未实现** | 当前只有前端版本可比对，后端版本无法经 healthz 核对 |
+| 4 | `apps/app/src/pages/legal/privacy.vue` 与 `apps/app/src/pages/me/index.vue` 合并口径 | **待裁决** | HEAD 版（本轮 blob 提交，仅含本轮内容）与工作区版（含并行改版线全部 hunks）现在有意分叉；并行线提交时如何合并待裁决 |
+| 5 | `apps/app/src/components/mx-icon/mx-icon.vue` 的 `m[1] ?? ''` 修复 | **仅存在于本机工作区，未提交** | 该文件为并行线未跟踪文件，本轮不得提交 |
+| 6 | `tools/hznzcn-importer/` 的 96 处 lint 红点 | 本轮前既存、未触碰 | 本地草稿，本轮未改 |
+| 7 | 真实注销链路的生产端到端验证 | **未执行** | 纪律要求不在线上做真实注销测试 |
+
+### 11.7 收口状态表
+
+| # | 收口项 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| 1 | privacy.vue 本轮内容剥离 | ✅ 闭环 | 提交 `95468b6`（blob 级剥离，仅本轮内容）、`2d131fc`；工作区并行线 hunks 分叉见 11.6 第 4 条 |
+| 2 | 入口可见性 | ✅ 闭环 | H5 26 个 chunk 全 200；`pages-settings-account-delete.B3Ff9PLP.js` 11,278 B、`pages-settings-local-data.C_B7getp.js` 8,350 B；路由表含 `accountDelete` / `localData`；深链接 200 |
+| 3 | typecheck | ✅ 闭环 | clean-check 内 `pnpm typecheck` exit 0（独立干净检出口径；工作区并行线红点未计入本轮） |
+| 4 | 独立闸门 | ✅ 闭环 | clean-check worktree：`pnpm typecheck` / `node scripts/build-h5.mjs` / `pnpm test` 均 exit 0；api 186 passed / 11 skipped，ids 11 passed |
+| 5 | push + 三条 run | ✅ 闭环 | push 范围 `8fbdac8..da70f46`；ci 45418613914（70s）、deploy 45418614008（398s）、Android 45418614614（126s）均 success |
+| 6 | 生产库 0022 / 0023 | ✅ 闭环 | 内置 runner 自动应用；`schema_migrations` 两条记录与 `ActiveEnterTimestamp` 22:56:14；对比表六项目标全部满足；备份两份在 `/root/mixmapp-backups/`；配套人工闸门未实现，见 11.6 第 2 条 |
+| 7 | 余下三项定论 | ⚠️ 有遗留 | merge 快照墓碑化（`0023_account_merge_redaction.sql`）与网关计数兼容（`parseDeletionCascadeCounts` + 5 用例）已落地；OAuth 重新授权校验**未实现** |
+| 8 | docs 收口 | ✅ 闭环 | 本章（46 号收口记录）单文件提交，仅改 `docs/46-account-data-lifecycle-2026-11-24.md` |
