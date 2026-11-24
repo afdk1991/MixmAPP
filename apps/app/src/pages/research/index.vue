@@ -2,6 +2,7 @@
   <view class="halo mx-ime-pad">
     <mx-bar title="研究助手" />
 
+    <mx-pull-refresh :refreshing="shellRefreshing" :scroll-top="pageScrollTop" @refresh="onShellRefresh">
     <view class="rs">
       <!-- ---------- 提问区 ---------- -->
       <view class="rs-hero">
@@ -67,10 +68,10 @@
 
         <view v-if="loading" class="rs-hist-skeleton">
           <view v-for="i in 2" :key="i" class="rs-skel-row">
-            <view class="sk rs-skel-dot" />
+            <view class="mx-skeleton rs-skel-dot" />
             <view class="rs-skel-lines">
-              <view class="sk rs-skel-line" />
-              <view class="sk rs-skel-line rs-skel-line--short" />
+              <view class="mx-skeleton rs-skel-line" />
+              <view class="mx-skeleton rs-skel-line rs-skel-line--short" />
             </view>
           </view>
         </view>
@@ -122,16 +123,18 @@
         <text class="foot-line mono">MIXMAPP · DEEP RESEARCH</text>
       </view>
     </view>
+    </mx-pull-refresh>
   </view>
 </template>
 
 <script setup lang="ts">
-import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll } from '@dcloudio/uni-app';
 import { ref } from 'vue';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
 import MxState from '../../components/mx-state/mx-state.vue';
+import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue';
 import { researchApi, researchRelativeTime, type ResearchTask } from '../../api/research';
 
 const samples = [
@@ -201,9 +204,22 @@ onLoad(() => {
   void loadHistory();
 });
 
-onPullDownRefresh(() => {
-  void loadHistory().then(() => uni.stopPullDownRefresh());
+/** 页面滚动距离：交给壳层下拉刷新判断是否在顶部（跨端不取 document） */
+const pageScrollTop = ref(0);
+onPageScroll(({ scrollTop }) => {
+  pageScrollTop.value = scrollTop;
 });
+
+/** 壳层下拉刷新状态：手势回调后真实重取记录，落定后复位收起指示环 */
+const shellRefreshing = ref(false);
+
+function onShellRefresh(): void {
+  if (shellRefreshing.value) return;
+  shellRefreshing.value = true;
+  void loadHistory().finally(() => {
+    shellRefreshing.value = false;
+  });
+}
 </script>
 
 <style scoped lang="scss">
@@ -410,6 +426,7 @@ onPullDownRefresh(() => {
 .rs-hist-title {
   display: -webkit-box;
   overflow: hidden;
+  overflow-wrap: anywhere;
   font-size: $fs-body;
   font-weight: 600;
   line-height: 1.4;

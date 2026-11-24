@@ -16,10 +16,15 @@
       <text class="block-title">服务端能力</text>
       <text class="block-lede">能用什么由服务端下发，未配置的渠道不在页面占位。</text>
       <view class="rule" />
-      <text v-if="!meta" class="hint">{{ error || '正在读取服务端能力…' }}</text>
-      <view v-if="!meta && error" class="btn btn--ghost btn--sm retry" hover-class="is-press" @tap="reloadMeta">
-        <text class="retry-text">重试</text>
-      </view>
+      <mx-state
+        v-if="!meta && error"
+        variant="error"
+        title="服务端能力没读到"
+        :text="error"
+        action-text="重试"
+        @action="reloadMeta"
+      />
+      <mx-state v-else-if="!meta" variant="loading" title="正在读取服务端能力…" />
       <view v-else-if="capabilities.length" class="cap-list">
         <view v-for="cap in capabilities" :key="cap.key" class="cap">
           <view class="cap-left">
@@ -82,6 +87,7 @@ import { APP_VERSION } from '../../version';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxLogo from '../../components/mx-logo/mx-logo.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 
 type MetaInfo = {
   env: string;
@@ -346,16 +352,6 @@ async function reloadMeta(): Promise<void> {
   color: $ink-3;
 }
 
-.retry {
-  margin-top: $sp-3;
-  align-self: flex-start;
-}
-
-.retry-text {
-  font-size: $fs-meta;
-  color: $brand-deep;
-}
-
 /* ---------- 运行环境 ---------- */
 .row {
   display: flex;
@@ -379,6 +375,7 @@ async function reloadMeta(): Promise<void> {
 
 .v {
   flex: 1;
+  min-width: 0;
   font-size: $fs-micro;
   line-height: 1.5;
   color: $ink;
@@ -398,6 +395,9 @@ async function reloadMeta(): Promise<void> {
 }
 
 .device-copy {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   flex-shrink: 0;
   font-size: $fs-micro;
   color: $brand-deep;

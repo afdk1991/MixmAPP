@@ -2,26 +2,25 @@
   <view class="halo">
     <mx-bar title="研究报告" />
 
-    <view v-if="loadError" class="empty">
-      <view class="empty-mark mono">!</view>
-      <text class="empty-title">研究报告没打开</text>
-      <text class="empty-sub">网络可能不可用，请重试；记录仍在列表里。</text>
-      <view class="btn btn--primary empty-btn" hover-class="is-press" @tap="reloadTask">
-        <text class="empty-btn-text">重新加载</text>
-      </view>
-      <view class="btn btn--ghost empty-btn" hover-class="is-press" @tap="backToList">
-        <text class="empty-btn-text empty-btn-text--ghost">返回研究记录</text>
-      </view>
-    </view>
+    <mx-state
+      v-if="loadError"
+      variant="error"
+      title="研究报告没打开"
+      text="网络可能不可用，请重试；记录仍在列表里。"
+      action-text="重新加载"
+      @action="reloadTask"
+    >
+      <view class="btn btn--ghost empty-btn" hover-class="is-press" @tap="backToList">返回研究记录</view>
+    </mx-state>
 
-    <view v-else-if="!task" class="empty">
-      <view class="empty-mark">!</view>
-      <text class="empty-title">未找到该研究</text>
-      <text class="empty-sub">记录可能已失效，返回重新发起一次研究。</text>
-      <view class="btn btn--primary empty-btn" hover-class="is-press" @tap="backToList">
-        <text class="empty-btn-text">返回研究记录</text>
-      </view>
-    </view>
+    <mx-state
+      v-else-if="!task"
+      variant="empty"
+      title="未找到该研究"
+      text="记录可能已失效，返回重新发起一次研究。"
+      action-text="返回研究记录"
+      @action="backToList"
+    />
 
     <view v-else class="rs">
       <!-- ---------- 问题重述 ---------- -->
@@ -101,10 +100,10 @@
 
         <view v-if="visibleSections.length === 0 && task.status !== 'done'" class="rs-report-skeleton">
           <view v-for="i in 3" :key="i" class="rs-skel-block">
-            <view class="sk rs-skel-bar" />
-            <view class="sk rs-skel-line" />
-            <view class="sk rs-skel-line" />
-            <view class="sk rs-skel-line rs-skel-line--short" />
+            <view class="mx-skeleton rs-skel-bar" />
+            <view class="mx-skeleton rs-skel-line" />
+            <view class="mx-skeleton rs-skel-line" />
+            <view class="mx-skeleton rs-skel-line rs-skel-line--short" />
           </view>
         </view>
 
@@ -132,9 +131,9 @@
           </view>
 
           <view v-if="task.status !== 'done' && visibleSections.length < sections.length" class="rs-skel-block">
-            <view class="sk rs-skel-bar" />
-            <view class="sk rs-skel-line" />
-            <view class="sk rs-skel-line rs-skel-line--short" />
+            <view class="mx-skeleton rs-skel-bar" />
+            <view class="mx-skeleton rs-skel-line" />
+            <view class="mx-skeleton rs-skel-line rs-skel-line--short" />
           </view>
         </view>
       </view>
@@ -151,8 +150,8 @@
         <view class="rule" />
 
         <view v-if="visibleSources.length === 0 && task.status !== 'done'" class="rs-skel-block">
-          <view class="sk rs-skel-line" />
-          <view class="sk rs-skel-line rs-skel-line--short" />
+          <view class="mx-skeleton rs-skel-line" />
+          <view class="mx-skeleton rs-skel-line rs-skel-line--short" />
         </view>
 
         <view v-else class="sources">
@@ -212,6 +211,7 @@ import { onLoad, onUnload } from '@dcloudio/uni-app';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 import { researchApi, researchRelativeTime, type ResearchTask } from '../../api/research';
 
 const task = ref<ResearchTask | null>(null);
@@ -802,25 +802,10 @@ onUnload(() => stopTimer());
   color: $ink-2;
 }
 
-/* ---------- 空态 ---------- */
-.empty {
-  padding: calc(180rpx + var(--mx-safe-top)) $sp-4 120rpx;
-  text-align: center;
-}
-
+/* ---------- 空态（mx-state 插槽内的次级按钮） ---------- */
 .empty-btn {
-  margin: $sp-5 auto 0;
-  width: 60%;
-}
-
-.empty-btn-text {
-  font-size: $fs-meta;
-  font-weight: 600;
-  color: $on-solid;
-}
-
-.empty-btn-text--ghost {
-  color: $ink;
+  margin-top: $sp-1;
+  min-width: 240rpx;
 }
 
 /* ---------- 页脚 ---------- */

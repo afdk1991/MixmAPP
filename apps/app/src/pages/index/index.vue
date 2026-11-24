@@ -233,29 +233,31 @@
 
             <view v-if="mallLoading" class="pick-grid">
               <view v-for="i in PAGE_SIZE" :key="i" class="pick-card">
-                <view class="sk pick-sk-cover" />
+                <view class="mx-skeleton pick-sk-cover" />
                 <view class="pick-info">
-                  <view class="sk pick-sk-line" />
-                  <view class="sk pick-sk-line pick-sk-line--short" />
-                  <view class="sk pick-sk-price" />
+                  <view class="mx-skeleton pick-sk-line" />
+                  <view class="mx-skeleton pick-sk-line pick-sk-line--short" />
+                  <view class="mx-skeleton pick-sk-price" />
                 </view>
               </view>
             </view>
 
-            <view v-else-if="mallError" class="pick-state">
-              <view class="pick-state-mark mono">!</view>
-              <text class="pick-state-title">商品没加载出来</text>
-              <text class="pick-state-sub">网络或服务可能不太稳定，点下面重试一次。</text>
-              <view class="pick-retry" hover-class="is-press" @tap="loadMall">
-                <text class="pick-retry-text mono">重新加载</text>
-              </view>
-            </view>
+            <mx-state
+              v-else-if="mallError"
+              variant="error"
+              title="商品没加载出来"
+              text="网络或服务可能不太稳定，点下面重试一次。"
+              action-text="重新加载"
+              @action="loadMall"
+            />
 
             <!-- 无结果：给出三条可执行改法，并把条件带进商城继续筛 -->
-            <view v-else-if="products.length === 0 && searchActive" class="pick-state">
-              <view class="pick-state-mark">空</view>
-              <text class="pick-state-title">没找到「{{ searchKeyword.trim() }}」</text>
-              <text class="pick-state-sub">可以试试这样改：</text>
+            <mx-state
+              v-else-if="products.length === 0 && searchActive"
+              variant="empty"
+              :title="`没找到「${searchKeyword.trim()}」`"
+              text="可以试试这样改："
+            >
               <view class="search-tips">
                 <view class="search-tip">
                   <text class="search-tip-k mono">01</text>
@@ -271,20 +273,21 @@
                 </view>
               </view>
               <view class="search-actions">
-                <view class="pick-retry" hover-class="is-press" @tap="openSearchInMall">
-                  <text class="pick-retry-text mono">去商城继续筛</text>
+                <view class="btn btn--deep btn--sm" hover-class="is-press" @tap="openSearchInMall">
+                  去商城继续筛
                 </view>
-                <view class="pick-retry pick-retry--ghost" hover-class="is-press" @tap="clearSearch">
-                  <text class="pick-retry-text mono">换个词再搜</text>
+                <view class="btn btn--ghost btn--sm" hover-class="is-press" @tap="clearSearch">
+                  换个词再搜
                 </view>
               </view>
-            </view>
+            </mx-state>
 
-            <view v-else-if="products.length === 0" class="pick-state">
-              <view class="pick-state-mark">空</view>
-              <text class="pick-state-title">这一类暂时没有商品</text>
-              <text class="pick-state-sub">换个类目看看，或进商城浏览全部商品。</text>
-            </view>
+            <mx-state
+              v-else-if="products.length === 0"
+              variant="empty"
+              title="这一类暂时没有商品"
+              text="换个类目看看，或进商城浏览全部商品。"
+            />
 
             <view v-else class="pick-grid">
               <view
@@ -425,7 +428,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { onLoad, onPageScroll, onPullDownRefresh, onShow } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll, onShow } from '@dcloudio/uni-app';
 import { metaApi, mallApi, homeApi, productCover, coverTint, ApiError, applyMetaFlags, applyMetaThirdParty } from '../../api/client';
 import { session } from '../../stores/session';
 import { cartBadgeText, refreshCartBadge, syncCartBadge } from '../../stores/cart-badge';
@@ -436,6 +439,7 @@ import MxLogo from '../../components/mx-logo/mx-logo.vue';
 import MxIcon from '../../components/mx-icon/mx-icon.vue';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
 import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 import type { MallCategoryDto, MallProductDto } from '../../api/mall';
 import { PAGE_SIZE_OPTIONS } from '@mixmapp/contracts';
 import type { HomeAdDto, HomeAdTarget, HomeRecommendedCategoryDto } from '@mixmapp/contracts';
@@ -845,12 +849,6 @@ onLoad(() => {
 /** 每次回到首页（含从购物车 / 我的页返回）重新对齐一次全局角标。 */
 onShow(() => {
   void refreshCartBadge();
-});
-
-/** 原生下拉刷新：同时刷新运行环境与精选目录，两者都落定后收起指示器 */
-onPullDownRefresh(() => {
-  console.info('[mixmapp] onPullDownRefresh 已触发（uni 原生钩子）');
-  void Promise.allSettled([loadMeta(), loadMall(), loadHome()]).then(() => uni.stopPullDownRefresh());
 });
 
 /** 页面滚动距离：交给壳层下拉刷新判断是否在顶部（跨端不取 document） */
@@ -1576,6 +1574,9 @@ function onShellRefresh(): void {
 }
 
 .cat-empty-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   flex: 0 0 auto;
   padding: 6rpx 14rpx;
   border: 1rpx solid $paper-3;
@@ -1854,44 +1855,7 @@ function onShellRefresh(): void {
   border-radius: 6rpx;
 }
 
-/* ---------- 空 / 错 / 无结果：同一张状态卡，不另起浮层 ---------- */
-.pick-state {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: $sp-2;
-  margin-top: $sp-2;
-  padding: $sp-4;
-  background: $shell;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-card;
-}
-
-.pick-state-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64rpx;
-  height: 64rpx;
-  border: 1rpx solid $paper-3;
-  border-radius: 50%;
-  font-size: $fs-meta;
-  color: $ink-3;
-}
-
-.pick-state-title {
-  font-size: $fs-body;
-  font-weight: 600;
-  line-height: 1.35;
-  color: $ink;
-}
-
-.pick-state-sub {
-  font-size: $fs-meta;
-  line-height: 1.5;
-  color: $ink-3;
-}
-
+/* ---------- 空 / 错 / 无结果：mx-state 插槽内的建议清单与动作 ---------- */
 .search-tips {
   display: flex;
   flex-direction: column;
@@ -1924,31 +1888,9 @@ function onShellRefresh(): void {
 .search-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: $sp-2;
   margin-top: $sp-1;
-}
-
-.pick-retry {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16rpx 28rpx;
-  background: $solid;
-  border-radius: $r-control;
-}
-
-.pick-retry-text {
-  font-size: $fs-meta;
-  color: $on-solid;
-}
-
-.pick-retry--ghost {
-  background: transparent;
-  border: 1rpx solid $paper-3;
-}
-
-.pick-retry--ghost .pick-retry-text {
-  color: $acc-2;
 }
 
 .catalog-note {

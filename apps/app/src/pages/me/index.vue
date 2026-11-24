@@ -47,10 +47,10 @@
           </view>
         </view>
 
-        <view v-if="refreshError" class="pass-error">
-          <text class="pass-error-text mono">资料未能刷新 · {{ refreshError }}</text>
-          <view class="pass-error-retry" hover-class="is-press" @tap="reload">
-            <text class="pass-error-retry-text mono">重试</text>
+        <view v-if="refreshError" class="mx-deep-error">
+          <text class="mx-deep-error__text mono">资料未能刷新 · {{ refreshError }}</text>
+          <view class="mx-deep-error__action" hover-class="is-press" @tap="reload">
+            <text class="mx-deep-error__action-text mono">重试</text>
           </view>
         </view>
 
@@ -163,7 +163,7 @@
               <text class="btn-text">{{ avatarUploading ? '上传中…' : '更换头像' }}</text>
             </button>
             <text class="hint">JPG / PNG / WebP，≤ 5MB；未配置云存储时落到本机存储回退。</text>
-            <text v-if="avatarError" class="error">{{ avatarError }}</text>
+            <text v-if="avatarError" class="mx-field-error">{{ avatarError }}</text>
           </view>
           <input ref="fileInput" type="file" accept="image/*" class="avatar-file" @change="onAvatarPicked" />
         </view>
@@ -188,7 +188,7 @@
           v-model="profileBio"
         />
         <text v-if="profileSaved" class="notice-inline">{{ profileSaved }}</text>
-        <text v-if="profileError" class="error">{{ profileError }}</text>
+        <text v-if="profileError" class="mx-field-error">{{ profileError }}</text>
         <view class="btn btn--deep btn--block mt-l" hover-class="is-press" @tap="saveProfile">
           <text class="btn-text">{{ profileSaving ? '保存中…' : '保存资料' }}</text>
         </view>
@@ -238,7 +238,7 @@
             </view>
           </view>
           <text v-if="bindPhoneDevCode" class="dev-hint">开发态验证码：{{ bindPhoneDevCode }}（正式环境不显示）</text>
-          <text v-if="bindPhoneError" class="error">{{ bindPhoneError }}</text>
+          <text v-if="bindPhoneError" class="mx-field-error">{{ bindPhoneError }}</text>
           <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="bindPhoneSubmit">
             <text class="btn-text btn-text--dark">{{ bindPhoneSubmitting ? '绑定中…' : '绑定手机号' }}</text>
           </view>
@@ -266,7 +266,7 @@
             v-model="bindEmailPassword"
             @confirm="bindEmailSubmit"
           />
-          <text v-if="bindEmailError" class="error">{{ bindEmailError }}</text>
+          <text v-if="bindEmailError" class="mx-field-error">{{ bindEmailError }}</text>
           <view class="btn btn--ghost btn--block mt-s" hover-class="is-press" @tap="bindEmailSubmit">
             <text class="btn-text btn-text--dark">{{ bindEmailSubmitting ? '绑定中…' : '绑定邮箱' }}</text>
           </view>
@@ -323,7 +323,7 @@
           @confirm="upgradeGuest"
         />
         <text class="hint mt-s">不得使用管理员、官方、政府机关等名称。</text>
-        <text v-if="upError" class="error">{{ upError }}</text>
+        <text v-if="upError" class="mx-field-error">{{ upError }}</text>
         <view class="btn btn--deep btn--block mt-l" hover-class="is-press" @tap="upgradeGuest">
           <text class="btn-text">{{ upgrading ? '提交中…' : '设置用户名与密码' }}</text>
         </view>
@@ -957,7 +957,7 @@ onShow(() => {
 }
 
 .pass-state--guest {
-  border-color: rgba(224, 169, 99, 0.55);
+  border-color: $amber-on-deep;
 }
 
 .pass-state--guest .pass-state-text {
@@ -1008,7 +1008,7 @@ onShow(() => {
   position: relative;
   height: 1rpx;
   margin: $sp-4 (-$sp-4) $sp-3;
-  border-top: 1rpx dashed rgba(226, 213, 180, 0.22);
+  border-top: 1rpx dashed $on-deep-line;
 }
 
 .notch {
@@ -1052,43 +1052,6 @@ onShow(() => {
   color: $brand-on-deep;
 }
 
-/* 资料刷新失败：贴在卡内底部的一条可重试提示，不打断已签发的静态信息 */
-.pass-error {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: $sp-3;
-  padding: 12rpx 16rpx;
-  border: 1rpx solid rgba(224, 169, 99, 0.35);
-  border-radius: $r-control;
-  background: rgba(224, 169, 99, 0.08);
-}
-
-.pass-error-text {
-  flex: 1;
-  min-width: 0;
-  font-size: $fs-micro;
-  line-height: 1.4;
-  color: $amber-on-deep;
-  word-break: break-all;
-}
-
-.pass-error-retry {
-  flex-shrink: 0;
-  margin-left: 16rpx;
-  padding: 4rpx 14rpx;
-  border: 1rpx solid rgba(224, 169, 99, 0.5);
-  border-radius: $r-pill;
-}
-
-.pass-error-retry-text {
-  font-size: $fs-micro;
-  letter-spacing: 1rpx;
-  color: $amber-on-deep;
-}
-
 .pass-k {
   display: block;
   font-size: $fs-micro;
@@ -1118,7 +1081,7 @@ onShow(() => {
   height: 68rpx;
   padding: 0 26rpx;
   margin-right: 14rpx;
-  border: 1rpx solid rgba(240, 201, 124, 0.32);
+  border: 1rpx solid $on-deep-line;
   border-radius: $r-control;
   display: flex;
   align-items: center;
@@ -1234,6 +1197,9 @@ onShow(() => {
 }
 
 .device-copy {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   flex-shrink: 0;
   font-size: $fs-micro;
   color: $acc-2;
@@ -1268,13 +1234,6 @@ onShow(() => {
 
 .btn-text--dark {
   color: $acc-2;
-}
-
-.error {
-  display: block;
-  margin-top: 16rpx;
-  font-size: $fs-meta;
-  color: $signal;
 }
 
 /* ---------- 头像上传 ---------- */

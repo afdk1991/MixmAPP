@@ -25,7 +25,7 @@
       </view>
     </view>
 
-    <text v-if="error" class="error">{{ error }}</text>
+    <text v-if="error" class="mx-field-error">{{ error }}</text>
 
     <view class="composer">
       <input
@@ -78,7 +78,6 @@ async function send(): Promise<void> {
     lines.value.push({ role: 'assistant', content: res.content });
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '对话失败，请稍后重试';
-    lines.value.push({ role: 'assistant', content: '抱歉，回复生成失败，请稍后再试。' });
   } finally {
     sending.value = false;
   }
@@ -176,13 +175,6 @@ async function send(): Promise<void> {
   color: $shell;
 }
 
-.error {
-  display: block;
-  margin-top: $sp-2;
-  font-size: $fs-micro;
-  color: $signal;
-}
-
 .composer {
   display: flex;
   align-items: center;
@@ -214,7 +206,12 @@ async function send(): Promise<void> {
 }
 
 .composer-btn--off {
-  opacity: 0.45;
+  /* 禁用退中性面 + 中性字，不用半透明（对齐全局 .btn--disabled 约定） */
+  background: $paper-3;
+}
+
+.composer-btn--off .composer-btn-text {
+  color: $ink-3;
 }
 
 .composer-btn-text {

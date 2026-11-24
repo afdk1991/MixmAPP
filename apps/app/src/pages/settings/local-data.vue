@@ -30,7 +30,7 @@
           <text class="item-size mono">{{ formatBytes(item.bytes) }}</text>
         </view>
       </view>
-      <text v-else class="hint empty">暂无本机记录。</text>
+      <text v-else class="hint cat-empty-hint">暂无本机记录。</text>
 
       <text class="cat-consequence">{{ cat.consequence }}</text>
 
@@ -299,7 +299,7 @@ function askClearAll(): void {
   color: $ink-3;
 }
 
-.empty {
+.cat-empty-hint {
   margin-top: $sp-3;
 }
 

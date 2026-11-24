@@ -42,7 +42,10 @@
 
     <!-- 身份校验 + 二次确认 -->
     <view class="sheet form">
-      <view v-if="optionsLoading" class="hint loading">正在读取可用的校验方式…</view>
+      <view v-if="optionsLoading" class="loading-inline">
+        <view class="mx-spinner" />
+        <text class="hint">正在读取可用的校验方式…</text>
+      </view>
       <block v-else>
         <view v-if="methods.length > 1" class="mode">
           <view
@@ -442,7 +445,10 @@ function mapError(e: unknown): string {
   margin-top: $sp-3;
 }
 
-.loading {
+.loading-inline {
+  display: flex;
+  align-items: center;
+  gap: $sp-3;
   margin-top: 12rpx;
 }
 
