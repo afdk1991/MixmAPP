@@ -420,7 +420,7 @@ function loginDevicePayload(input?: DeviceLoginInput): DeviceLoginInput {
 }
 
 export const authApi = {
-  requestSmsCode: (phone: string, purpose: 'register' | 'login' | 'bind') =>
+  requestSmsCode: (phone: string, purpose: 'register' | 'login' | 'bind' | 'delete') =>
     apiRequest<{ ttlSec: number; devCode?: string }>('/auth/sms/code', {
       method: 'POST',
       data: { phone, purpose },
@@ -518,6 +518,57 @@ export const meApi = {
     apiRequest<{ ok: boolean }>('/me/push-token', { method: 'POST', data: input }),
   /** 向已注册设备发一条测试推送；尚未注册令牌时服务端返回 404。 */
   pushTest: () => apiRequest<{ accepted: number }>('/me/push-test', { method: 'POST' }),
+};
+
+/** 注销账号：可用身份校验方式（GET /me/account/deletion-options）。 */
+export type AccountDeletionMethod = 'password' | 'sms' | 'device';
+
+export type AccountDeletionOptions = {
+  methods: AccountDeletionMethod[];
+  phone: string | null;
+  requiresChallenge: boolean;
+};
+
+/** device 方式一次性挑战票据（POST /me/account/delete-challenge 下发，单次有效、5 分钟过期）。 */
+export type DeleteAccountChallenge = { challenge: string; expiresInSec: number };
+
+/** 与 packages/contracts 的 deleteAccountSchema 对齐；confirm 必须逐字为「注销」。 */
+export type DeleteAccountBody = {
+  confirm: '注销';
+  method: AccountDeletionMethod;
+  password?: string;
+  code?: string;
+  deviceId?: string;
+  challenge?: string;
+};
+
+/** 注销成功回执：级联删除计数与会话/订单脱敏统计。 */
+export type DeleteAccountResult = {
+  deleted: boolean;
+  revokedSessions: number;
+  ordersAnonymized: number;
+  purged: {
+    binds: number;
+    devices: number;
+    addresses: number;
+    favorites: number;
+    carts: number;
+    pushTokens: number;
+  };
+};
+
+export const accountApi = {
+  /** 读取当前账号可用的校验方式与掩码手机号。 */
+  deletionOptions: () => apiRequest<AccountDeletionOptions>('/me/account/deletion-options'),
+  /** device 方式：凭最近登录设备号换取一次性挑战票据。 */
+  deleteChallenge: (deviceId: string) =>
+    apiRequest<DeleteAccountChallenge>('/me/account/delete-challenge', {
+      method: 'POST',
+      data: { deviceId },
+    }),
+  /** 提交注销：body 严格符合 deleteAccountSchema。 */
+  delete: (body: DeleteAccountBody) =>
+    apiRequest<DeleteAccountResult>('/me/account/delete', { method: 'POST', data: body }),
 };
 
 /** 服务端落库并回写的设备快照（含服务端产生的 ip 与采集时间）。 */

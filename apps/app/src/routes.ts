@@ -19,6 +19,8 @@ export const ROUTES = {
   cart: '/pages/cart/index',
   orders: '/pages/orders/index',
   about: '/pages/settings/about',
+  accountDelete: '/pages/settings/account-delete',
+  localData: '/pages/settings/local-data',
   admin: '/pages/admin/index',
   research: '/pages/research/index',
   researchDetail: '/pages/research/detail',

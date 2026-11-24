@@ -55,6 +55,14 @@
       "style": { "navigationBarTitleText": "MixmAPP" }
     },
     {
+      "path": "pages/settings/account-delete",
+      "style": { "navigationBarTitleText": "MixmAPP" }
+    },
+    {
+      "path": "pages/settings/local-data",
+      "style": { "navigationBarTitleText": "MixmAPP" }
+    },
+    {
       "path": "pages/admin/index",
       "style": { "navigationBarTitleText": "MixmAPP" }
     },
