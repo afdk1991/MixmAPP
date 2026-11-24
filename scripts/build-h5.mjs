@@ -92,13 +92,16 @@ if (existsSync(publicDir)) {
 
 const html = readFileSync(indexPath, 'utf8');
 const mediaBase = (process.env.MIXMAPP_MEDIA_BASE ?? '').trim();
-if (!html.includes('__MIXMAPP_API_BASE__')) {
-  const tags = [`<script>window.__MIXMAPP_API_BASE__=${JSON.stringify(apiBase)};</script>`];
-  if (mediaBase) {
-    tags.push(`<script>window.__MIXMAPP_MEDIA_BASE__=${JSON.stringify(mediaBase)};</script>`);
-  }
-  writeFileSync(indexPath, html.replace('<head>', `<head>\n    ${tags.join('\n    ')}`), 'utf8');
+// 模板 index.html 自带一条默认 __MIXMAPP_API_BASE__ 脚本，不能再以「是否包含变量名」判断是否注入，
+// 否则每次构建都会沿用模板里的默认绝对地址（2026-11-24 本地预览请求打回线上域名的根因）。
+const stripped = html
+  .replace(/<script>window\.__MIXMAPP_API_BASE__\s*=\s*"[^"]*";<\/script>\s*/g, '')
+  .replace(/<script>window\.__MIXMAPP_MEDIA_BASE__\s*=\s*"[^"]*";<\/script>\s*/g, '');
+const tags = [`<script>window.__MIXMAPP_API_BASE__=${JSON.stringify(apiBase)};</script>`];
+if (mediaBase) {
+  tags.push(`<script>window.__MIXMAPP_MEDIA_BASE__=${JSON.stringify(mediaBase)};</script>`);
 }
+writeFileSync(indexPath, stripped.replace('<head>', `<head>\n    ${tags.join('\n    ')}`), 'utf8');
 
 const mode = /^https?:\/\//.test(apiBase) ? '跨域绝对源' : '同域相对路径';
 console.info(`[h5] 已注入 API 源（${mode}，来源 ${baseSource}）：${apiBase}`);
