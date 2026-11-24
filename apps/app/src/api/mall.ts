@@ -1,4 +1,4 @@
-import type { ProductDto } from '@mixmapp/contracts';
+import type { ProductDto, ProductListSummaryDto } from '@mixmapp/contracts';
 import { apiRequest } from './client';
 
 /**
@@ -287,6 +287,7 @@ export type MallProductQuery = {
   /** 牙别多选（源站 trts）：逗号分隔的 specs.牙别 取值 */
   trts?: string;
   keyword?: string;
+  sort?: 'createdDesc' | 'priceAsc' | 'priceDesc';
   page?: number;
   pageSize?: number;
 };
@@ -302,6 +303,15 @@ export function fetchMallProducts(query: MallProductQuery = {}): Promise<MallPro
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
     .join('&');
   return apiRequest<MallProductDto[]>(`/mall/products${qs ? `?${qs}` : ''}`);
+}
+
+/** 商品列表总数摘要：与列表同一次过滤口径，页头「共 N 件」用它；与分页无关。 */
+export function fetchMallProductSummary(query: MallProductQuery = {}): Promise<ProductListSummaryDto> {
+  const qs = Object.entries(query)
+    .filter(([, value]) => value !== undefined && value !== '')
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&');
+  return apiRequest<ProductListSummaryDto>(`/mall/products/summary${qs ? `?${qs}` : ''}`);
 }
 
 /** 商品详情（可选登录态），门禁口径同 fetchMallProducts。 */

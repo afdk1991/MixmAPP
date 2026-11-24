@@ -4,9 +4,13 @@ import {
   cartUpdateSchema,
   favoriteAddSchema,
   favoriteCopySchema,
+  favoriteFolderCreateSchema,
+  favoriteFolderRenameSchema,
+  favoriteMoveSchema,
   favoriteQuerySchema,
   orderCancelSchema,
   orderCreateSchema,
+  orderListQuerySchema,
   productQuerySchema,
 } from '@mixmapp/contracts';
 import { parse } from '../lib/validate.js';
@@ -65,6 +69,17 @@ export async function mallRoutes(app: FastifyInstance): Promise<void> {
       await resolveLoggedIn(app, request, reply),
     ),
   }));
+
+  // 列表总数摘要：与列表同一次过滤口径，独立端点下发，不改动既有 ProductDto[] 数组响应形态。
+  // 既有 mallApi.listProducts 仍只取数组；页头另调本端点消费 total，老调用方零改动。
+  app.get('/mall/products/summary', async (request, reply) => {
+    const query = parse(productQuerySchema, request.query ?? {});
+    await resolveLoggedIn(app, request, reply);
+    const total = await app.mall.countProducts(query);
+    return {
+      data: { total, page: query.page, pageSize: query.pageSize, hasMore: query.page * query.pageSize < total },
+    };
+  });
 
   app.get('/mall/products/:id', async (request, reply) => ({
     data: await app.mall.getProduct(
@@ -126,9 +141,25 @@ export async function mallRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send({ data: order });
   });
 
-  app.get('/mall/orders', { preHandler: app.requireAuth }, async (request) => ({
-    data: await app.mall.listOrders(request.userId as string),
-  }));
+  app.get('/mall/orders', { preHandler: app.requireAuth }, async (request) => {
+    const query = parse(orderListQuerySchema, request.query ?? {});
+    return {
+      data: await app.mall.listOrders(request.userId as string, {
+        status: query.status,
+        page: query.page,
+        pageSize: query.pageSize,
+      }),
+    };
+  });
+
+  // 订单列表总数摘要：状态口径与列表一致，用于页头条数与分页 hasMore。
+  app.get('/mall/orders/summary', { preHandler: app.requireAuth }, async (request) => {
+    const query = parse(orderListQuerySchema, request.query ?? {});
+    const total = await app.mall.countOrders(request.userId as string, query.status);
+    return {
+      data: { total, page: query.page, pageSize: query.pageSize, hasMore: query.page * query.pageSize < total },
+    };
+  });
 
   app.get('/mall/orders/:orderNo', { preHandler: app.requireAuth }, async (request) => ({
     data: await app.mall.getOrder(request.userId as string, (request.params as { orderNo: string }).orderNo),
@@ -217,5 +248,62 @@ export async function mallRoutes(app: FastifyInstance): Promise<void> {
       request.userId as string,
       (request.params as { folderId: string }).folderId,
     ),
+  }));
+
+  // 新建收藏夹（新夹不抢默认位）
+  app.post('/mall/favorites/folders', { preHandler: app.requireAuth }, async (request, reply) => {
+    const body = parse(favoriteFolderCreateSchema, request.body);
+    return reply
+      .status(201)
+      .send({ data: await app.mall.createFavoriteFolder(request.userId as string, body.name) });
+  });
+
+  // 重命名收藏夹
+  app.patch('/mall/favorites/folders/:folderId', { preHandler: app.requireAuth }, async (request) => {
+    const body = parse(favoriteFolderRenameSchema, request.body);
+    return {
+      data: await app.mall.renameFavoriteFolder(
+        request.userId as string,
+        (request.params as { folderId: string }).folderId,
+        body.name,
+      ),
+    };
+  });
+
+  // 删除收藏夹：连带删除其条目；默认夹不允许删除（服务端兜底）
+  app.delete('/mall/favorites/folders/:folderId', { preHandler: app.requireAuth }, async (request) => ({
+    data: {
+      removed: await app.mall.deleteFavoriteFolder(
+        request.userId as string,
+        (request.params as { folderId: string }).folderId,
+      ),
+    },
+  }));
+
+  // 条目跨夹移动：?folderId= 省略取默认夹作为源夹；body.folderId 为目标夹
+  app.post('/mall/favorites/items/:productId/move', { preHandler: app.requireAuth }, async (request) => {
+    const body = parse(favoriteMoveSchema, request.body);
+    const query = parse(favoriteQuerySchema, request.query ?? {});
+    return {
+      data: await app.mall.moveFavoriteItem(
+        request.userId as string,
+        (request.params as { productId: string }).productId,
+        body.folderId,
+        query.folderId,
+      ),
+    };
+  });
+
+  // 商品收藏态回显（跨夹）：详情页/卡片收藏按钮点亮用
+  app.get('/mall/favorites/state/:productId', { preHandler: app.requireAuth }, async (request) => ({
+    data: await app.mall.favoriteState(
+      request.userId as string,
+      (request.params as { productId: string }).productId,
+    ),
+  }));
+
+  // 全部收藏条目总数（我的页磁贴角标用，含已下架残留行，与夹内计数同口径）
+  app.get('/mall/favorites/summary', { preHandler: app.requireAuth }, async (request) => ({
+    data: { total: await app.mall.countAllFavorites(request.userId as string) },
   }));
 }

@@ -30,6 +30,7 @@ import type {
   OrderRecord,
   OAuthStateRecord,
   PaymentRecord,
+  ProductListFilter,
   ProductRecord,
   PushTokenRecord,
   RefreshTokenRecord,
@@ -207,6 +208,108 @@ const SQL_SEARCH_TEXT = normSql(
 );
 
 const SQL_SPEC_KEY = specKeySql(`specs->>'规格'`);
+
+/** 商品列表 / 计数共用的 WHERE 构造：list 与 count 必须同构，避免筛选后条数与分页结果漂移。 */
+function buildProductWhere(filter: ProductListFilter): { conditions: string[]; params: unknown[] } {
+  const conditions: string[] = ['listed is not false'];
+  const params: unknown[] = [];
+  if (filter.category) {
+    params.push(filter.category);
+    conditions.push(`category = $${params.length}`);
+  }
+  // 分类树节点：一级/二级按子孙三级类目收敛（商品只挂三级），三级即自身。
+  if (filter.cat) {
+    params.push(filter.cat);
+    const i = params.length;
+    conditions.push(
+      `c3_id in (select id from catalog_categories where id = $${i} or parent_id = $${i}
+                  or parent_id in (select id from catalog_categories where parent_id = $${i}))`,
+    );
+  }
+  // 分类多选（源站 ctgs）：多值 OR；每个节点仍按子孙三级类目收敛，与 cat 完全同口径。
+  if (filter.ctgs?.length) {
+    params.push(filter.ctgs);
+    const i = params.length;
+    conditions.push(
+      `c3_id in (select id from catalog_categories where id = any($${i}::text[]) or parent_id = any($${i}::text[])
+                  or parent_id in (select id from catalog_categories where parent_id = any($${i}::text[])))`,
+    );
+  }
+  if (filter.dims) {
+    params.push(filter.dims);
+    conditions.push(`spec_dims = $${params.length}`);
+  }
+  if (filter.lens) {
+    params.push(filter.lens);
+    conditions.push(`spec_lens = $${params.length}`);
+  }
+  // 属性筛选：品牌落列，标准/等级/材质/表面处理落在 specs（源站中文键）里。
+  if (filter.brand) {
+    params.push(filter.brand);
+    conditions.push(`brand = $${params.length}`);
+  }
+  for (const [key, column] of [
+    ['std', '标准'],
+    ['grd', '等级'],
+    ['mtl', '材质'],
+    ['ttt', '表面处理'],
+  ] as const) {
+    const value = filter[key];
+    if (!value) continue;
+    params.push(value);
+    conditions.push(`specs->>'${column}' = $${params.length}`);
+  }
+  // 牙别多选（源站 trts）：取值来自 specs.牙别，多值 OR；单独成维，不与表面处理（ttt）合并。
+  if (filter.trts?.length) {
+    params.push(filter.trts);
+    conditions.push(`specs->>'牙别' = any($${params.length}::text[])`);
+  }
+  if (filter.keyword) {
+    // 搜索口径统一走 lib/search：多词 AND、项目号 12/6 位、规格等价、全半角/大小写归一。
+    const tokens = buildSearchTokens(filter.keyword);
+    for (const token of tokens) {
+      if (token.kind === 'itemNoMiss') {
+        // 7~11 位中间片段源站不匹配，保持一致：整条查询直接不命中
+        conditions.push('false');
+        continue;
+      }
+      if (token.kind === 'itemNo12') {
+        params.push(token.raw);
+        const i = params.length;
+        conditions.push(`(coalesce(source_id, '') = $${i} or coalesce(source_item_no, '') = $${i})`);
+        continue;
+      }
+      if (token.kind === 'itemNo6') {
+        params.push(`${escapeLikePattern(token.raw)}%`);
+        const i = params.length;
+        conditions.push(
+          `(coalesce(source_id, '') like $${i} escape '\\' or coalesce(source_item_no, '') like $${i} escape '\\')`,
+        );
+        continue;
+      }
+      params.push(`%${escapeLikePattern(token.raw)}%`);
+      const pattern = params.length;
+      if (token.kind === 'spec') {
+        params.push(token.canonical);
+        // 有「规格」键时只做等价比对（避免 M12x1 命中 M12x1.5）；缺规格字段才回落到文本子串。
+        conditions.push(
+          `((coalesce(specs->>'规格', '') <> '' and ${SQL_SPEC_KEY} = $${params.length})
+            or (coalesce(specs->>'规格', '') = '' and ${SQL_SEARCH_TEXT} like $${pattern} escape '\\'))`,
+        );
+      } else {
+        conditions.push(`${SQL_SEARCH_TEXT} like $${pattern} escape '\\'`);
+      }
+    }
+  }
+  return { conditions, params };
+}
+
+/** 商品排序：默认上架时间倒序；价格优先 price_li，缺省回落 price_fen，末尾仍用 id desc 稳定兜底。 */
+function productOrderBy(sort?: 'createdDesc' | 'priceAsc' | 'priceDesc'): string {
+  if (sort === 'priceAsc') return 'coalesce(price_li, price_fen) asc nulls last, sort_no asc, id desc';
+  if (sort === 'priceDesc') return 'coalesce(price_li, price_fen) desc nulls last, sort_no asc, id desc';
+  return 'sort_no asc, created_at desc, id desc';
+}
 
 /** PostgreSQL 驱动：生产环境唯一使用的持久化实现。 */
 export class PgStore implements Store {
@@ -884,125 +987,28 @@ export class PgStore implements Store {
           return false;
         }
       },
-      list: async (filter: {
-        category?: string;
-        cat?: string;
-        ctgs?: string[];
-        dims?: string;
-        lens?: string;
-        brand?: string;
-        std?: string;
-        grd?: string;
-        mtl?: string;
-        ttt?: string;
-        trts?: string[];
-        keyword?: string;
-        limit: number;
-        offset: number;
-      }): Promise<ProductRecord[]> => {
-        const conditions: string[] = ['listed is not false'];
-        const params: unknown[] = [];
-        if (filter.category) {
-          params.push(filter.category);
-          conditions.push(`category = $${params.length}`);
-        }
-        // 分类树节点：一级/二级按子孙三级类目收敛（商品只挂三级），三级即自身。
-        if (filter.cat) {
-          params.push(filter.cat);
-          const i = params.length;
-          conditions.push(
-            `c3_id in (select id from catalog_categories where id = $${i} or parent_id = $${i}
-                        or parent_id in (select id from catalog_categories where parent_id = $${i}))`,
-          );
-        }
-        // 分类多选（源站 ctgs）：多值 OR；每个节点仍按子孙三级类目收敛，与 cat 完全同口径。
-        if (filter.ctgs?.length) {
-          params.push(filter.ctgs);
-          const i = params.length;
-          conditions.push(
-            `c3_id in (select id from catalog_categories where id = any($${i}::text[]) or parent_id = any($${i}::text[])
-                        or parent_id in (select id from catalog_categories where parent_id = any($${i}::text[])))`,
-          );
-        }
-        if (filter.dims) {
-          params.push(filter.dims);
-          conditions.push(`spec_dims = $${params.length}`);
-        }
-        if (filter.lens) {
-          params.push(filter.lens);
-          conditions.push(`spec_lens = $${params.length}`);
-        }
-        // 属性筛选：品牌落列，标准/等级/材质/表面处理落在 specs（源站中文键）里。
-        if (filter.brand) {
-          params.push(filter.brand);
-          conditions.push(`brand = $${params.length}`);
-        }
-        for (const [key, column] of [
-          ['std', '标准'],
-          ['grd', '等级'],
-          ['mtl', '材质'],
-          ['ttt', '表面处理'],
-        ] as const) {
-          const value = filter[key];
-          if (!value) continue;
-          params.push(value);
-          conditions.push(`specs->>'${column}' = $${params.length}`);
-        }
-        // 牙别多选（源站 trts）：取值来自 specs.牙别，多值 OR；单独成维，不与表面处理（ttt）合并。
-        if (filter.trts?.length) {
-          params.push(filter.trts);
-          conditions.push(`specs->>'牙别' = any($${params.length}::text[])`);
-        }
-        if (filter.keyword) {
-          // 搜索口径统一走 lib/search：多词 AND、项目号 12/6 位、规格等价、全半角/大小写归一。
-          // 落点在 SQL：用 translate 做全半角归一（不新增列、不要求回填），15k 目录上为顺序扫描，
-          // 现有索引无法覆盖 `%kw%`，这是有意的取舍（见里程碑报告）。
-          const tokens = buildSearchTokens(filter.keyword);
-          for (const token of tokens) {
-            if (token.kind === 'itemNoMiss') {
-              // 7~11 位中间片段源站不匹配，保持一致：整条查询直接不命中
-              conditions.push('false');
-              continue;
-            }
-            if (token.kind === 'itemNo12') {
-              params.push(token.raw);
-              const i = params.length;
-              conditions.push(`(coalesce(source_id, '') = $${i} or coalesce(source_item_no, '') = $${i})`);
-              continue;
-            }
-            if (token.kind === 'itemNo6') {
-              params.push(`${escapeLikePattern(token.raw)}%`);
-              const i = params.length;
-              conditions.push(
-                `(coalesce(source_id, '') like $${i} escape '\\' or coalesce(source_item_no, '') like $${i} escape '\\')`,
-              );
-              continue;
-            }
-            params.push(`%${escapeLikePattern(token.raw)}%`);
-            const pattern = params.length;
-            if (token.kind === 'spec') {
-              params.push(token.canonical);
-              // 有「规格」键时只做等价比对（避免 M12x1 命中 M12x1.5）；缺规格字段才回落到文本子串。
-              conditions.push(
-                `((coalesce(specs->>'规格', '') <> '' and ${SQL_SPEC_KEY} = $${params.length})
-                  or (coalesce(specs->>'规格', '') = '' and ${SQL_SEARCH_TEXT} like $${pattern} escape '\\'))`,
-              );
-            } else {
-              conditions.push(`${SQL_SEARCH_TEXT} like $${pattern} escape '\\'`);
-            }
-          }
-        }
+      list: async (
+        filter: ProductListFilter & { limit: number; offset: number },
+        sort?: 'createdDesc' | 'priceAsc' | 'priceDesc',
+      ): Promise<ProductRecord[]> => {
+        const { conditions, params } = buildProductWhere(filter);
         const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
         params.push(filter.limit, filter.offset);
         // id desc 是必要的稳定兜底：批量导入的 created_at 大量相同，
         // 只按 sort_no/created_at 排序时同一页在不同请求间会漂移，
         // limit/offset 翻页就会出现重复卡片 + 漏商品（15k 目录实测量出 4 重 4 漏）。
         const res = await this.pool.query(
-          `select * from products ${where} order by sort_no asc, created_at desc, id desc
+          `select * from products ${where} order by ${productOrderBy(sort)}
            limit $${params.length - 1} offset $${params.length}`,
           params,
         );
         return res.rows.map((row) => mapProduct(row as Row));
+      },
+      count: async (filter: ProductListFilter): Promise<number> => {
+        const { conditions, params } = buildProductWhere(filter);
+        const where = conditions.length ? `where ${conditions.join(' and ')}` : '';
+        const res = await this.pool.query(`select count(*)::int as n from products ${where}`, params);
+        return Number(res.rows[0]?.['n'] ?? 0);
       },
       aggregateCategories: async () => {
         const res = await this.pool.query(
@@ -1474,12 +1480,42 @@ export class PgStore implements Store {
         const res = await this.pool.query('select * from orders where order_no = $1 limit 1', [orderNo]);
         return res.rows[0] ? mapOrder(res.rows[0] as Row) : null;
       },
-      listByUser: async (userId: string): Promise<OrderRecord[]> => {
+      listByUser: async (
+        userId: string,
+        opts?: { status?: OrderRecord['status']; limit?: number; offset?: number },
+      ): Promise<OrderRecord[]> => {
+        const conditions = ['user_id = $1'];
+        const params: unknown[] = [userId];
+        if (opts?.status) {
+          params.push(opts.status);
+          conditions.push(`status = $${params.length}`);
+        }
+        const limit = opts?.limit ?? 100;
+        const offset = opts?.offset ?? 0;
+        params.push(limit, offset);
         const res = await this.pool.query(
-          'select * from orders where user_id = $1 order by created_at desc limit 100',
-          [userId],
+          `select * from orders where ${conditions.join(' and ')}
+             order by created_at desc, id desc
+             limit $${params.length - 1} offset $${params.length}`,
+          params,
         );
         return res.rows.map((row) => mapOrder(row as Row));
+      },
+      countByUser: async (
+        userId: string,
+        opts?: { status?: OrderRecord['status'] },
+      ): Promise<number> => {
+        const conditions = ['user_id = $1'];
+        const params: unknown[] = [userId];
+        if (opts?.status) {
+          params.push(opts.status);
+          conditions.push(`status = $${params.length}`);
+        }
+        const res = await this.pool.query(
+          `select count(*)::int as n from orders where ${conditions.join(' and ')}`,
+          params,
+        );
+        return Number(res.rows[0]?.['n'] ?? 0);
       },
       itemsByOrder: async (orderId: string): Promise<OrderItemRecord[]> => {
         const res = await this.pool.query('select * from order_items where order_id = $1', [orderId]);
@@ -1742,6 +1778,50 @@ export class PgStore implements Store {
           [folderId],
         );
         return (res.rows[0]?.['n'] as number) ?? 0;
+      },
+      deleteFolder: async (userId: string, folderId: string): Promise<boolean> => {
+        if (!this.pool.connect) throw new Error('当前存储驱动不支持事务');
+        const client = await this.pool.connect();
+        try {
+          await client.query('begin');
+          const owned = await client.query(
+            'select id from mall_favorite_folders where id = $1 and user_id = $2',
+            [folderId, userId],
+          );
+          if (!owned.rows[0]) {
+            await client.query('rollback');
+            return false;
+          }
+          await client.query('delete from mall_favorite_items where folder_id = $1', [folderId]);
+          await client.query('delete from mall_favorite_folders where id = $1 and user_id = $2', [
+            folderId,
+            userId,
+          ]);
+          await client.query('commit');
+          return true;
+        } catch (error) {
+          await client.query('rollback');
+          throw error;
+        } finally {
+          client.release();
+        }
+      },
+      countAllByUser: async (userId: string): Promise<number> => {
+        const res = await this.pool.query(
+          'select count(*)::int as n from mall_favorite_items where user_id = $1',
+          [userId],
+        );
+        return Number(res.rows[0]?.['n'] ?? 0);
+      },
+      findItemByProduct: async (
+        userId: string,
+        productId: string,
+      ): Promise<FavoriteItemRecord | null> => {
+        const res = await this.pool.query(
+          'select * from mall_favorite_items where user_id = $1 and product_id = $2 limit 1',
+          [userId, productId],
+        );
+        return res.rows[0] ? mapFavoriteItem(res.rows[0]) : null;
       },
       deleteByUser: async (userId: string): Promise<number> => {
         const items = await this.pool.query(

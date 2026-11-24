@@ -57,6 +57,12 @@ const DEMO_CATEGORY_CODES = new Set([
   'sports',
 ]);
 
+/**
+ * 不进入「6 个中文五金类目」展示口径的源站类目（同 catalog-source 排除清单）。
+ * 商品保留、可搜可看，只从分类计数与首页推荐口径中剔除，避免污染中文类目统计。
+ */
+const HZN_DISPLAY_EXCLUDED_CODES = new Set(['hznzcn-apparel']);
+
 /** 默认收藏夹名称（0019）：懒创建时使用，与迁移里 name 的 1–40 字符约束一致 */
 const DEFAULT_FAVORITE_FOLDER_NAME = '默认收藏夹';
 
@@ -393,15 +399,11 @@ export class MallService {
     };
   }
 
-  async listProducts(query: ProductQueryInput, loggedIn: boolean): Promise<ProductDto[]> {
-    if (await this.useCatalog()) {
-      const rows = this.catalog!.listProducts(query);
-      return rows.map((row) => stripUpstreamFields(this.applyViewerGate(row, loggedIn)));
-    }
-    // ctgs/trts 是源站 ccc_filter 的多选维度：逗号分隔，多值 OR；与其它维度 AND。
+  /** 把查询参数归一成 DB 过滤条件（list 与 count 共用，保证条数口径同构）。 */
+  private productFilter(query: ProductQueryInput) {
     const ctgs = parseMultiValues(query.ctgs);
     const trts = parseMultiValues(query.trts);
-    const rows = await this.store.mall.products.list({
+    return {
       ...(query.category ? { category: query.category } : {}),
       ...(query.cat ? { cat: query.cat } : {}),
       ...(ctgs.length ? { ctgs } : {}),
@@ -414,10 +416,28 @@ export class MallService {
       ...(query.ttt ? { ttt: query.ttt } : {}),
       ...(trts.length ? { trts } : {}),
       ...(query.keyword ? { keyword: query.keyword } : {}),
-      limit: query.pageSize,
-      offset: (query.page - 1) * query.pageSize,
-    });
+    };
+  }
+
+  async listProducts(query: ProductQueryInput, loggedIn: boolean): Promise<ProductDto[]> {
+    if (await this.useCatalog()) {
+      const rows = this.catalog!.listProducts(query);
+      return rows.map((row) => stripUpstreamFields(this.applyViewerGate(row, loggedIn)));
+    }
+    const rows = await this.store.mall.products.list(
+      { ...this.productFilter(query), limit: query.pageSize, offset: (query.page - 1) * query.pageSize },
+      query.sort,
+    );
     return rows.map((row) => this.toProductDto(row, loggedIn));
+  }
+
+  /**
+   * 过滤后命中总数：与 listProducts 同一次过滤口径。目录源用快照 matched.length（精确、与列表同遍历）；
+   * DB 兜底用同构 count SQL，语义对齐。total 与分页无关。
+   */
+  async countProducts(query: ProductQueryInput): Promise<number> {
+    if (await this.useCatalog()) return this.catalog!.countProducts(query);
+    return this.store.mall.products.count(this.productFilter(query));
   }
 
   async getProduct(productId: string, loggedIn: boolean): Promise<ProductDto> {
@@ -431,11 +451,16 @@ export class MallService {
     return this.toProductDto(product, loggedIn);
   }
 
-  /** 公开分类聚合：目录源激活时只返回 6 个真实中文类目；否则走数据层全量聚合并剔除演示分类。 */
+  /**
+   * 公开分类聚合：目录源激活时返回快照一级类目（已剔除 HZN 展示类目）；
+   * DB 兜底走数据层全量聚合，剔除演示分类与 HZN 展示类目，两侧口径对齐。
+   */
   async listCategories(): Promise<ImportCategoryCount[]> {
     if (await this.useCatalog()) return this.catalog!.listCategories();
     const rows = await this.store.mall.products.aggregateCategories();
-    const real = rows.filter((row) => !DEMO_CATEGORY_CODES.has(row.code));
+    const real = rows.filter(
+      (row) => !DEMO_CATEGORY_CODES.has(row.code) && !HZN_DISPLAY_EXCLUDED_CODES.has(row.code),
+    );
     return [...real].sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   }
 
@@ -467,11 +492,15 @@ export class MallService {
     parent: string | null,
     opts?: { includeEmpty?: boolean },
   ): Promise<CategoryNode[]> {
+    // 目录源激活时与 listCategories() 同源走快照，避免抽屉计数与页头总数两套来源。
+    if (await this.useCatalog()) return this.catalog!.listCategoryChildren(parent);
     return this.store.mall.products.listChildCategories(parent, opts);
   }
 
   /** 分类节点（含子孙）下真实存在的筛选候选，用于筛选条展示。 */
   async listSpecOptions(c3: string) {
+    // 目录源激活时与列表同源从快照聚合，不再回 DB，避免规格候选与筛选结果两套。
+    if (await this.useCatalog()) return this.catalog!.listSpecOptions(c3);
     return this.store.mall.products.listSpecOptions(c3);
   }
 
@@ -776,9 +805,12 @@ export class MallService {
       })),
       tiers,
     );
+    const availableQuantity = lines.filter((line) => line.selectable).reduce((sum, line) => sum + line.quantity, 0);
     return {
       items: lines,
       totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+      // 可结算件数：仅 A 到货行，角标与「共 M 件」用这个口径，失效行不计入。
+      availableQuantity,
       totalFen: lines.reduce((sum, line) => sum + line.subtotalFen, 0),
       pricing,
     };
@@ -1352,14 +1384,28 @@ export class MallService {
     return this.toOrderDto(latest, items);
   }
 
-  async listOrders(userId: string): Promise<OrderDto[]> {
-    const orders = await this.store.mall.orders.listByUser(userId);
+  async listOrders(
+    userId: string,
+    opts?: { status?: OrderRecord['status']; page?: number; pageSize?: number },
+  ): Promise<OrderDto[]> {
+    const page = Math.max(1, opts?.page ?? 1);
+    const pageSize = Math.max(1, opts?.pageSize ?? 20);
+    const orders = await this.store.mall.orders.listByUser(userId, {
+      status: opts?.status,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
     const result: OrderDto[] = [];
     for (const order of orders) {
       const items = await this.store.mall.orders.itemsByOrder(order.id);
       result.push(this.toOrderDto(order, items));
     }
     return result;
+  }
+
+  /** 订单列表命中总数：与 listOrders 同状态口径，用于列表摘要 total。 */
+  async countOrders(userId: string, status?: OrderRecord['status']): Promise<number> {
+    return this.store.mall.orders.countByUser(userId, status ? { status } : undefined);
   }
 
   async getOrder(userId: string, orderNo: string): Promise<OrderDto> {
@@ -1378,18 +1424,18 @@ export class MallService {
     return folders.map((folder, i) => this.toFavoriteFolderDto(folder, counts[i] ?? 0));
   }
 
-  /** 条目列表：folderId 省略时取默认收藏夹；只存引用，标题/价格为读时快照 */
+  /** 条目列表：folderId 省略时取默认收藏夹；只存引用，标题/价格为读时快照（DB 缺失时回退目录源） */
   async listFavoriteItems(userId: string, folderId?: string): Promise<FavoriteItemDto[]> {
     const folder = await this.resolveFavoriteFolder(userId, folderId);
     const items = await this.store.mall.favorites.listItems(folder.id);
     if (!items.length) return [];
-    const products = await Promise.all(items.map((item) => this.store.mall.products.findById(item.productId)));
+    const products = await Promise.all(items.map((item) => this.resolveFavoriteProduct(item.productId)));
     return items.map((item, i) => this.toFavoriteItemDto(item, products[i] ?? null));
   }
 
   /** 加收藏：同夹内重复收藏按幂等处理（返回已有条目），folderId 省略时落到默认收藏夹 */
   async addFavoriteItem(userId: string, productId: string, folderId?: string): Promise<FavoriteItemDto> {
-    const product = await this.store.mall.products.findById(productId);
+    const product = await this.resolveFavoriteProduct(productId);
     if (!product) throw AppError.notFound('商品不存在');
     const folder = await this.resolveFavoriteFolder(userId, folderId);
     const item = await this.store.mall.favorites.insertItem({
@@ -1400,6 +1446,79 @@ export class MallService {
       createdAt: new Date(),
     });
     return this.toFavoriteItemDto(item, product);
+  }
+
+  /** 新建收藏夹：名称 1–40 字符；新夹不抢默认位。 */
+  async createFavoriteFolder(userId: string, name: string): Promise<FavoriteFolderDto> {
+    const trimmed = name.trim().slice(0, 40);
+    if (!trimmed) throw AppError.validation('收藏夹名称不能为空');
+    // 先兜底懒创建默认夹：否则用户在首次收藏前先建夹，后续 ensureDefault 会把唯一新夹误提为默认。
+    await this.ensureDefaultFavoriteFolder(userId);
+    const now = new Date();
+    const folder: FavoriteFolderRecord = {
+      id: this.ids.next().id,
+      userId,
+      name: trimmed,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.store.mall.favorites.insertFolder(folder);
+    return this.toFavoriteFolderDto(folder, 0);
+  }
+
+  /** 重命名收藏夹：必须属于当前用户。 */
+  async renameFavoriteFolder(userId: string, folderId: string, name: string): Promise<FavoriteFolderDto> {
+    const folder = await this.requireOwnFolder(userId, folderId);
+    const trimmed = name.trim().slice(0, 40);
+    if (!trimmed) throw AppError.validation('收藏夹名称不能为空');
+    const updated = await this.store.mall.favorites.updateFolder(userId, folderId, { name: trimmed });
+    const count = await this.store.mall.favorites.countItems(folder.id);
+    return this.toFavoriteFolderDto(updated ?? folder, count);
+  }
+
+  /** 删除收藏夹：连带删除其条目；默认收藏夹不允许删除。 */
+  async deleteFavoriteFolder(userId: string, folderId: string): Promise<boolean> {
+    const folder = await this.requireOwnFolder(userId, folderId);
+    if (folder.isDefault) throw AppError.validation('默认收藏夹不允许删除');
+    return this.store.mall.favorites.deleteFolder(userId, folderId);
+  }
+
+  /** 条目跨夹移动：源夹省略取默认夹；目标夹必须属于当前用户。 */
+  async moveFavoriteItem(
+    userId: string,
+    productId: string,
+    targetFolderId: string,
+    sourceFolderId?: string,
+  ): Promise<FavoriteItemDto> {
+    const source = await this.resolveFavoriteFolder(userId, sourceFolderId);
+    const target = await this.requireOwnFolder(userId, targetFolderId);
+    const existing = await this.store.mall.favorites.findItemByProduct(userId, productId);
+    if (!existing || existing.folderId !== source.id) throw AppError.notFound('收藏条目不存在');
+    await this.store.mall.favorites.deleteItem(source.id, productId);
+    const item = await this.store.mall.favorites.insertItem({
+      id: this.ids.next().id,
+      folderId: target.id,
+      userId,
+      productId,
+      createdAt: existing.createdAt,
+    });
+    const product = await this.resolveFavoriteProduct(productId);
+    return this.toFavoriteItemDto(item, product);
+  }
+
+  /** 商品是否已收藏（跨夹）：详情页/卡片收藏回显用。 */
+  async favoriteState(
+    userId: string,
+    productId: string,
+  ): Promise<{ favorited: boolean; folderId: string | null }> {
+    const item = await this.store.mall.favorites.findItemByProduct(userId, productId);
+    return { favorited: Boolean(item), folderId: item?.folderId ?? null };
+  }
+
+  /** 当前用户全部收藏条目总数（我的页磁贴角标用，含已下架残留行，与夹内计数同口径）。 */
+  async countAllFavorites(userId: string): Promise<number> {
+    return this.store.mall.favorites.countAllByUser(userId);
   }
 
   /** 删收藏条目：不存在也按成功返回（幂等） */
@@ -1460,8 +1579,11 @@ export class MallService {
     };
   }
 
-  /** 商品删除后条目仍可能残留引用：此时按「已下架」回显，不抛错 */
-  private toFavoriteItemDto(item: FavoriteItemRecord, product: ProductRecord | null): FavoriteItemDto {
+  /** 商品删除后条目仍可能残留引用：此时按「已下架」回显，不抛错；目录源商品走 ProductDto 视图。 */
+  private toFavoriteItemDto(
+    item: FavoriteItemRecord,
+    product: ProductRecord | ProductDto | null,
+  ): FavoriteItemDto {
     return {
       id: item.id,
       folderId: item.folderId,
@@ -1520,5 +1642,15 @@ export class MallService {
     const folder = await this.store.mall.favorites.findFolder(userId, folderId);
     if (!folder) throw AppError.notFound('收藏夹不存在');
     return folder;
+  }
+
+  /** 收藏条目读商品：DB 优先，目录源激活时回退快照，保证目录商品也能收藏/回显。 */
+  private async resolveFavoriteProduct(
+    productId: string,
+  ): Promise<ProductRecord | ProductDto | null> {
+    const db = await this.store.mall.products.findById(productId);
+    if (db) return db;
+    if (await this.useCatalog()) return this.catalog!.getProduct(productId) ?? null;
+    return null;
   }
 }

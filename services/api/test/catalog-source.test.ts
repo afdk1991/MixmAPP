@@ -140,6 +140,34 @@ describe('内嵌只读目录源（fixture 夹具）', () => {
     expect(new Set(ids).size).toBe(3);
   });
 
+  it('summary 总数与列表 / 分类计数同源，列表保持数组形态', async () => {
+    const { app } = await makeApp(cfg('force'));
+
+    const all = await app.inject({ method: 'GET', url: '/api/v1/mall/products/summary?pageSize=50' });
+    expect(all.json().data.total).toBe(3);
+    expect(all.json().data.hasMore).toBe(false);
+
+    const cat = await app.inject({ method: 'GET', url: '/api/v1/mall/products/summary?category=eg-screw' });
+    expect(cat.json().data.total).toBe(1);
+    const catList = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/products?category=eg-screw&pageSize=50',
+    });
+    expect(catList.json().data).toHaveLength(1);
+
+    const kw = await app.inject({ method: 'GET', url: '/api/v1/mall/products/summary?keyword=OSG' });
+    expect(kw.json().data.total).toBe(1);
+
+    // 既有列表响应仍是数组，老调用方解析不受影响
+    const list = await app.inject({ method: 'GET', url: '/api/v1/mall/products' });
+    expect(Array.isArray(list.json().data)).toBe(true);
+
+    // 分类抽屉计数之和 == 列表总数（同一屏不出现两套来源）
+    const cats = await app.inject({ method: 'GET', url: '/api/v1/mall/categories' });
+    const catSum = (cats.json().data as Array<{ count: number }>).reduce((s, c) => s + c.count, 0);
+    expect(catSum).toBe(3);
+  });
+
   it('id 由 sourceKey 稳定派生（字符串、URL 安全、重启不变）', () => {
     expect(stableCatalogId('sku:A')).toBe(stableCatalogId('sku:A'));
     expect(stableCatalogId('sku:A')).not.toBe(stableCatalogId('sku:B'));

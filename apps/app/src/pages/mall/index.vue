@@ -8,7 +8,7 @@
         <view class="head-title">
           <text class="eyebrow">MIXMAPP STORE</text>
           <text class="title">商城</text>
-          <text class="count mono">商品 · {{ products.length }} 件</text>
+          <text class="count mono">共 {{ totalCount ?? products.length }} 件 · 已加载 {{ products.length }} 件</text>
         </view>
         <view class="cart-btn" hover-class="is-press" @tap="goCart">
           <text class="cart-text">购物车</text>
@@ -125,7 +125,19 @@
 
     <view v-else>
       <view class="list-head">
-        <text class="micro mono">{{ products.length }} ITEMS · 按上架顺序</text>
+        <text class="micro mono">{{ totalCount ?? products.length }} ITEMS · {{ sortLabel }}</text>
+        <view class="sort-group">
+          <view
+            v-for="opt in SORT_OPTIONS"
+            :key="`sort-${opt.value}`"
+            class="sort-chip"
+            :class="{ 'sort-chip--on': sort === opt.value }"
+            hover-class="is-press"
+            @tap="selectSort(opt.value)"
+          >
+            <text class="sort-chip-text mono">{{ opt.label }}</text>
+          </view>
+        </view>
         <!-- 每页条数切换（20/50/100）：无限滚动保留，切换后从第一页重新拉取 -->
         <view class="page-size">
           <text class="page-size-label mono">每页</text>
@@ -170,6 +182,14 @@
               </view>
             </view>
             <text v-if="product.brand" class="cover-tag mono">{{ product.brand }}</text>
+            <view
+              class="cover-fav"
+              :class="{ 'cover-fav--on': favoritedIds.has(product.id) }"
+              hover-class="is-press"
+              @tap.stop="toggleFavorite(product)"
+            >
+              <text class="cover-fav-text mono">{{ favoritedIds.has(product.id) ? '★' : '☆' }}</text>
+            </view>
             <view
               v-if="isInquiryProduct(product)"
               class="cover-add cover-add--inquiry"
@@ -323,6 +343,7 @@ import MxIcon from '../../components/mx-icon/mx-icon.vue';
 import type { MallCategoryNodeDto, MallProductDto, MallSpecOptionsDto } from '../../api/mall';
 import {
   breadcrumbLabel,
+  fetchMallProductSummary,
   fetchMallProducts,
   INQUIRY_NOTICE,
   isBulkStock,
@@ -352,6 +373,13 @@ import { goTo, consumeTabQuery } from '../../navigation';
  * 避免前端能选、服务端拒收。
  */
 const PAGE_SIZE_OPTIONS = PAGE_SIZE_WHITELIST;
+/** 排序选项：综合=上架顺序（默认），价格按单价升降。 */
+const SORT_OPTIONS = [
+  { value: 'createdDesc', label: '综合' },
+  { value: 'priceAsc', label: '价格 ↑' },
+  { value: 'priceDesc', label: '价格 ↓' },
+] as const;
+const sortLabel = computed(() => SORT_OPTIONS.find((o) => o.value === sort.value)?.label ?? '综合');
 /** 当前每页条数：默认 20，切换后重置分页（无限滚动只改变每次追加的条数） */
 const pageSize = ref<number>(20);
 
@@ -422,11 +450,17 @@ const filterGroups = computed(() =>
 
 const keyword = ref('');
 const products = ref<MallProductDto[]>([]);
+/** 服务端过滤后命中总数（与分页无关）；未取到摘要时回落到本地数组长度。 */
+const totalCount = ref<number | null>(null);
+/** 排序：createdDesc 上架顺序（默认）/ priceAsc / priceDesc。 */
+const sort = ref<'createdDesc' | 'priceAsc' | 'priceDesc'>('createdDesc');
 const page = ref(1);
 const loading = ref(false);
 const loadingMore = ref(false);
 const noMore = ref(false);
 const error = ref('');
+/** 当前默认收藏夹已收藏的商品 id 集合（卡片点亮用；跨夹精确态以详情页 favoriteState 为准）。 */
+const favoritedIds = reactive(new Set<string>());
 
 /** 图片 404 兜底：记录加载失败的 productId，命中后改用文字占位，避免破图。 */
 const brokenImages = reactive(new Set<string>());
@@ -684,30 +718,41 @@ async function fetchPage(reset: boolean): Promise<void> {
     loadingMore.value = true;
   }
   try {
+    const query = {
+      cat: activeCat.value || undefined,
+      ctgs: ctgs.value.length ? ctgs.value.join(',') : undefined,
+      dims: filters.dims || undefined,
+      lens: filters.lens || undefined,
+      brand: filters.brand || undefined,
+      std: filters.std || undefined,
+      grd: filters.grd || undefined,
+      mtl: filters.mtl || undefined,
+      ttt: filters.ttt || undefined,
+      trts: filters.trts || undefined,
+      keyword: keyword.value.trim() || undefined,
+      sort: sort.value,
+      page: page.value,
+      pageSize: pageSize.value,
+    };
     // 可选登录态：登录后服务端才下发折后千支价与真实库存（源站 disbasePrc / bpInvQty 口径）
-    const list = await withDeadline(
-      fetchMallProducts({
-        cat: activeCat.value || undefined,
-        ctgs: ctgs.value.length ? ctgs.value.join(',') : undefined,
-        dims: filters.dims || undefined,
-        lens: filters.lens || undefined,
-        brand: filters.brand || undefined,
-        std: filters.std || undefined,
-        grd: filters.grd || undefined,
-        mtl: filters.mtl || undefined,
-        ttt: filters.ttt || undefined,
-        trts: filters.trts || undefined,
-        keyword: keyword.value.trim() || undefined,
-        page: page.value,
-        pageSize: pageSize.value,
-      }),
-      20000,
-    );
+    const list = await withDeadline(fetchMallProducts(query), 20000);
     // 接口异常或网关返回非 JSON 时保持空数组，避免模板读取 length 时报错白屏
     const rows = Array.isArray(list) ? list : [];
     products.value = reset ? rows : [...products.value, ...rows];
-    if (rows.length < pageSize.value) noMore.value = true;
-    else page.value += 1;
+    // 首屏顺带拉摘要：total 与列表同一次过滤口径；hasMore 优先用服务端判定，兜底按本页是否满页。
+    if (reset) {
+      try {
+        const summary = await fetchMallProductSummary(query);
+        totalCount.value = typeof summary?.total === 'number' ? summary.total : null;
+        noMore.value = summary ? !summary.hasMore : rows.length < pageSize.value;
+      } catch {
+        totalCount.value = null;
+        noMore.value = rows.length < pageSize.value;
+      }
+    } else if (rows.length < pageSize.value) {
+      noMore.value = true;
+    }
+    if (!noMore.value) page.value += 1;
     // 记录首屏成功时间，供 onShow 节流判断（避免重复 refresh 把列表打回骨架屏）
     if (reset) lastLoadedAt = Date.now();
   } catch (e) {
@@ -762,6 +807,45 @@ function selectPageSize(size: number): void {
   if (pageSize.value === size) return;
   pageSize.value = size;
   refresh();
+}
+
+/** 切换排序：重置分页后重新拉取。 */
+function selectSort(next: 'createdDesc' | 'priceAsc' | 'priceDesc'): void {
+  if (sort.value === next) return;
+  sort.value = next;
+  refresh();
+}
+
+/** 拉取默认收藏夹条目，点亮列表卡片收藏态；未登录/失败时静默为空。 */
+async function loadFavoritedIds(): Promise<void> {
+  try {
+    const items = await mallApi.listFavoriteItems();
+    favoritedIds.clear();
+    for (const item of items ?? []) favoritedIds.add(item.productId);
+  } catch {
+    // 未登录或接口异常：卡片不点亮，不阻断浏览
+  }
+}
+
+/** 卡片收藏切换：未收藏→加入默认夹；已收藏→移除。登录态缺失时跳登录页。 */
+async function toggleFavorite(product: MallProductDto): Promise<void> {
+  const favorited = favoritedIds.has(product.id);
+  try {
+    if (favorited) {
+      await mallApi.removeFavorite(product.id);
+      favoritedIds.delete(product.id);
+    } else {
+      await mallApi.addFavorite(product.id);
+      favoritedIds.add(product.id);
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '';
+    if (message.includes('登录')) {
+      goTo(ROUTES.login);
+      return;
+    }
+    uni.showToast({ title: message || '收藏操作失败', icon: 'none' });
+  }
 }
 
 function coverOf(product: MallProductDto): string {
@@ -882,6 +966,7 @@ onShow(() => {
     refresh();
   }
   void refreshCartBadge();
+  void loadFavoritedIds();
 });
 onReachBottom(() => {
   loadMore();
@@ -1334,7 +1419,39 @@ function onShellRefresh(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: $sp-2;
   padding: $sp-2 0 $sp-3;
+}
+
+/* ---------- 排序切换：综合 / 价格 ↑ / 价格 ↓ ---------- */
+.sort-group {
+  display: flex;
+  align-items: center;
+}
+
+.sort-chip {
+  margin-left: 8rpx;
+  padding: 6rpx 16rpx;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+}
+
+.sort-chip--on {
+  background: $brand-soft;
+  border-color: transparent;
+}
+
+.sort-chip-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.sort-chip--on .sort-chip-text {
+  color: $brand-deep;
+  font-weight: 600;
 }
 
 /* ---------- 每页条数切换（20 / 50 / 100） ---------- */
@@ -1480,6 +1597,30 @@ function onShellRefresh(): void {
   border-radius: $r-pill;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 卡片收藏角标：右上角悬浮，★ 点亮 / ☆ 未收藏。 */
+.cover-fav {
+  position: absolute;
+  right: 16rpx;
+  top: 16rpx;
+  z-index: 3;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  background: $shell;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-fav-text {
+  font-size: 28rpx;
+  color: $ink-3;
+}
+
+.cover-fav--on .cover-fav-text {
+  color: #e11d48;
 }
 
 /* 自有商品无实物图时后端 cover 是品牌色：占位块铺该底色，图标改深场反白。 */

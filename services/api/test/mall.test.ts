@@ -807,6 +807,28 @@ describe('购物车行状态四态与三层优惠（0017）', () => {
     expect(data.pricing.payableFen).toBe(20000);
   });
 
+  it('availableQuantity 只合计 A 到货行件数；totalQuantity 仍含失效行', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'av-a', title: '到货件', priceFen: 10000, stock: 50 }));
+    await ctx.store.mall.products.insert(
+      product({ id: 'av-l', title: '缺货件', priceFen: 10000, stock: 50, sourceInvStatus: '无货' }),
+    );
+    const token = await register(app, '13800002211');
+    const user = await ctx.store.users.findByPhone('13800002211');
+    expect(user).toBeTruthy();
+    await seedCart(ctx.store, user!.id, [
+      { productId: 'av-a', quantity: 3 },
+      { productId: 'av-l', quantity: 2 },
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/mall/cart', headers: auth(token) });
+    expect(res.statusCode).toBe(200);
+    // 角标 / 「共 M 件」按可结算件数口径：只算 A 行 3 件；旧字段仍含失效行共 5 件
+    expect(res.json().data.availableQuantity).toBe(3);
+    expect(res.json().data.totalQuantity).toBe(5);
+  });
+
   it('商城 / 特价取优不叠加，厘→分只在小计与减免处取整一次', async () => {
     const ctx = await makeApp();
     app = ctx.app;
@@ -1161,5 +1183,261 @@ describe('首页运营位（home/ggs、home/rcs）', () => {
     expect(cartAfter.json().data.items).toHaveLength(1);
     const orders = await app.inject({ method: 'GET', url: '/api/v1/mall/orders', headers: auth(token) });
     expect(orders.json().data).toHaveLength(0);
+  });
+});
+
+describe('列表总数摘要 / 排序 / 订单筛选分页 / 收藏夹管理（第二阶段口径）', () => {
+  it('summary 总数与列表同口径，列表响应仍是数组；排序按价格升降', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'sum-1', title: '低价件', category: 'featured', priceFen: 1000, sortNo: 1 }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'sum-2', title: '高价件', category: 'digital', priceFen: 3000, sortNo: 2 }),
+    );
+    await ctx.store.mall.products.insert(
+      product({ id: 'sum-3', title: '中价件', category: 'featured', priceFen: 2000, sortNo: 3 }),
+    );
+
+    // 既有列表响应仍是 ProductDto[] 数组，老调用方零改动
+    const list = await app.inject({ method: 'GET', url: '/api/v1/mall/products?pageSize=100' });
+    expect(list.statusCode).toBe(200);
+    expect(Array.isArray(list.json().data)).toBe(true);
+    expect(list.json().data).toHaveLength(3);
+
+    const sum = await app.inject({ method: 'GET', url: '/api/v1/mall/products/summary' });
+    expect(sum.statusCode).toBe(200);
+    expect(sum.json().data.total).toBe(3);
+    expect(sum.json().data.hasMore).toBe(false);
+
+    const filteredSum = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/products/summary?category=featured',
+    });
+    expect(filteredSum.json().data.total).toBe(2);
+    const filteredList = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/products?category=featured&pageSize=100',
+    });
+    expect(filteredList.json().data).toHaveLength(2);
+
+    // 分页参数不影响 total：翻到越界第 2 页（空页），summary 仍是全量命中 3
+    const page2 = await app.inject({ method: 'GET', url: '/api/v1/mall/products?page=2&pageSize=20' });
+    expect(page2.json().data).toHaveLength(0);
+    const page2Sum = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/products/summary?page=2&pageSize=20',
+    });
+    expect(page2Sum.json().data.total).toBe(3);
+    expect(page2Sum.json().data.hasMore).toBe(false);
+
+    const asc = await app.inject({ method: 'GET', url: '/api/v1/mall/products?sort=priceAsc&pageSize=100' });
+    expect(asc.json().data.map((p: { id: string }) => p.id)).toEqual(['sum-1', 'sum-3', 'sum-2']);
+    const desc = await app.inject({ method: 'GET', url: '/api/v1/mall/products?sort=priceDesc&pageSize=100' });
+    expect(desc.json().data.map((p: { id: string }) => p.id)).toEqual(['sum-2', 'sum-3', 'sum-1']);
+  });
+
+  it('订单按状态筛选、分页与 summary 同源；非法状态 422', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(product({ id: 'ord-1', title: '下单件', stock: 100, priceFen: 1000 }));
+    const token = await register(app, '13800002401');
+
+    const orderIds: string[] = [];
+    for (let i = 0; i < 25; i += 1) {
+      const r = await app.inject({
+        method: 'POST',
+        url: '/api/v1/mall/orders',
+        headers: auth(token),
+        payload: {
+          receiverName: '周九',
+          receiverPhone: '13800002401',
+          address: '浙江省宁波市镇海区六条路 9 号',
+          items: [{ productId: 'ord-1', quantity: 1 }],
+        },
+      });
+      expect(r.statusCode).toBe(201);
+      orderIds.push(r.json().data.id as string);
+    }
+    // 前两笔流转为 completed，其余留在 pending
+    for (const id of orderIds.slice(0, 2)) {
+      await ctx.store.mall.orders.transitionStatus(id, 'pending', 'completed');
+    }
+
+    const all = await app.inject({ method: 'GET', url: '/api/v1/mall/orders/summary', headers: auth(token) });
+    expect(all.json().data.total).toBe(25);
+    const done = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders/summary?status=completed',
+      headers: auth(token),
+    });
+    expect(done.json().data.total).toBe(2);
+    const pend = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders/summary?status=pending',
+      headers: auth(token),
+    });
+    expect(pend.json().data.total).toBe(23);
+
+    const doneList = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders?status=completed',
+      headers: auth(token),
+    });
+    expect(doneList.json().data).toHaveLength(2);
+    expect(
+      (doneList.json().data as Array<{ status: string }>).every((o) => o.status === 'completed'),
+    ).toBe(true);
+
+    const page1 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders?page=1&pageSize=20',
+      headers: auth(token),
+    });
+    expect(page1.json().data).toHaveLength(20);
+    const page2 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders?page=2&pageSize=20',
+      headers: auth(token),
+    });
+    expect(page2.json().data).toHaveLength(5);
+    const page3 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders?page=3&pageSize=20',
+      headers: auth(token),
+    });
+    expect(page3.json().data).toHaveLength(0);
+    const pageSum = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders/summary?page=1&pageSize=20',
+      headers: auth(token),
+    });
+    expect(pageSum.json().data.total).toBe(25);
+    expect(pageSum.json().data.hasMore).toBe(true);
+
+    const bad = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/orders?status=weird',
+      headers: auth(token),
+    });
+    expect(bad.statusCode).toBe(422);
+  });
+
+  it('收藏夹新建/改名/删除、条目跨夹移动、收藏态回显与全部总数；默认夹禁删', async () => {
+    const ctx = await makeApp();
+    app = ctx.app;
+    await ctx.store.mall.products.insert(
+      product({ id: 'fav-move-1', title: '移动件', stock: 5, priceFen: 1900 }),
+    );
+    const token = await register(app, '13800002402');
+
+    // 空名（纯空白）走 schema 校验 422
+    const empty = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+      payload: { name: '   ' },
+    });
+    expect(empty.statusCode).toBe(422);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+      payload: { name: '常用五金' },
+    });
+    expect(created.statusCode).toBe(201);
+    const newId = created.json().data.id as string;
+    expect(created.json().data.isDefault).toBe(false);
+
+    const renamed = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/mall/favorites/folders/${newId}`,
+      headers: auth(token),
+      payload: { name: '常用工具' },
+    });
+    expect(renamed.json().data.name).toBe('常用工具');
+
+    // 先收藏进默认夹，再跨夹移动到新夹
+    const add = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/favorites/items',
+      headers: auth(token),
+      payload: { productId: 'fav-move-1' },
+    });
+    expect(add.statusCode).toBe(201);
+    const move = await app.inject({
+      method: 'POST',
+      url: '/api/v1/mall/favorites/items/fav-move-1/move',
+      headers: auth(token),
+      payload: { folderId: newId },
+    });
+    expect(move.statusCode).toBe(200);
+
+    const state = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/state/fav-move-1',
+      headers: auth(token),
+    });
+    expect(state.json().data.favorited).toBe(true);
+    expect(state.json().data.folderId).toBe(newId);
+
+    const summary = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/summary',
+      headers: auth(token),
+    });
+    expect(summary.json().data.total).toBe(1);
+
+    const defaultItems = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/items',
+      headers: auth(token),
+    });
+    expect(defaultItems.json().data).toHaveLength(0);
+    const newItems = await app.inject({
+      method: 'GET',
+      url: `/api/v1/mall/favorites/folders/${newId}/items`,
+      headers: auth(token),
+    });
+    expect(newItems.json().data).toHaveLength(1);
+
+    // 默认夹不允许删除（服务端兜底 422）
+    const folders0 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/folders',
+      headers: auth(token),
+    });
+    const defaultId = (
+      folders0.json().data as Array<{ id: string; isDefault: boolean }>
+    ).find((f) => f.isDefault)!.id;
+    const delDefault = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/mall/favorites/folders/${defaultId}`,
+      headers: auth(token),
+    });
+    expect(delDefault.statusCode).toBe(422);
+
+    // 删新夹连带删除其条目，收藏态与总数同步归零
+    const delNew = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/mall/favorites/folders/${newId}`,
+      headers: auth(token),
+    });
+    expect(delNew.statusCode).toBe(200);
+    expect(delNew.json().data.removed).toBe(true);
+    const state2 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/state/fav-move-1',
+      headers: auth(token),
+    });
+    expect(state2.json().data.favorited).toBe(false);
+    const summary2 = await app.inject({
+      method: 'GET',
+      url: '/api/v1/mall/favorites/summary',
+      headers: auth(token),
+    });
+    expect(summary2.json().data.total).toBe(0);
   });
 });

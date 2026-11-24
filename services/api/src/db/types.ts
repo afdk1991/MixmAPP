@@ -434,6 +434,22 @@ export type MergeCandidate = {
   bindingIds: string[];
 };
 
+/** 商品列表 / 计数共用的过滤条件（分页参数由调用方另算）。 */
+export type ProductListFilter = {
+  category?: string;
+  cat?: string;
+  ctgs?: string[];
+  dims?: string;
+  lens?: string;
+  brand?: string;
+  std?: string;
+  grd?: string;
+  mtl?: string;
+  ttt?: string;
+  trts?: string[];
+  keyword?: string;
+};
+
 export type Store = {
   driver: 'memory' | 'postgres';
   ping(): Promise<boolean>;
@@ -542,24 +558,15 @@ export type Store = {
   mall: {
     products: {
       insert(product: ProductRecord): Promise<ProductRecord>;
-      list(filter: {
-        category?: string;
-        cat?: string;
-        /** 分类多选（源站 ctgs）：节点 id 数组，多值 OR，每个节点按子孙收敛 */
-        ctgs?: string[];
-        dims?: string;
-        lens?: string;
-        brand?: string;
-        std?: string;
-        grd?: string;
-        mtl?: string;
-        ttt?: string;
-        /** 牙别多选（源站 trts）：specs.牙别 的取值数组，多值 OR */
-        trts?: string[];
-        keyword?: string;
-        limit: number;
-        offset: number;
-      }): Promise<ProductRecord[]>;
+      list(
+        filter: ProductListFilter & { limit: number; offset: number },
+        sort?: 'createdDesc' | 'priceAsc' | 'priceDesc',
+      ): Promise<ProductRecord[]>;
+      /**
+       * 与 list 同构的过滤条件，只返回命中总数（count(*)），用于列表摘要 total；
+       * 过滤口径必须与 list 完全一致，避免「筛选后条数」与分页结果漂移。
+       */
+      count(filter: ProductListFilter): Promise<number>;
       /**
        * 分类树逐层读取：parentId 为空取一级类目，否则取该节点的直接子级。
        * 默认只返回 is_active 且 product_count > 0 的节点（列表页不显示空壳）；
@@ -640,7 +647,12 @@ export type Store = {
     orders: {
       insert(order: OrderRecord, items: OrderItemRecord[]): Promise<OrderRecord>;
       findByOrderNo(orderNo: string): Promise<OrderRecord | null>;
-      listByUser(userId: string): Promise<OrderRecord[]>;
+      listByUser(
+        userId: string,
+        opts?: { status?: OrderRecord['status']; limit?: number; offset?: number },
+      ): Promise<OrderRecord[]>;
+      /** 与 listByUser 同口径的命中总数（筛选状态对齐），用于订单列表摘要 total。 */
+      countByUser(userId: string, opts?: { status?: OrderRecord['status'] }): Promise<number>;
       itemsByOrder(orderId: string): Promise<OrderItemRecord[]>;
       /** 订单归属迁移：订单号不变，只换 userId */
       move(ids: string[], userId: string): Promise<number>;
@@ -703,8 +715,14 @@ export type Store = {
       deleteItem(folderId: string, productId: string): Promise<boolean>;
       /** 清空某收藏夹的条目，返回删除条数 */
       clearItems(folderId: string): Promise<number>;
+      /** 删除收藏夹：连带删除其条目；归属不匹配返回 false。默认夹不允许删除由服务端兜底。 */
+      deleteFolder(userId: string, folderId: string): Promise<boolean>;
       /** 条目数统计（收藏夹列表用） */
       countItems(folderId: string): Promise<number>;
+      /** 跨夹查找某商品的收藏条目（详情页收藏回显用）；未收藏返回 null。 */
+      findItemByProduct(userId: string, productId: string): Promise<FavoriteItemRecord | null>;
+      /** 当前用户全部收藏夹条目总数（我的页磁贴角标用，含已下架残留行，与夹内计数同口径）。 */
+      countAllByUser(userId: string): Promise<number>;
       /** 注销级联：物理删除该用户全部收藏夹与条目，返回条目删除条数。 */
       deleteByUser(userId: string): Promise<number>;
     };

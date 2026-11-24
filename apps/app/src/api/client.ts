@@ -9,7 +9,9 @@ import type {
   OAuthProviderId,
   OrderCreateInput,
   OrderDto,
+  OrderListSummaryDto,
   PrivacyConsentInput,
+  ProductListSummaryDto,
   TokenPair,
   UserDto,
 } from '@mixmapp/contracts';
@@ -801,29 +803,39 @@ export const adminApi = {
     }),
 };
 
+/** 商品列表查询参数（与后端 productQuerySchema 对齐）。 */
+export type MallProductQuery = {
+  category?: string;
+  cat?: string;
+  ctgs?: string;
+  dims?: string;
+  lens?: string;
+  brand?: string;
+  std?: string;
+  grd?: string;
+  mtl?: string;
+  ttt?: string;
+  trts?: string;
+  keyword?: string;
+  sort?: 'createdDesc' | 'priceAsc' | 'priceDesc';
+  page?: number;
+  pageSize?: number;
+};
+
+function toQueryString(query: Record<string, unknown>): string {
+  const qs = Object.entries(query)
+    .filter(([, value]) => value !== undefined && value !== '')
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&');
+  return qs ? `?${qs}` : '';
+}
+
 export const mallApi = {
-  listProducts: (
-    query: {
-      category?: string;
-      cat?: string;
-      dims?: string;
-      lens?: string;
-      brand?: string;
-      std?: string;
-      grd?: string;
-      mtl?: string;
-      ttt?: string;
-      keyword?: string;
-      page?: number;
-      pageSize?: number;
-    } = {},
-  ) => {
-    const qs = Object.entries(query)
-      .filter(([, value]) => value !== undefined && value !== '')
-      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
-      .join('&');
-    return apiRequest<MallProductDto[]>(`/mall/products${qs ? `?${qs}` : ''}`, { auth: false });
-  },
+  listProducts: (query: MallProductQuery = {}) =>
+    apiRequest<MallProductDto[]>(`/mall/products${toQueryString(query)}`, { auth: false }),
+  /** 列表总数摘要：与列表同口径；既有数组列表不受影响，页头用它显示「共 N 件」。 */
+  listProductsSummary: (query: MallProductQuery = {}) =>
+    apiRequest<ProductListSummaryDto>(`/mall/products/summary${toQueryString(query)}`, { auth: false }),
   getProduct: (productId: string) =>
     apiRequest<MallProductDto>(`/mall/products/${encodeURIComponent(productId)}`, { auth: false }),
   /** 一级分类 + 商品计数；后端未就绪时前端兜底只留「全部」。 */
@@ -865,7 +877,11 @@ export const mallApi = {
   clearCart: () => apiRequest<CartDto>('/mall/cart', { method: 'DELETE' }),
   createOrder: (input: OrderCreateInput) =>
     apiRequest<OrderDto>('/mall/orders', { method: 'POST', data: input }),
-  listOrders: () => apiRequest<OrderDto[]>('/mall/orders'),
+  listOrders: (query: { status?: string; page?: number; pageSize?: number } = {}) =>
+    apiRequest<OrderDto[]>(`/mall/orders${toQueryString(query)}`),
+  /** 订单列表总数摘要：状态口径与列表一致。 */
+  orderSummary: (query: { status?: string; page?: number; pageSize?: number } = {}) =>
+    apiRequest<OrderListSummaryDto>(`/mall/orders/summary${toQueryString(query)}`),
   getOrder: (orderNo: string) =>
     apiRequest<OrderDto>(`/mall/orders/${encodeURIComponent(orderNo)}`),
   /** 用户侧取消订单（0018）：已分配拣货/已发货/已完成不可取消；重复取消服务端幂等返回当前订单 */
@@ -913,6 +929,38 @@ export const mallApi = {
       `/mall/favorites/folders/${encodeURIComponent(folderId)}/items`,
       { method: 'DELETE' },
     ),
+  /** 新建收藏夹（新夹不抢默认位） */
+  createFavoriteFolder: (name: string) =>
+    apiRequest<FavoriteFolderDto>('/mall/favorites/folders', {
+      method: 'POST',
+      data: { name },
+    }),
+  /** 重命名收藏夹 */
+  renameFavoriteFolder: (folderId: string, name: string) =>
+    apiRequest<FavoriteFolderDto>(`/mall/favorites/folders/${encodeURIComponent(folderId)}`, {
+      method: 'PATCH',
+      data: { name },
+    }),
+  /** 删除收藏夹（连带条目；默认夹服务端拦截） */
+  deleteFavoriteFolder: (folderId: string) =>
+    apiRequest<{ removed: boolean }>(`/mall/favorites/folders/${encodeURIComponent(folderId)}`, {
+      method: 'DELETE',
+    }),
+  /** 条目跨夹移动：sourceFolderId 省略取默认夹 */
+  moveFavoriteItem: (productId: string, folderId: string, sourceFolderId?: string) =>
+    apiRequest<FavoriteItemDto>(
+      `/mall/favorites/items/${encodeURIComponent(productId)}/move${
+        sourceFolderId ? `?folderId=${encodeURIComponent(sourceFolderId)}` : ''
+      }`,
+      { method: 'POST', data: { folderId } },
+    ),
+  /** 商品收藏态回显（跨夹） */
+  favoriteState: (productId: string) =>
+    apiRequest<{ favorited: boolean; folderId: string | null }>(
+      `/mall/favorites/state/${encodeURIComponent(productId)}`,
+    ),
+  /** 全部收藏条目总数（我的页磁贴角标用） */
+  favoriteSummary: () => apiRequest<{ total: number }>('/mall/favorites/summary'),
 };
 
 /**

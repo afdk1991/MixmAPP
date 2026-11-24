@@ -361,6 +361,11 @@ export const productQuerySchema = z.object({
    */
   trts: z.string().trim().max(128).optional(),
   keyword: z.string().trim().max(64).optional(),
+  /**
+   * 排序：createdDesc 上架时间倒序（默认，与历史口径一致）；priceAsc/priceDesc 按单价升降。
+   * 单价口径与列表展示一致：优先 priceLi（厘/支），缺省回落 priceFen（分/件）。
+   */
+  sort: z.enum(['createdDesc', 'priceAsc', 'priceDesc']).default('createdDesc'),
   // 页上界放大到可覆盖全量目录（万级以上）。
   // pageSize 只允许 20/50/100 三档（源站列表每页条数口径），默认 20；超出上界直接 400。
   page: z.coerce.number().int().min(1).max(100000).default(1),
@@ -517,7 +522,44 @@ export const orderCancelSchema = z.object({
   reason: z.string().trim().max(120).optional(),
 });
 
+/**
+ * 订单列表查询：状态可选筛选；分页默认 20、上限 100，取代旧的「一次拉最近 100 条」硬编码。
+ * status 省略表示全部状态。
+ */
+export const orderListQuerySchema = z.object({
+  status: z.enum(['pending', 'paid', 'picking', 'shipped', 'completed', 'cancelled']).optional(),
+  page: z.coerce.number().int().min(1).max(100000).default(1),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .refine((v) => PAGE_SIZE_OPTIONS.includes(v as (typeof PAGE_SIZE_OPTIONS)[number]), {
+      message: 'pageSize 只支持 20 / 50 / 100',
+    })
+    .default(20),
+});
+
 export type ProductQueryInput = z.infer<typeof productQuerySchema>;
+
+/**
+ * 列表总数摘要（与列表同一次过滤口径算出，独立端点下发，不改动既有 `ProductDto[]` 数组响应）。
+ * total 为过滤后的命中总数（与分页无关）；hasMore 表示当前页之后是否还有下一页。
+ */
+export type ProductListSummaryDto = {
+  /** 过滤后命中商品总数 */
+  total: number;
+  page: number;
+  pageSize: number;
+  /** 当前页之后是否还有更多条目 */
+  hasMore: boolean;
+};
+
+/** 订单列表总数摘要（口径同商品列表摘要）。 */
+export type OrderListSummaryDto = {
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
 export type ImportProductImageInput = z.infer<typeof importProductImageSchema>;
 export type ImportProductInput = z.infer<typeof importProductSchema>;
 export type ImportCatalogInput = z.infer<typeof importCatalogSchema>;
@@ -750,7 +792,13 @@ export type CartLineDto = {
 
 export type CartDto = {
   items: CartLineDto[];
+  /** 全部行件数合计（含 R/L/X 失效行，沿用旧口径，不做静默改动） */
   totalQuantity: number;
+  /**
+   * 可结算件数：仅统计 A 到货行的 quantity 合计；角标与「共 M 件」用这个口径，
+   * 失效行（R 需求 / L 缺货 / X 下架）不计入。旧客户端不读该字段，零影响。
+   */
+  availableQuantity?: number;
   /** 全部行面价合计（含不可结算行，沿用旧口径） */
   totalFen: number;
   /** 三层优惠汇总（只统计可结算的 A 态行） */
@@ -860,6 +908,21 @@ export const favoriteCopySchema = z.object({
   name: z.string().trim().min(1).max(40).optional(),
 });
 
+/** 新建收藏夹入参：名称 1–40 字符，与迁移 check 约束一致。 */
+export const favoriteFolderCreateSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+});
+
+/** 重命名收藏夹入参。 */
+export const favoriteFolderRenameSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+});
+
+/** 条目移动到目标收藏夹入参：folderId 为目标夹；源夹省略时取当前默认夹。 */
+export const favoriteMoveSchema = z.object({
+  folderId: z.string().trim().min(1).max(64),
+});
+
 /** 删除 / 清空收藏条目时的查询参数。 */
 export const favoriteQuerySchema = z.object({
   folderId: z.string().trim().min(1).max(64).optional(),
@@ -867,6 +930,10 @@ export const favoriteQuerySchema = z.object({
 
 export type FavoriteAddInput = z.infer<typeof favoriteAddSchema>;
 export type FavoriteCopyInput = z.infer<typeof favoriteCopySchema>;
+export type FavoriteFolderCreateInput = z.infer<typeof favoriteFolderCreateSchema>;
+export type FavoriteFolderRenameInput = z.infer<typeof favoriteFolderRenameSchema>;
+export type FavoriteMoveInput = z.infer<typeof favoriteMoveSchema>;
+export type OrderListQueryInput = z.infer<typeof orderListQuerySchema>;
 
 export type FavoriteFolderDto = {
   id: string;

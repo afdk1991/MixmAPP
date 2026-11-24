@@ -32,6 +32,41 @@ export type CatalogMode = 'auto' | 'off' | 'force';
 
 export type CatalogCategory = { code: string; name: string; count: number };
 
+/** 分类树节点视图（与 MallService.CategoryNode 形状对齐）。 */
+type CategoryNodeView = { id: string; code: string; name: string; level: number; count: number };
+
+/** 筛选候选视图（与 DB listSpecOptions 返回形状对齐）。 */
+type SpecOptionsView = {
+  dims: string[];
+  lens: string[];
+  brands: string[];
+  stds: string[];
+  grds: string[];
+  mtls: string[];
+  ttts: string[];
+  trts: string[];
+};
+
+/**
+ * 不进入「6 个中文五金类目」展示口径的源站类目。
+ * 这类商品本身保留在快照里、可搜可看可进详情，只是从分类计数与首页推荐口径中排除，
+ * 避免把非五金女装类目混进中文类目统计（商品不删、口径不污染）。
+ */
+const HZN_DISPLAY_EXCLUDED_CODES = new Set(['hznzcn-apparel']);
+
+/** 分类树节点 id（c1:/c2:/c3: 前缀）剥成类目 code；无前缀时原样返回。 */
+function nodeCodeOf(nodeId?: string | null): string | null {
+  if (!nodeId) return null;
+  const i = nodeId.indexOf(':');
+  return i >= 0 ? nodeId.slice(i + 1) : nodeId;
+}
+
+/** 逗号分隔多选参数：去空白、去重、丢空。 */
+function splitMulti(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return [...new Set(raw.split(',').map((v) => v.trim()).filter(Boolean))];
+}
+
 export type CatalogStatus = {
   mode: CatalogMode;
   /** 实际生效的商城商品读源 */
@@ -369,29 +404,109 @@ export class CatalogSource {
       .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   }
 
+  private specText(p: ProductDto, key: string): string {
+    return p.specs?.[key]?.trim() ?? '';
+  }
+
   /**
-   * 公开读：category（一级 code）、keyword、page/pageSize。
+   * 与 DB 读路径同构的过滤条件，list / count / 规格候选共用，保证「筛选后条数」与分页结果不漂移。
+   * 快照商品只挂一级类目 code：cat / ctgs 节点剥掉 c1:/c2:/c3: 前缀后按 categoryCode 比对；
+   * 快照无二级/三级树节点，更深层级按无商品处理，与 DB 内存实现口径一致。
+   */
+  private matchProducts(query: ProductQueryInput): ProductDto[] {
+    const catCode = nodeCodeOf(query.cat);
+    const ctgCodes = splitMulti(query.ctgs).map(nodeCodeOf).filter((v): v is string => Boolean(v));
+    const trts = splitMulti(query.trts);
+    const tokens = buildSearchTokens(query.keyword);
+    return this.all.filter((p) => {
+      if (query.category && p.category !== query.category) return false;
+      if (catCode && p.category !== catCode) return false;
+      if (ctgCodes.length && !ctgCodes.includes(p.category)) return false;
+      const specs = p.specs ?? {};
+      // 快照规格维度统一落在「规格」键上：dims/lens 做子串包含，与 DB 规格候选口径对齐。
+      const dimText = String(specs['规格'] ?? '');
+      if (query.dims && !dimText.includes(query.dims)) return false;
+      if (query.lens && !dimText.includes(query.lens)) return false;
+      const brand = (p.brand ?? String(specs['品牌'] ?? '')).trim();
+      if (query.brand && brand !== query.brand) return false;
+      if (query.std && this.specText(p, '标准') !== query.std) return false;
+      if (query.grd && this.specText(p, '等级') !== query.grd) return false;
+      if (query.mtl && this.specText(p, '材质') !== query.mtl) return false;
+      if (query.ttt && this.specText(p, '表面处理') !== query.ttt) return false;
+      if (trts.length && !trts.includes(this.specText(p, '牙别'))) return false;
+      if (tokens.length) {
+        const index = this.search.get(p.id);
+        if (!index || !matchesSearchTokens(index, tokens)) return false;
+      }
+      return true;
+    });
+  }
+
+  private sortProducts(rows: ProductDto[], sort: ProductQueryInput['sort']): ProductDto[] {
+    const priceOf = (p: ProductDto): number => p.priceLi ?? p.priceFen ?? 0;
+    if (sort === 'priceAsc') return [...rows].sort((a, b) => priceOf(a) - priceOf(b) || a.id.localeCompare(b.id));
+    if (sort === 'priceDesc') return [...rows].sort((a, b) => priceOf(b) - priceOf(a) || a.id.localeCompare(b.id));
+    // createdDesc：快照按 id 字典序稳定排序，等价于稳定的上架时间倒序兜底。
+    return rows;
+  }
+
+  /**
+   * 公开读：先按同一次遍历算出 matched（total 与分页无关），再切片。
    * keyword 口径见 lib/search：多词 AND（顺序无关）、项目号 12/6 位、规格等价、全半角/大小写归一。
    */
   listProducts(query: ProductQueryInput): ProductDto[] {
-    const base = query.category ? (this.byCategory.get(query.category) ?? []) : this.all;
-    const tokens = buildSearchTokens(query.keyword);
+    const matched = this.sortProducts(this.matchProducts(query), query.sort);
     const offset = (query.page - 1) * query.pageSize;
-    const matched: ProductDto[] = [];
-    for (const item of base) {
-      const index = this.search.get(item.id);
-      if (tokens.length && (!index || !matchesSearchTokens(index, tokens))) continue;
-      matched.push(item);
-    }
     return matched.slice(offset, offset + query.pageSize);
+  }
+
+  /** 过滤后命中总数：与 listProducts 同一次过滤口径，不做切片。 */
+  countProducts(query: ProductQueryInput): number {
+    return this.matchProducts(query).length;
   }
 
   getProduct(id: string): ProductDto | undefined {
     return this.byId.get(id);
   }
 
-  /** 分类聚合：只来自 catalog.products 的 6 个真实中文类目，绝不混入 4 个英文演示分类。 */
+  /**
+   * 分类聚合：来自快照一级类目；排除 HZN 展示口径类目（商品仍可搜可看），
+   * 与 listCategoryChildren / 首页推荐同源。
+   */
   listCategories(): CatalogCategory[] {
-    return this.categories.map((c) => ({ ...c }));
+    return this.categories
+      .filter((c) => !HZN_DISPLAY_EXCLUDED_CODES.has(c.code))
+      .map((c) => ({ ...c }));
+  }
+
+  /** 分类树下一层：快照只有一级类目，parent 为空返回一级，否则为空数组（无更深层级）。 */
+  listCategoryChildren(parent: string | null): CategoryNodeView[] {
+    if (parent) return [];
+    return this.categories
+      .filter((c) => !HZN_DISPLAY_EXCLUDED_CODES.has(c.code))
+      .map((c) => ({ id: `c1:${c.code}`, code: c.code, name: c.name, level: 1, count: c.count }));
+  }
+
+  /**
+   * 分类节点（含子孙）下真实存在的筛选候选；目录源从快照聚合，不再回 DB，与列表同源。
+   * nodeId 省略时全量聚合；快照规格统一落在 specs 中文键上。
+   */
+  listSpecOptions(nodeId?: string | null): SpecOptionsView {
+    const scope = this.all.filter((p) => {
+      const code = nodeCodeOf(nodeId);
+      return code ? p.category === code : true;
+    });
+    const distinct = (values: Array<string | undefined>): string[] =>
+      [...new Set(values.map((v) => v?.trim()).filter((v): v is string => Boolean(v)))].sort();
+    return {
+      dims: distinct(scope.map((p) => p.specs?.['规格'])),
+      lens: distinct(scope.map((p) => p.specs?.['规格'])),
+      brands: distinct(scope.map((p) => p.brand ?? p.specs?.['品牌'])),
+      stds: distinct(scope.map((p) => p.specs?.['标准'])),
+      grds: distinct(scope.map((p) => p.specs?.['等级'])),
+      mtls: distinct(scope.map((p) => p.specs?.['材质'])),
+      ttts: distinct(scope.map((p) => p.specs?.['表面处理'])),
+      trts: distinct(scope.map((p) => p.specs?.['牙别'])),
+    };
   }
 }

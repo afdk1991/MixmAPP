@@ -22,6 +22,7 @@ import type {
   OrderRecord,
   OAuthStateRecord,
   PaymentRecord,
+  ProductListFilter,
   ProductRecord,
   PushTokenRecord,
   RefreshTokenRecord,
@@ -478,6 +479,43 @@ export class MemoryStore implements Store {
     },
   };
 
+  /** 内存实现的商品过滤：与 PG where 同构，list 与 count 共用，避免两套条数口径。 */
+  private matchProducts(filter: ProductListFilter): ProductRecord[] {
+    // 内存实现没有分类树与规格数据：树节点/规格筛选下无商品可返回，保持与 PG 口径一致。
+    if (filter.cat || filter.dims || filter.lens) return [];
+    // 分类多选（源站 ctgs）：内存库只有一级类目（id = c1:<category>），其它节点视为无商品。
+    const ctgCategories = filter.ctgs?.length
+      ? filter.ctgs.map((id) => (id.startsWith('c1:') ? id.slice(3) : '\u0000'))
+      : null;
+    // 牙别（源站 trts）：直接比对 specs.牙别，多值 OR。
+    const trts = filter.trts?.length ? filter.trts : null;
+    const tokens = buildSearchTokens(filter.keyword);
+    return this.productList
+      .filter((p) => p.listed !== false)
+      .filter((p) => (filter.category ? p.category === filter.category : true))
+      .filter((p) => (ctgCategories ? ctgCategories.includes(p.category) : true))
+      .filter((p) => (filter.brand ? p.brand === filter.brand : true))
+      // 标准/等级/材质/表面处理都直接比对 specs 上的真实取值
+      .filter((p) => (filter.std ? p.specs?.['标准'] === filter.std : true))
+      .filter((p) => (filter.grd ? p.specs?.['等级'] === filter.grd : true))
+      .filter((p) => (filter.mtl ? p.specs?.['材质'] === filter.mtl : true))
+      .filter((p) => (filter.ttt ? p.specs?.['表面处理'] === filter.ttt : true))
+      .filter((p) => (trts ? trts.includes(p.specs?.['牙别'] ?? '') : true))
+      .filter((p) => {
+        if (!tokens.length) return true;
+        const row = buildSearchIndexRow({
+          title: p.title,
+          subtitle: p.subtitle,
+          brand: p.brand,
+          specs: p.specs,
+          sourceId: p.sourceId ?? null,
+          sourceItemNo: p.sourceItemNo ?? null,
+          sourceKey: p.sourceKey ?? null,
+        });
+        return matchesSearchTokens(row, tokens);
+      });
+  }
+
   mall = {
     products: {
       insert: async (product: ProductRecord): Promise<ProductRecord> => {
@@ -486,51 +524,20 @@ export class MemoryStore implements Store {
       },
       hasCatalogProducts: async (): Promise<boolean> =>
         this.productList.some((p) => Boolean(p.sourceKey)),
-      list: async (filter: {
-        category?: string;
-        cat?: string;
-        ctgs?: string[];
-        dims?: string;
-        lens?: string;
-        ttt?: string;
-        trts?: string[];
-        keyword?: string;
-        limit: number;
-        offset: number;
-      }): Promise<ProductRecord[]> => {
-        // 内存实现没有分类树与规格数据：树节点/规格筛选下无商品可返回，保持与 PG 口径一致。
-        if (filter.cat || filter.dims || filter.lens) return [];
-        // 分类多选（源站 ctgs）：内存库只有一级类目（id = c1:<category>），其它节点视为无商品。
-        const ctgCategories = filter.ctgs?.length
-          ? filter.ctgs.map((id) => (id.startsWith('c1:') ? id.slice(3) : '\u0000'))
-          : null;
-        // 牙别（源站 trts）：直接比对 specs.牙别，多值 OR。
-        const trts = filter.trts?.length ? filter.trts : null;
-        const tokens = buildSearchTokens(filter.keyword);
-        return this.productList
-          .filter((p) => p.listed !== false)
-          .filter((p) => (filter.category ? p.category === filter.category : true))
-          .filter((p) => (ctgCategories ? ctgCategories.includes(p.category) : true))
-          // 表面处理（ttt）与牙别（trts）都直接比对 specs 上的真实取值
-          .filter((p) => (filter.ttt ? p.specs?.['表面处理'] === filter.ttt : true))
-          .filter((p) => (trts ? trts.includes(p.specs?.['牙别'] ?? '') : true))
-          .filter((p) => {
-            if (!tokens.length) return true;
-            const row = buildSearchIndexRow({
-              title: p.title,
-              subtitle: p.subtitle,
-              brand: p.brand,
-              specs: p.specs,
-              sourceId: p.sourceId ?? null,
-              sourceItemNo: p.sourceItemNo ?? null,
-              sourceKey: p.sourceKey ?? null,
-            });
-            return matchesSearchTokens(row, tokens);
-          })
-          .sort((a, b) => a.sortNo - b.sortNo)
-          .slice(filter.offset, filter.offset + filter.limit)
-          .map(clone);
+      list: async (
+        filter: ProductListFilter & { limit: number; offset: number },
+        sort?: 'createdDesc' | 'priceAsc' | 'priceDesc',
+      ): Promise<ProductRecord[]> => {
+        const matched = this.matchProducts(filter);
+        const priceOf = (p: ProductRecord): number => p.priceLi ?? p.priceFen ?? 0;
+        matched.sort((a, b) => {
+          if (sort === 'priceAsc') return priceOf(a) - priceOf(b) || a.sortNo - b.sortNo;
+          if (sort === 'priceDesc') return priceOf(b) - priceOf(a) || a.sortNo - b.sortNo;
+          return a.sortNo - b.sortNo;
+        });
+        return matched.slice(filter.offset, filter.offset + filter.limit).map(clone);
       },
+      count: async (filter: ProductListFilter): Promise<number> => this.matchProducts(filter).length,
       aggregateCategories: async () => {
         const byCode = new Map<string, { code: string; name: string; count: number }>();
         for (const p of this.productList) {
@@ -748,11 +755,22 @@ export class MemoryStore implements Store {
         const found = this.orderList.find((o) => o.orderNo === orderNo);
         return found ? clone(found) : null;
       },
-      listByUser: async (userId: string): Promise<OrderRecord[]> =>
+      listByUser: async (
+        userId: string,
+        opts?: { status?: OrderRecord['status']; limit?: number; offset?: number },
+      ): Promise<OrderRecord[]> =>
         this.orderList
           .filter((o) => o.userId === userId)
+          .filter((o) => (opts?.status ? o.status === opts.status : true))
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(opts?.offset ?? 0, (opts?.offset ?? 0) + (opts?.limit ?? 100))
           .map(clone),
+      countByUser: async (
+        userId: string,
+        opts?: { status?: OrderRecord['status'] },
+      ): Promise<number> =>
+        this.orderList.filter((o) => o.userId === userId && (!opts?.status || o.status === opts.status))
+          .length,
       itemsByOrder: async (orderId: string): Promise<OrderItemRecord[]> =>
         this.orderItemList.filter((i) => i.orderId === orderId).map(clone),
       move: async (ids: string[], userId: string): Promise<number> => {
@@ -944,6 +962,24 @@ export class MemoryStore implements Store {
       },
       countItems: async (folderId: string): Promise<number> =>
         this.favoriteItemList.filter((i) => i.folderId === folderId).length,
+      deleteFolder: async (userId: string, folderId: string): Promise<boolean> => {
+        const owned = this.favoriteFolderList.some((f) => f.id === folderId && f.userId === userId);
+        if (!owned) return false;
+        this.favoriteItemList = this.favoriteItemList.filter((i) => i.folderId !== folderId);
+        this.favoriteFolderList = this.favoriteFolderList.filter(
+          (f) => !(f.id === folderId && f.userId === userId),
+        );
+        return true;
+      },
+      countAllByUser: async (userId: string): Promise<number> =>
+        this.favoriteItemList.filter((i) => i.userId === userId).length,
+      findItemByProduct: async (
+        userId: string,
+        productId: string,
+      ): Promise<FavoriteItemRecord | null> => {
+        const found = this.favoriteItemList.find((i) => i.userId === userId && i.productId === productId);
+        return found ? clone(found) : null;
+      },
       deleteByUser: async (userId: string): Promise<number> => {
         const before = this.favoriteItemList.length;
         this.favoriteItemList = this.favoriteItemList.filter((i) => i.userId !== userId);
