@@ -360,6 +360,7 @@
             </view>
             <text class="tile-label">通行证订单</text>
             <text class="tile-desc">下单后看进度</text>
+            <text v-if="orderBadgeText" class="tile-badge mono">{{ orderBadgeText }}</text>
           </view>
           <view class="tile" hover-class="is-press" @tap="go(ROUTES.favorites)">
             <view class="tile-glyph">
@@ -367,6 +368,7 @@
             </view>
             <text class="tile-label">收藏夹</text>
             <text class="tile-desc">商品与分类整理</text>
+            <text v-if="favoriteBadgeText" class="tile-badge mono">{{ favoriteBadgeText }}</text>
           </view>
         </view>
 
@@ -473,7 +475,7 @@ import { onShow } from '@dcloudio/uni-app';
 import type { OAuthProviderId } from '@mixmapp/contracts';
 import { session, logout, refreshProfile, applySession } from '../../stores/session';
 import { cartBadgeText, clearCartBadge, refreshCartBadge } from '../../stores/cart-badge';
-import { meApi, authApi, ApiError, providerLive, readAdminToken, uploadImageBlob, mediaUrl, deviceApi, type DeviceContextDto } from '../../api/client';
+import { meApi, mallApi, authApi, ApiError, providerLive, readAdminToken, uploadImageBlob, mediaUrl, deviceApi, type DeviceContextDto } from '../../api/client';
 import { getDeviceSnapshot, networkTypeLabel, type DeviceSnapshot } from '../../device';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
@@ -577,6 +579,31 @@ const holderText = computed(() => {
 });
 const statusText = computed(() => (user.value?.isGuest ? '有效 · 游客' : '有效'));
 const refreshError = ref('');
+
+// ===== 订单 / 收藏磁贴角标：服务端摘要口径，未登录归零 =====
+const orderCount = ref(0);
+const favoriteCount = ref(0);
+const badgeText = (n: number): string => {
+  const v = Math.max(0, Math.round(n));
+  if (v <= 0) return '';
+  return v >= 100 ? '99+' : String(v);
+};
+const orderBadgeText = computed(() => badgeText(orderCount.value));
+const favoriteBadgeText = computed(() => badgeText(favoriteCount.value));
+
+async function loadEntryBadges(): Promise<void> {
+  try {
+    const [orders, favs] = await Promise.all([
+      mallApi.orderSummary().catch(() => null),
+      mallApi.favoriteSummary().catch(() => null),
+    ]);
+    orderCount.value = orders?.total ?? 0;
+    favoriteCount.value = favs?.total ?? 0;
+  } catch {
+    orderCount.value = 0;
+    favoriteCount.value = 0;
+  }
+}
 
 // ===== 设备与网络（契约 docs/39 §5/§6） =====
 const deviceSnapshot = ref<DeviceSnapshot | null>(null);
@@ -861,6 +888,8 @@ async function bindEmailSubmit(): Promise<void> {
 async function doLogout(): Promise<void> {
   await logout();
   clearCartBadge();
+  orderCount.value = 0;
+  favoriteCount.value = 0;
   uni.showToast({ title: '已退出', icon: 'none' });
 }
 
@@ -871,7 +900,10 @@ onShow(() => {
       .then(() => { refreshError.value = ''; syncProfileForm(); })
       .catch((e) => { refreshError.value = e instanceof ApiError ? e.message : '网络异常'; });
     void loadDeviceContext();
+    void loadEntryBadges();
   } else {
+    orderCount.value = 0;
+    favoriteCount.value = 0;
     deviceSnapshot.value = null;
     deviceContext.value = null;
     deviceFailed.value = false;

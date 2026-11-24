@@ -3,7 +3,8 @@ import { mallApi } from '../api/client';
 
 /**
  * 全局购物车件数与角标状态。
- * 计数权威来源：`GET /mall/cart` 返回的 `totalQuantity`；
+ * 计数权威来源：`GET /mall/cart` 返回的 `availableQuantity`（仅 A 到货行件数合计，
+ * R 需求 / L 缺货 / X 下架失效行不计入角标）；旧网关未下发该字段时回落到 totalQuantity 兜底。
  * 加购 / 改量 / 删除 / 清空后页面手里已有最新 CartDto，直接 `syncCartBadge`；
  * 进页面（onShow）或重新进应用时 `refreshCartBadge` 拉一次自恢复，不依赖上一次会话内存。
  */
@@ -11,7 +12,7 @@ import { mallApi } from '../api/client';
 /** Tab 栏下标（pages.json tabBar 顺序：首页 0 / 商城 1 / 购物车 2 / 我的 3）。 */
 const CART_TAB_INDEX = 2;
 
-/** 当前购物车件数（服务端 totalQuantity 口径，含不可结算行）。 */
+/** 当前购物车可结算件数（availableQuantity 口径；失效行不计入）。 */
 export const cartCount = ref(0);
 
 /**
@@ -37,8 +38,10 @@ function applyTabBadge(): void {
 }
 
 /** 用最新购物车响应直接同步（加购 / 改量 / 删除 / 清空成功后调用）。 */
-export function syncCartBadge(cart: { totalQuantity?: number } | null | undefined): void {
-  cartCount.value = Math.max(0, Math.round(cart?.totalQuantity ?? 0));
+export function syncCartBadge(
+  cart: { totalQuantity?: number; availableQuantity?: number } | null | undefined,
+): void {
+  cartCount.value = Math.max(0, Math.round(cart?.availableQuantity ?? cart?.totalQuantity ?? 0));
   applyTabBadge();
 }
 

@@ -4,8 +4,24 @@
     <view class="head">
       <text class="eyebrow">ORDERS</text>
       <text class="title">通行证订单</text>
-      <text class="sub mono">{{ orders.length ? `${orders.length} RECORDS` : 'NO RECORDS' }}</text>
+      <text class="sub mono">
+        {{ total ?? orders.length }} RECORDS · 第 {{ page }}/{{ pageCount }} 页
+      </text>
     </view>
+
+    <!-- 状态筛选：与后端六态对齐；切换后回第一页 -->
+    <scroll-view :scroll-x="true" class="status-tabs" :show-scrollbar="false">
+      <view
+        v-for="tab in STATUS_TABS"
+        :key="tab.value || 'all'"
+        class="status-tab"
+        :class="{ 'status-tab--on': status === tab.value }"
+        hover-class="is-press"
+        @tap="selectStatus(tab.value)"
+      >
+        <text class="status-tab-text mono">{{ tab.label }}</text>
+      </view>
+    </scroll-view>
 
     <view v-if="loading" class="loading">
       <view v-for="i in 2" :key="i" class="sheet ticket-sk">
@@ -79,6 +95,20 @@
 
         <text class="address">{{ order.address }}</text>
 
+        <!-- 详情入口：卡片内联展开，复用列表已带的完整 OrderDto，不另建页面 -->
+        <view class="detail-toggle" hover-class="is-press" @tap="toggleDetail(order)">
+          <text class="detail-toggle-text mono">
+            {{ expandedNo === order.orderNo ? '收起详情' : '订单详情' }}
+          </text>
+        </view>
+        <view v-if="expandedNo === order.orderNo" class="detail-panel">
+          <text class="detail-row mono">下单时间 {{ dateText(order.createdAt) }}</text>
+          <text v-if="order.pickingAt" class="detail-row mono">分配拣货 {{ dateText(order.pickingAt) }}</text>
+          <text v-if="order.shippedAt" class="detail-row mono">发货时间 {{ dateText(order.shippedAt) }}</text>
+          <text v-if="order.completedAt" class="detail-row mono">完成时间 {{ dateText(order.completedAt) }}</text>
+          <text v-if="order.remark" class="detail-row">备注：{{ order.remark }}</text>
+        </view>
+
         <!-- 0018 六态：已取消展示取消留痕；其余状态给取消入口，不可取消时说明原因（不静默置灰） -->
         <view v-if="order.status === 'cancelled'" class="cancel-row">
           <text class="cancel-note mono">{{ cancelLine(order) }}</text>
@@ -108,13 +138,32 @@
     </view>
 
     <view v-if="orders.length" class="foot">
+      <view class="pager">
+        <view
+          class="pager-btn"
+          :class="{ 'pager-btn--disabled': page <= 1 || loading }"
+          hover-class="is-press"
+          @tap="changePage(page - 1)"
+        >
+          <text class="pager-text mono">上一页</text>
+        </view>
+        <text class="pager-info mono">{{ page }} / {{ pageCount }}</text>
+        <view
+          class="pager-btn"
+          :class="{ 'pager-btn--disabled': page >= pageCount || loading }"
+          hover-class="is-press"
+          @tap="changePage(page + 1)"
+        >
+          <text class="pager-text mono">下一页</text>
+        </view>
+      </view>
       <text class="micro mono">订单与库存以服务端为准 · 下拉刷新可重新加载</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import type { OrderDto } from '@mixmapp/contracts';
 import { mallApi, integrationsApi, providerState } from '../../api/client';
@@ -131,6 +180,45 @@ const highlight = ref('');
 const cancelling = ref('');
 /** 正在发起支付的订单号 */
 const paying = ref('');
+/** 状态筛选：'' 表示全部；与后端 ORDER_STATUSES 对齐。 */
+const status = ref<'' | OrderDto['status']>('');
+const page = ref(1);
+const pageSize = 20;
+/** 服务端命中总数；未取到摘要时回落到当前页条数。 */
+const total = ref<number | null>(null);
+/** 内联展开详情的订单号（不新建页面，复用列表已带的完整 OrderDto）。 */
+const expandedNo = ref('');
+
+const STATUS_TABS: Array<{ value: '' | OrderDto['status']; label: string }> = [
+  { value: '', label: '全部' },
+  { value: 'pending', label: '待支付' },
+  { value: 'paid', label: '已支付' },
+  { value: 'picking', label: '拣货中' },
+  { value: 'shipped', label: '已发货' },
+  { value: 'completed', label: '已完成' },
+  { value: 'cancelled', label: '已取消' },
+];
+
+const pageCount = computed(() => (total.value == null ? 1 : Math.max(1, Math.ceil(total.value / pageSize))));
+
+function selectStatus(next: '' | OrderDto['status']): void {
+  if (status.value === next) return;
+  status.value = next;
+  page.value = 1;
+  expandedNo.value = '';
+  void load();
+}
+
+function changePage(next: number): void {
+  if (next < 1 || next > pageCount.value || loading.value) return;
+  page.value = next;
+  expandedNo.value = '';
+  void load();
+}
+
+function toggleDetail(order: OrderDto): void {
+  expandedNo.value = expandedNo.value === order.orderNo ? '' : order.orderNo;
+}
 
 function price(fen: number): string {
   return (fen / 100).toFixed(2);
@@ -253,8 +341,18 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    const list = await mallApi.listOrders();
+    const query = { status: status.value || undefined, page: page.value, pageSize };
+    const [list, summary] = await Promise.all([
+      mallApi.listOrders(query),
+      mallApi.orderSummary(query).catch(() => null),
+    ]);
     orders.value = Array.isArray(list) ? list : [];
+    total.value = summary && typeof summary.total === 'number' ? summary.total : null;
+    // 越界兜底：筛选项变化后当前页可能超出总页数，回第一页。
+    if (orders.value.length === 0 && page.value > 1) {
+      page.value = 1;
+      void load();
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : '订单加载失败';
     if (message.includes('登录')) {
@@ -541,6 +639,91 @@ onLoad((options) => {
   padding-bottom: $sp-2;
   font-size: 26rpx;
   line-height: 1.6;
+  color: $ink-3;
+}
+
+/* ---------- 状态筛选 tab ---------- */
+.status-tabs {
+  display: flex;
+  white-space: nowrap;
+  padding: 0 4rpx $sp-3;
+}
+
+.status-tab {
+  margin-right: $sp-2;
+  padding: 8rpx 22rpx;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-pill;
+}
+
+.status-tab--on {
+  background: $brand-soft;
+  border-color: transparent;
+}
+
+.status-tab-text {
+  font-size: $fs-micro;
+  color: $ink-3;
+}
+
+.status-tab--on .status-tab-text {
+  color: $brand-deep;
+  font-weight: 600;
+}
+
+/* ---------- 订单详情内联展开 ---------- */
+.detail-toggle {
+  display: inline-flex;
+  padding: 4rpx 0;
+}
+
+.detail-toggle-text {
+  font-size: $fs-micro;
+  color: $brand-deep;
+}
+
+.detail-panel {
+  display: flex;
+  flex-direction: column;
+  padding: $sp-2 0;
+  border-top: 1rpx dashed $paper-3;
+}
+
+.detail-row {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: $ink-3;
+}
+
+/* ---------- 分页 ---------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: $sp-2;
+}
+
+.pager-btn {
+  padding: 8rpx 24rpx;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-control;
+}
+
+.pager-btn--disabled {
+  opacity: 0.4;
+}
+
+.pager-text {
+  font-size: $fs-micro;
+  color: $ink-2;
+}
+
+.pager-info {
+  margin: 0 $sp-3;
+  font-size: $fs-micro;
   color: $ink-3;
 }
 

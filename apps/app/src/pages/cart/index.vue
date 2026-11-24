@@ -5,8 +5,11 @@
       <text class="eyebrow">BAG</text>
       <text class="title">购物车</text>
       <text class="sub mono">
-        {{ cart.items.length ? `${cart.totalQuantity} 件 · ${cart.items.length} 个商品` : 'EMPTY' }}
+        {{ cart.items.length ? `${availableQuantity} 件可结算 · ${cart.items.length} 个商品` : 'EMPTY' }}
       </text>
+      <view v-if="cart.items.length" class="head-clear" hover-class="is-press" @tap="askClearCart">
+        <text class="head-clear-text mono">清空购物车</text>
+      </view>
     </view>
 
     <view v-if="loading" class="loading">
@@ -141,7 +144,7 @@
             {{ allSelected ? '取消全选' : '全选可结算' }}
           </text>
         </view>
-        <text class="summary-pick mono">已选 {{ selectedLines.length }} / {{ selectableLines.length }} 件可结算商品</text>
+        <text class="summary-pick mono">已选 {{ selectedLines.length }} / {{ selectableLines.length }} 个可结算商品</text>
         <view class="summary-row">
           <text class="summary-k">商品小计</text>
           <text class="summary-v mono">¥{{ price(pricing.subtotalFen) }}</text>
@@ -361,7 +364,7 @@
 
       <view class="mx-sticky-bar mx-sticky-bar--tab">
         <view class="bar-total">
-          <text class="bar-label mono">已选 {{ selectedLines.length }} 件 · 共 {{ cart.totalQuantity }} 件</text>
+          <text class="bar-label mono">已选 {{ selectedQuantity }} 件 · 共 {{ availableQuantity }} 件</text>
           <text class="bar-price mono">¥{{ price(pricing.payableFen) }}</text>
         </view>
         <view
@@ -397,6 +400,7 @@ import {
   unitPriceText,
 } from '../../api/mall';
 import { mallApi, mediaUrl, productCover, coverTint, isDemoOrderMode, integrationsApi } from '../../api/client';
+import { clearCartBadge, syncCartBadge } from '../../stores/cart-badge';
 import { addressApi } from '../../api/address';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
@@ -499,9 +503,13 @@ function normalizeCart(input: unknown): CartView {
   if (!Array.isArray(raw.items)) {
     return { items: [], totalQuantity: 0, totalFen: 0, pricing: EMPTY_PRICING };
   }
+  const availableQuantity =
+    raw.availableQuantity ??
+    raw.items.filter((line) => line.lineStatus === 'A').reduce((sum, line) => sum + line.quantity, 0);
   return {
     items: raw.items as CartLine[],
     totalQuantity: raw.totalQuantity ?? 0,
+    availableQuantity,
     totalFen: raw.totalFen ?? 0,
     // pricing 兜底：缺字段时退回空汇总，模板始终拿到结构完整的对象
     pricing: { ...EMPTY_PRICING, ...(raw.pricing ?? {}) },
@@ -566,6 +574,15 @@ const selectedLines = computed(() =>
 );
 const allSelected = computed(
   () => selectableLines.value.length > 0 && selectedLines.value.length === selectableLines.value.length,
+);
+
+/** 已选件数：按选中行 quantity 汇总（不是行数），与底部「已选 N 件」口径一致。 */
+const selectedQuantity = computed(() =>
+  selectedLines.value.reduce((sum, line) => sum + line.quantity, 0),
+);
+/** 可结算件数：仅 A 到货行；服务端 availableQuantity 缺失时按本地 A 行汇总兜底。 */
+const availableQuantity = computed(
+  () => cart.value.availableQuantity ?? selectableLines.value.reduce((sum, line) => sum + line.quantity, 0),
 );
 
 /** 勾选 / 取消勾选单行；失效行给出对应四态说明，不改变勾选状态。 */
@@ -889,6 +906,8 @@ function stepOf(line: CartLine): number {
 function applyCart(input: unknown): void {
   cart.value = normalizeCart(input);
   reconcileSelection();
+  // 角标按可结算件数口径同步；失效行不计入。
+  syncCartBadge(cart.value);
 }
 
 async function load(): Promise<void> {
@@ -932,6 +951,28 @@ async function remove(productId: string): Promise<void> {
     applyCart(await mallApi.removeCart(productId));
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '删除失败', icon: 'none' });
+  }
+}
+
+function askClearCart(): void {
+  if (!cart.value.items.length) return;
+  uni.showModal({
+    title: '清空购物车',
+    content: `清空全部 ${cart.value.items.length} 个商品？已失效行也一并清除，不可恢复。`,
+    confirmText: '清空',
+    success: (res) => {
+      if (res.confirm) void doClearCart();
+    },
+  });
+}
+
+async function doClearCart(): Promise<void> {
+  try {
+    applyCart(await mallApi.clearCart());
+    clearCartBadge();
+    uni.showToast({ title: '购物车已清空', icon: 'none' });
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '清空失败', icon: 'none' });
   }
 }
 
@@ -1079,6 +1120,19 @@ onShow(() => {
   font-size: 26rpx;
   letter-spacing: 2rpx;
   color: $acc-6;
+}
+
+.head-clear {
+  display: inline-flex;
+  margin-top: 12rpx;
+  padding: 6rpx 20rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-pill;
+}
+
+.head-clear-text {
+  font-size: $fs-micro;
+  color: $ink-4;
 }
 
 .list {

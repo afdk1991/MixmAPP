@@ -509,6 +509,13 @@ async function load(): Promise<void> {
     if (!tabs.value.some((t) => t.key === activeTab.value)) {
       activeTab.value = tabs.value[0]?.key ?? 'spec';
     }
+    // 收藏态回显：跨夹查询；未登录/失败按未收藏处理，不阻断详情浏览。
+    try {
+      const state = await mallApi.favoriteState(productId.value);
+      favorited.value = Boolean(state?.favorited);
+    } catch {
+      favorited.value = false;
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '商品加载失败';
   } finally {

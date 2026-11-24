@@ -25,8 +25,9 @@
       </view>
     </scroll-view>
 
-    <!-- 当前夹操作：设默认 / 复制 / 清空（收藏夹本身始终保留） -->
+    <!-- 夹级操作：新建 / 设默认 / 重命名 / 复制 / 删除 / 清空（默认夹不可删） -->
     <view v-if="activeFolder" class="ops">
+      <view class="btn btn--ghost btn--sm op" hover-class="is-press" @tap="askCreate">新建夹</view>
       <view
         v-if="!activeFolder.isDefault"
         class="btn btn--ghost btn--sm op"
@@ -35,7 +36,23 @@
       >
         设为默认
       </view>
+      <view
+        v-if="!activeFolder.isDefault"
+        class="btn btn--ghost btn--sm op"
+        hover-class="is-press"
+        @tap="askRename"
+      >
+        重命名
+      </view>
       <view class="btn btn--ghost btn--sm op" hover-class="is-press" @tap="askCopy">复制收藏夹</view>
+      <view
+        v-if="!activeFolder.isDefault"
+        class="btn btn--ghost btn--sm op"
+        hover-class="is-press"
+        @tap="askDelete"
+      >
+        删除夹
+      </view>
       <view class="btn btn--ghost btn--sm op" hover-class="is-press" @tap="askClear">
         {{ busy === 'clear' ? '清空中…' : '清空' }}
       </view>
@@ -85,8 +102,13 @@
           <view class="fav-foot">
             <text v-if="item.available" class="fav-price mono">¥{{ price(item.priceFen) }}<text v-if="item.unit" class="fav-unit"> / {{ item.unit }}</text></text>
             <text v-else class="fav-off mono">商品已下架</text>
-            <view class="fav-remove" hover-class="is-press" @tap="askRemove(item)">
-              <text class="fav-remove-text mono">移除</text>
+            <view class="fav-actions">
+              <view class="fav-remove" hover-class="is-press" @tap="askMove(item)">
+                <text class="fav-remove-text mono">移动</text>
+              </view>
+              <view class="fav-remove" hover-class="is-press" @tap="askRemove(item)">
+                <text class="fav-remove-text mono">移除</text>
+              </view>
             </view>
           </view>
         </view>
@@ -329,6 +351,119 @@ async function doClear(): Promise<void> {
   }
 }
 
+function askCreate(): void {
+  if (busy.value) return;
+  uni.showModal({
+    title: '新建收藏夹',
+    editable: true,
+    placeholderText: '输入收藏夹名称（1–40 字）',
+    confirmText: '创建',
+    success: (res) => {
+      const name = (res.content ?? '').trim();
+      if (res.confirm && name) void doCreate(name);
+    },
+  });
+}
+
+async function doCreate(name: string): Promise<void> {
+  busy.value = 'create';
+  try {
+    const created = await mallApi.createFavoriteFolder(name);
+    await loadFolders();
+    activeId.value = created.id;
+    await loadItems();
+    toast('已创建收藏夹');
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '创建失败');
+  } finally {
+    busy.value = '';
+  }
+}
+
+function askRename(): void {
+  const folder = activeFolder.value;
+  if (!folder || busy.value) return;
+  uni.showModal({
+    title: '重命名收藏夹',
+    editable: true,
+    content: folder.name,
+    placeholderText: '输入新名称（1–40 字）',
+    confirmText: '保存',
+    success: (res) => {
+      const name = (res.content ?? '').trim();
+      if (res.confirm && name) void doRename(name);
+    },
+  });
+}
+
+async function doRename(name: string): Promise<void> {
+  if (!activeFolder.value || busy.value) return;
+  busy.value = 'rename';
+  try {
+    await mallApi.renameFavoriteFolder(activeFolder.value.id, name);
+    await loadFolders();
+    toast('已重命名');
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '重命名失败');
+  } finally {
+    busy.value = '';
+  }
+}
+
+function askDelete(): void {
+  const folder = activeFolder.value;
+  if (!folder || busy.value) return;
+  showDangerModal({
+    title: '删除收藏夹',
+    content: `删除「${folder.name}」？夹内 ${folder.itemCount} 个收藏条目会一并移除，不可恢复。`,
+    confirmText: '删除',
+    success: (res) => {
+      if (res.confirm) void doDelete();
+    },
+  });
+}
+
+async function doDelete(): Promise<void> {
+  if (!activeFolder.value || busy.value) return;
+  busy.value = 'delete';
+  try {
+    await mallApi.deleteFavoriteFolder(activeFolder.value.id);
+    await loadFolders();
+    await loadItems();
+    toast('已删除收藏夹');
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '删除失败');
+  } finally {
+    busy.value = '';
+  }
+}
+
+function askMove(item: FavoriteItemDto): void {
+  const targets = folders.value.filter((f) => f.id !== activeId.value);
+  if (!targets.length) {
+    toast('暂无其它收藏夹，可先新建一个');
+    return;
+  }
+  uni.showActionSheet({
+    itemList: targets.map((t) => t.name),
+    success: (res) => {
+      const target = targets[res.tapIndex];
+      if (target) void doMove(item, target.id);
+    },
+  });
+}
+
+async function doMove(item: FavoriteItemDto, targetFolderId: string): Promise<void> {
+  try {
+    await mallApi.moveFavoriteItem(item.productId, targetFolderId, activeId.value);
+    items.value = items.value.filter((i) => i.id !== item.id);
+    await loadFolders();
+    toast('已移动');
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '移动失败');
+  }
+}
+
 // 从商品详情页收藏后返回本页需要看到最新条目，因此用 onShow 而不是 onLoad
 onShow(() => {
   void loadAll();
@@ -519,8 +654,13 @@ onShow(() => {
   color: $ink-4;
 }
 
+.fav-actions {
+  display: flex;
+  align-items: center;
+}
+
 .fav-remove {
-  padding: 2rpx 0;
+  padding: 2rpx 0 2rpx 20rpx;
   background: transparent;
 }
 
