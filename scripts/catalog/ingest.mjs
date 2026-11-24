@@ -164,12 +164,12 @@ export async function applySiteChanges({ cfg, state, items, details, adapter, sp
   try {
     if (client) await client.query('begin');
 
-    const reader = client || (await openPool());
+    const reader = client || (dryRun ? null : await openPool());
     let dbRows;
     try {
-      dbRows = await loadScopeRows(reader, adapter.scope);
+      dbRows = dryRun ? [] : await loadScopeRows(reader, adapter.scope);
     } finally {
-      if (!client && reader.end) await reader.end();
+      if (!client && reader && reader.end) await reader.end();
     }
     const dbByKey = new Map(dbRows.map((row) => [row.source_key, row]));
 

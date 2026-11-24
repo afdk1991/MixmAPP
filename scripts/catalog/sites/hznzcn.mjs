@@ -91,6 +91,21 @@ function createHttp(cfg, log) {
   const gap = Math.max(SITE.minGapMs, cfg.listDelayMs || 0);
   let lastAt = 0;
   let chain = Promise.resolve();
+  // WAF 双层：首次 403 + Set-Cookie 挑战，带 cookie 重试即 200；cookie 需在请求间保持。
+  const cookies = new Map();
+  // 连续被阻断次数（连接重置 / 403 / 429 / 444 / 5xx / 验证页）；成功即清零。
+  const BLOCKED_RE = /ECONNRESET|ECONNREFUSED|ETIMEDOUT|429|444|403|5\d\d|安全验证|滑动验证|访问验证|人机验证|captcha|aliyun_waf/i;
+  let streak = 0;
+
+  function absorb(setCookieHeader) {
+    const raw = Array.isArray(setCookieHeader) ? setCookieHeader : [];
+    for (const line of raw) {
+      const [kv] = String(line).split(';');
+      const i = kv.indexOf('=');
+      if (i > 0) cookies.set(kv.slice(0, i).trim(), kv.slice(i + 1).trim());
+    }
+  }
+  const cookieHeader = () => [...cookies].map(([k, v]) => `${k}=${v}`).join('; ');
 
   /** 全局串行限流：所有请求排队，保证任意两次请求间隔 ≥ gap。 */
   function pace() {
@@ -106,26 +121,42 @@ function createHttp(cfg, log) {
     return run;
   }
 
+  /** 重新握手首页，刷新挑战 cookie（不计数到业务重试）。 */
+  async function handshake() {
+    await pace();
+    const res = await request(`${SITE.origin}/`, {
+      'User-Agent': UA,
+      Accept: 'text/html,*/*;q=0.8',
+      Referer: `${SITE.origin}/`,
+      Cookie: cookieHeader(),
+    });
+    absorb(res.headers['set-cookie']);
+    return res.status === 200;
+  }
+
   async function get(
     url,
     { binary = false, referer = `${SITE.origin}/`, retries = cfg.maxRetries, pace: usePace = true } = {}
   ) {
     let lastErr = '';
     for (let attempt = 0; attempt <= retries; attempt += 1) {
-      // 图片走 alicdn，不受源站 WAF 限速约束；商品页/列表页必须串行限速
+      // 图片走图床，不受源站 WAF 限速约束；商品页/列表页必须串行限速
       if (usePace) await pace();
       try {
         const res = await request(url, {
           'User-Agent': UA,
           Accept: binary
-            // 不要带 image/webp：alicdn 会按 Accept 把原图转码成 webp（体积变小、等于压缩）。
+            // 不要带 image/webp：图床会按 Accept 把原图转码成 webp（体积变小、等于压缩）。
             // 这里必须取源站原始 jpg/png，保留原图尺寸与原始字节。
             ? 'image/*,*/*;q=0.8'
             : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'zh-CN,zh;q=0.9',
           Referer: referer,
+          Cookie: cookieHeader(),
         });
+        absorb(res.headers['set-cookie']);
         if (res.status === 200) {
+          streak = 0;
           if (binary) return res.body;
           const text = res.body.toString('utf8');
           if (looksBlocked(text)) throw new Error('源站返回验证/拦截页');
@@ -133,6 +164,13 @@ function createHttp(cfg, log) {
         }
         lastErr = `HTTP ${res.status}`;
         if (res.status === 404) throw new Error(lastErr);
+        // 301/302 是翻到公开分页上限后的跳转（跳回首页/第 1 页），视为本类列表结束，不当失败重试。
+        if ([301, 302, 303, 307, 308].includes(res.status)) return binary ? Buffer.alloc(0) : '';
+        // 403 首次多为 cookie 挑战：先回首页握手拿 cookie，再退避重试。
+        if (res.status === 403) {
+          log(`[hznzcn] 403 挑战 → 重新握手首页刷新 cookie（${attempt + 1}/${retries + 1}）`);
+          await handshake();
+        }
         // 403/429/444/5xx：多半是 WAF，退避后重试
         if ([403, 429, 444].includes(res.status) || res.status >= 500) {
           const backoff = Math.min(10 * 60 * 1000, 3000 * 2 ** attempt);
@@ -149,10 +187,11 @@ function createHttp(cfg, log) {
         await sleep(backoff);
       }
     }
+    if (BLOCKED_RE.test(lastErr)) streak += 1; else streak = 0;
     throw new Error(`${url} 请求失败：${lastErr}`);
   }
 
-  return { get };
+  return { get, handshake, get streak() { return streak; } };
 }
 
 // -------------------------------------------------------------- HTML 工具
@@ -221,18 +260,20 @@ export function parseCategoryTree(html) {
   };
 
   if (labels.length > 0) {
+    const parentCodes = new Set();
     labels.forEach((lm, idx) => {
       const blockEnd = idx + 1 < labels.length ? labels[idx + 1].index : html.length;
       const block = html.slice(lm.index, blockEnd);
       const parent = { code: lm[2], name: stripTags(lm[3]), level: 1, parent: null };
       parent.path = [parent.name];
       add(parent);
+      parentCodes.add(parent.code);
 
       const childRe = /<a[^>]*href=["']([^"']*gallery-(\d+)[^"']*)["'][^>]*>([^<]{1,40})<\/a>/gi;
       const kids = [];
       let cm;
       while ((cm = childRe.exec(block))) {
-        if (cm[2] === lm[2]) continue;
+        if (cm[2] === lm[2] || parentCodes.has(cm[2])) continue;
         const name = stripTags(cm[3]);
         if (!name) continue;
         if (kids.some((k) => k.code === cm[2])) continue;
@@ -252,6 +293,18 @@ export function parseCategoryTree(html) {
       const n = { code: fm[2], name, level: 1, parent: null, path: [name] };
       if (add(n)) pushLeaf(n);
     }
+  }
+
+  // 兜底补齐：顶部快捷入口里有、但不在 labelh3 分组菜单里的独立品类（童装/女包/女鞋/饰品/床品…）。
+  const allAnchorRe = /<a[^>]*href=["']([^"']*gallery-(\d+)[^"']*)["'][^>]*>([^<]{1,40})<\/a>/gi;
+  let am;
+  while ((am = allAnchorRe.exec(html))) {
+    const code = am[2];
+    const name = stripTags(am[3]);
+    if (!code || !name || leafSeen.has(code)) continue;
+    const standalone = { code, name, level: 1, parent: null, path: [name] };
+    add(standalone);
+    pushLeaf(standalone);
   }
 
   const levels = { 1: 0, 2: 0, 3: 0 };
@@ -303,10 +356,11 @@ export function parseList(html, origin = SITE.origin) {
     if (!id || seen.has(id)) continue;
     seen.add(id);
 
-    // 条目内还有勾选框图标等 <img>，只取真正的商品图（alicdn 域）
+    // 条目内混有勾选框/箭头等 UI 图标（imgbase 域）；只认商品图床 + goods_new/crawler 路径。
     const imgs = [...block.matchAll(/<img[^>]*>/gi)].map((im) => im[0]);
-    const imgTag = imgs.find((t) => /alicdn\.com/i.test(t)) || imgs[0] || '';
-    const rawImage = attr(imgTag, 'data-original') || attr(imgTag, 'src');
+    const imgTag = imgs[0] || '';
+    const candidates = imgs.flatMap((t) => [attr(t, 'data-original'), attr(t, 'src')].filter(Boolean));
+    const rawImage = candidates.map((u) => productImageUrl(u)).find(Boolean) || '';
     const brand = (block.match(/brandname=["']([^"']{1,60})["']/) || [])[1] || '';
 
     // rowTitle 里的 title 是纯商品名；img 的 title 形如「NAME,档口名 货号」需剥掉尾部
@@ -329,7 +383,7 @@ export function parseList(html, origin = SITE.origin) {
       sourceId: id,
       name,
       brand,
-      image: rawImage ? normalizeImageUrl(rawImage) : null,
+      image: rawImage || null,
       priceText,
       url: `${origin}/product-${id}.html`,
     });
@@ -388,19 +442,41 @@ export function parseDetail(html, id) {
   const stallInMeta = (html.match(/档口位置在([^，。<"]{1,60})/) || [])[1] || '';
   const stall = stallInMeta.trim();
 
-  // 主图：midimg 的 jqimg 是原图；颜色规格图取 originaladdress（原图，不带尺寸后缀）
+  // 主图：midimg 的 jqimg/src 是原图；缩略图 li 的 id= 指向 goods_new 原图；
+  // 颜色规格图取 originaladdress；crawler 缩略图仅作兜底。
   const images = [];
-  const pushImg = (raw) => {
-    const url = normalizeImageUrl(raw);
+  const pushImg = (raw, opts = {}) => {
+    const url = productImageUrl(raw, opts);
     if (!url || images.includes(url)) return;
     images.push(url);
   };
-  pushImg((html.match(/id=["']midimg["'][^>]*jqimg=["']([^"']+)["']/i) || [])[1] || '');
-  const origRe = /originaladdress=['"]([^'"]*alicdn[^'"]*)['"]/gi;
-  let om;
-  while ((om = origRe.exec(html)) && images.length < 20) pushImg(om[1]);
+  const midTag = (html.match(/<img[^>]*id=["']midimg["'][^>]*>/i) || [])[0] || '';
+  pushImg(attr(midTag, 'jqimg') || attr(midTag, 'src'));
+
+  // 遍历所有 img 标签：优先 goods_new 原图（jqimg / id / originaladdress），其次 crawler。
+  const imgTagRe = /<img[^>]+>/gi;
+  let tm;
+  while ((tm = imgTagRe.exec(html)) && images.length < 20) {
+    const tag = tm[0];
+    const goods = ['jqimg', 'id', 'originaladdress']
+      .map((a) => attr(tag, a))
+      .find((u) => /goods_new\//.test(u || ''));
+    if (goods) {
+      pushImg(goods);
+      continue;
+    }
+    const swatch = attr(tag, 'originaladdress');
+    if (swatch) pushImg(swatch);
+  }
   if (images.length === 0) {
-    const anyRe = /((?:https?:)?\/\/[^"'\s]*alicdn\.com[^"'\s]*\.(?:jpg|jpeg|png|webp)(?:_[^"'\s]*)?)/gi;
+    // 兜底：crawler 缩略图按带尺寸后缀取（去后缀可能 404），仅在没有原图时使用。
+    const crawlerRe = /(?:https?:)?\/\/[^"'\s]*hznzcn\.com\/images\/crawler\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:_\d+x\d+[^"'\s]*)?/gi;
+    let om;
+    while ((om = crawlerRe.exec(html)) && images.length < 20) pushImg(om[1], { keepSize: true });
+  }
+  if (images.length === 0) {
+    const anyRe = /(?:https?:)?\/\/[^"'\s]*(?:hznzcn\.com|alicdn\.com)[^"'\s]*\.(?:jpg|jpeg|png|webp)(?:_[^"'\s]*)?/gi;
+    let om;
     while ((om = anyRe.exec(html)) && images.length < 20) pushImg(om[1]);
   }
 
@@ -440,12 +516,35 @@ function splitValues(v) {
 }
 
 /** img.alicdn.com/.../x.jpg_300x300.jpg → 原图；保留原尺寸，不压缩。 */
-export function normalizeImageUrl(raw) {
+export function normalizeImageUrl(raw, { keepSize = false } = {}) {
   if (!raw) return null;
   let url = String(raw).trim();
   if (url.startsWith('//')) url = `https:${url}`;
   if (!/^https?:/i.test(url)) return null;
-  return url.replace(/(_\d+x\d+[^./]*)+\.[a-z]+$/i, '');
+  // 去掉尺寸变体后缀，但保留扩展名：base.jpg_300x300.jpg → base.jpg
+  return keepSize
+    ? url
+    : url.replace(/\.(jpe?g|png|webp)_\d+x\d+(?:_\d+x\d+)*\.\1$/i, '.$1');
+}
+
+/** 商品图床域名（2026-11 实测为 img*.hznzcn.com，历史上走过 alicdn，两种都兼容）。 */
+const PRODUCT_IMG_HOST_RE = /^(?:https?:)?\/\/(?:img\d?\.hznzcn\.com|[\w.-]+\.alicdn\.com)\//i;
+/** 商品图路径：goods_new 为主图/颜色原图，crawler 为抓取缩略图。 */
+const PRODUCT_IMG_PATH_RE = /\/images\/(?:goods_new|crawler)\//i;
+/** 页面 UI 图标/占位图路径，一律不当商品图。 */
+const UI_IMG_RE =
+  /\/(?:member_New|new_index|index_hz|index_new|index_[^/]+|pc\/)|grey\.gif|NaughtImages|none_50|logo_|brand_search|select_icon|meuIco|navBar|singleArrow|updot|arrow\.png/i;
+
+/** 判定并清洗一张候选图是否为商品图；非商品图返回 null。 */
+export function productImageUrl(raw, opts = {}) {
+  // crawler 路径只存在带尺寸后缀的缩略图，去后缀会 404；goods_new 才是原图。
+  const keepSize = opts.keepSize ?? /\/images\/crawler\//.test(String(raw || ''));
+  const url = normalizeImageUrl(raw, { keepSize });
+  if (!url) return null;
+  if (!PRODUCT_IMG_HOST_RE.test(url)) return null;
+  if (UI_IMG_RE.test(url)) return null;
+  if (!PRODUCT_IMG_PATH_RE.test(url) && !/alicdn\.com\//i.test(url)) return null;
+  return url;
 }
 
 // ---------------------------------------------------------------- 采集
@@ -460,7 +559,7 @@ function listUrl(cat, page) {
   return `${SITE.origin}/hz/gallery-${cat.code}-${page || 1}-grid.html`;
 }
 
-async function collectCatalog({ http, cfg, log }) {
+async function collectCatalog({ http, cfg, log, prior }) {
   const startedAt = Date.now();
   const home = await http.get(`${SITE.origin}/`, { referer: `${SITE.origin}/` });
   const tree = parseCategoryTree(home);
@@ -471,16 +570,30 @@ async function collectCatalog({ http, cfg, log }) {
 
   const pages = cfg.pages > 0 ? cfg.pages : 1;
   const scope = cfg.limit > 0 ? leaves.slice(0, cfg.limit) : leaves;
-  const items = [];
-  const seen = new Set();
-  const perCategory = [];
+
+  // 断点续抓：复用上次已落盘的目录，已枚举成功的叶子不再重抓；0 件/失败的叶子本次重试。
+  const priorItems = prior?.items || [];
+  const seen = new Set(priorItems.map((i) => i.sourceId));
+  const items = [...priorItems];
+  const perCategory = [...(prior?.perCategory || [])];
+  const perCatByCode = new Map(perCategory.map((c) => [c.code, c]));
   const errors = [];
   let listFailed = 0;
-  let totalReported = null;
+  let totalReported = prior?.totalReported || null;
   let truncated = false;
+
+  const checkpoint = () =>
+    writeAtomic(path.join(cfg.stateDir, 'hznzcn-catalog.json'), {
+      items, tree, perCategory, totalReported,
+    });
 
   for (let i = 0; i < scope.length; i += 1) {
     const leaf = scope[i];
+    const priorLeaf = perCatByCode.get(leaf.code);
+    if (priorLeaf && priorLeaf.items > 0) {
+      log(`[hznzcn] 类目 ${i + 1}/${scope.length} ${leaf.code} ${leaf.name}：断点复用 ${priorLeaf.items} 件，累计 ${items.length}`);
+      continue;
+    }
     let count = 0;
     if (!truncated) {
       for (let page = 1; page <= pages; page += 1) {
@@ -503,18 +616,24 @@ async function collectCatalog({ http, cfg, log }) {
           if (cfg.maxItems > 0 && items.length >= cfg.maxItems) break;
         } catch (e) {
           listFailed += 1;
-          errors.push({ cat: leaf.code, page, error: e instanceof Error ? e.message : String(e) });
-          log(`[hznzcn] 列表失败 ${leaf.code} p${page}：${errors[errors.length - 1].error}`);
+          const message = e instanceof Error ? e.message : String(e);
+          errors.push({ cat: leaf.code, page, error: message });
+          log(`[hznzcn] 列表失败 ${leaf.code} p${page}：${message}`);
+          if (http.streak >= 3) {
+            log(`[hznzcn] 连续被阻断 ${http.streak} 次 → 冷却 10 分钟后继续，剩余叶子可 --resume 续跑`);
+            await sleep(10 * 60 * 1000);
+            try { await http.handshake(); } catch { /* 冷却后再握手 */ }
+          }
           break;
         }
       }
       if (cfg.maxItems > 0 && items.length >= cfg.maxItems) truncated = true;
     }
-    // 达到 --max-items 后不再请求，但类别仍以 0 计入，保证分类表完整、对账行不缺项
-    perCategory.push({ code: leaf.code, name: leaf.name, level: leaf.level, path: leaf.path, items: count });
-    if (i % 10 === 0 || i === scope.length - 1) {
-      log(`[hznzcn] 目录进度 ${i + 1}/${scope.length} 类，累计 ${items.length} 件${truncated ? '（已达上限）' : ''}`);
-    }
+    const entry = { code: leaf.code, name: leaf.name, level: leaf.level, path: leaf.path, items: count };
+    if (perCatByCode.has(leaf.code)) perCatByCode.set(leaf.code, entry);
+    else { perCatByCode.set(leaf.code, entry); perCategory.push(entry); }
+    checkpoint();
+    log(`[hznzcn] 类目 ${i + 1}/${scope.length} ${leaf.code} ${leaf.name}：本类 ${count} 件，累计 ${items.length}${truncated ? '（已达上限）' : ''}`);
   }
 
   if (items.length === 0) throw new Error('列表解析到 0 件商品（结构改版或被拦截），停止导入');
@@ -559,10 +678,20 @@ async function downloadImage({ http, cfg, log }, remote) {
 
 async function collectDetails({ http, cfg, log, items }) {
   const startedAt = Date.now();
-  const store = { items: {}, errors: [] };
+  // 断点续抓：复用已落盘的部分详情，已抓过的 sourceId 不再请求源站。
+  const storePath = path.join(cfg.stateDir, 'hznzcn-details.json');
+  const store = readJson(storePath, { items: {}, errors: [] });
+  const done = new Set(Object.keys(store.items || {}));
+  store.items = store.items || {};
+  store.errors = store.errors || [];
   const images = { ok: 0, failed: 0, products: 0 };
+  let processed = 0;
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
+    if (done.has(item.sourceId)) {
+      processed += 1;
+      continue;
+    }
     try {
       const html = await http.get(`${SITE.origin}/product-${item.sourceId}.html`);
       const parsed = parseDetail(html, item.sourceId);
@@ -582,17 +711,28 @@ async function collectDetails({ http, cfg, log, items }) {
       }
       if (local.length) images.products += 1;
       store.items[item.sourceId] = { ...parsed, images: local };
+      done.add(item.sourceId);
     } catch (e) {
       store.errors.push({ id: item.sourceId, error: e instanceof Error ? e.message : String(e) });
       log(`[hznzcn] 详情失败 ${item.sourceId}：${store.errors[store.errors.length - 1].error}`);
+      if (http.streak >= 3) {
+        log(`[hznzcn] 详情连续被阻断 ${http.streak} 次 → 冷却 10 分钟后继续，已抓详情已落盘可 --resume 续跑`);
+        writeAtomic(storePath, store);
+        await sleep(10 * 60 * 1000);
+        try { await http.handshake(); } catch { /* 冷却后再握手 */ }
+      }
     }
-    if (i % 25 === 0 || i === items.length - 1) {
-      log(`[hznzcn] 详情进度 ${i + 1}/${items.length}，失败 ${store.errors.length}`);
+    processed += 1;
+    if (processed % 25 === 0 || i === items.length - 1) {
+      writeAtomic(storePath, store);
+      log(`[hznzcn] 详情进度 ${processed}/${items.length}，失败 ${store.errors.length}`);
     }
     if (store.errors.length >= 50 && store.errors.length > i / 2) {
+      writeAtomic(storePath, store);
       throw new Error('详情失败率过高（源站可能再次封禁），已中止；修复网络后可用 --resume 续跑');
     }
   }
+  writeAtomic(storePath, store);
   return { store, stats: { ...images, errors: store.errors.length, durationSec: Math.round((Date.now() - startedAt) / 1000) } };
 }
 
@@ -953,7 +1093,8 @@ export async function runSite(cfg) {
     const t0 = Date.now();
 
     if (!state.catalogDone) {
-      const catalog = await collectCatalog({ http, cfg, log });
+      const prior = readJson(path.join(cfg.stateDir, 'hznzcn-catalog.json'), null);
+      const catalog = await collectCatalog({ http, cfg, log, prior });
       state.catalogDone = true;
       // 有界采集（--per-cat / --pages / --limit / --max-items）只覆盖站点一部分商品，
       // 不能据此判定「没抓到 = 已下架」，必须显式要求全量参数才允许下架。
