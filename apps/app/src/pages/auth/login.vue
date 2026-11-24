@@ -554,10 +554,6 @@ function oauthLogin(provider: OAuthProviderOption): void {
   color: $ink-4;
 }
 
-.oauth-btn--off {
-  opacity: 0.55;
-}
-
 .oauth-off {
   font-size: $fs-micro;
   letter-spacing: 1rpx;

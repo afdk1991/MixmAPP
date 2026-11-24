@@ -559,7 +559,11 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
 }
 
 .code-btn--off {
-  opacity: 0.45;
+  background: $paper-3;
+}
+
+.code-btn--off .code-btn-text {
+  color: $ink-3;
 }
 
 .code-btn-text {

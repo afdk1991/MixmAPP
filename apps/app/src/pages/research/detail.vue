@@ -195,7 +195,7 @@
       </view>
       <view
         class="dock-btn"
-        :class="task.status === 'done' ? 'dock-btn--brand' : 'dock-btn--ghost dock-btn--disabled'"
+        :class="task.status === 'done' ? 'dock-btn--brand' : 'dock-btn--ghost'"
         hover-class="is-press"
         @tap="task.status === 'done' ? reResearch() : backToList()"
       >
@@ -786,10 +786,6 @@ onUnload(() => stopTimer());
 
 .dock-btn--ghost {
   background: transparent;
-}
-
-.dock-btn--disabled {
-  opacity: 0.5;
 }
 
 .dock-btn-text {

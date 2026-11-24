@@ -1751,12 +1751,15 @@ onShow(() => {
   box-shadow: 0 12rpx 28rpx -16rpx rgba(10, 122, 112, 0.55);
 }
 
-.bar-btn--busy {
-  opacity: 0.72;
+.bar-btn--busy,
+.bar-btn--disabled {
+  background: $paper-3;
+  box-shadow: none;
 }
 
-.bar-btn--disabled {
-  opacity: 0.5;
+.bar-btn--busy .bar-btn-text,
+.bar-btn--disabled .bar-btn-text {
+  color: $ink-3;
 }
 
 .bar-price--muted {

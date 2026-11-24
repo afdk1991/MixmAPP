@@ -714,7 +714,13 @@ onLoad((options) => {
 }
 
 .pager-btn--disabled {
-  opacity: 0.4;
+  background: $paper-3;
+  color: $ink-3;
+  border-color: $paper-3;
+}
+
+.pager-btn--disabled .pager-text {
+  color: $ink-3;
 }
 
 .pager-text {
