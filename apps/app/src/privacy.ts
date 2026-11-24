@@ -20,7 +20,7 @@ export const PRIVACY_GATE_MODE: PrivacyGateMode = 'register';
  * 记录里带政策版本号；政策实质变更时升级 PRIVACY_POLICY_VERSION，
  * 旧版本的同意记录随即失效。
  */
-export const PRIVACY_POLICY_VERSION = '2026-11-15';
+export const PRIVACY_POLICY_VERSION = '2026-11-24';
 export const PRIVACY_CONSENT_KEY = 'mixmapp:privacy-consent';
 
 export type ConsentRecord = {
