@@ -178,7 +178,7 @@ Select-String -Path services\api\src\config.ts -Pattern "SMS_PROVIDER|ONEKEY_PRO
 
 - 未调用线上 `/meta` 核对部署环境的 `thirdParty` 快照（见 4.2）。
 - 未执行后端测试与类型检查；本轮只改文档，未跑 `pnpm test` / `pnpm typecheck`。
-- 未做任何 `git add` / `commit` / `push`；文档提交由项目负责人统一处理。
+- 本档案以 docs-only 提交 `3ab522a`（`docs: 45 号隐私政策改版说明`，提交信息带 `[skip ci]`）单独入库，未与功能提交混提交。
 
 ## 附：本轮未改动范围（避免被读成「顺手修了一堆功能」）
 
@@ -196,3 +196,8 @@ Select-String -Path services\api\src\config.ts -Pattern "SMS_PROVIDER|ONEKEY_PRO
 - **`c31a5bb`** `fix(privacy): 第六节按实际触发条件写清 DCloud CDN 阴影预载（页面加载约 3 秒后请求）`
   - 改这一句的原因：`shadow.css:1-8` 的 `body::after{animation:shadow-preload .1s;animation-delay:3s}` 属**必然触发**（`body::after` 常驻，延迟 3 秒后动画必然跑一次），不是条件触发；上一版「仅对应样式被触发时才会请求图片」与代码不符。最终措辞如实写清触发时机（页面加载约 3 秒后请求两张阴影预载图）与请求范围（只带图片地址、不携带账号或设备信息）。
   - 本档案第 15 条已同步为该最终口径；本轮只改文档，未改代码、未提交 git。
+
+- **`0a8afbf`** `fix(privacy): 字段块改用 .prow 前缀，避开全局 .field 表单高度规则造成的文字叠压`
+  - 现象与根因：首轮上线后，政策第二节「设备与网络信息」的字段块与第四节权限清单在浏览器与真机上出现标签/正文互相叠压、文字被裁切。根因是页面自定的字段块类名 `.field / .field-k / .field-v` 与全局表单样式 `apps\app\src\styles\theme.scss:456-466` 的 `.field{width:100%; height:96rpx; padding:0 26rpx; ...}` 撞名，全局规则把每个字段块强压成 96rpx 高，块内正文溢出覆盖下一段。
+  - 修复方式：模板与样式类名统一改为 `.prow / .prow-k / .prow-v`。纯样式改动，**未改任何政策文案**，第 2 节条款-代码依据表与政策正文口径全部不变。
+  - 验证：本地 h5 产物 `assets/privacy-*.css` 含 `.prow` 规则；线上隐私 chunk 由 `pages-legal-privacy.DIR6-ACL.js`（21,984 B）换为 `pages-legal-privacy.BTKNoYzJ.js`（21,935 B），`prow`×54，原有断言（`2026-11-24`×2、`约 3 秒`×1、`设备与网络信息`×3、`DCloud 官方 CDN`×1）全部保持；ci `45398817405`、deploy `45398816428`、Android `45398816548` 三条 success。
