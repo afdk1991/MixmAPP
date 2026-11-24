@@ -119,9 +119,9 @@
       </block>
       <!-- internal:end -->
 
-      <view v-if="error" class="error-row">
-        <text class="error-mark mono">!</text>
-        <text class="error-text">{{ error }}</text>
+      <view v-if="error" class="mx-error-row">
+        <text class="mx-error-mark">!</text>
+        <text class="mx-error-text">{{ error }}</text>
       </view>
 
       <view
@@ -466,37 +466,6 @@ function oauthLogin(provider: OAuthProviderOption): void {
   margin-top: 14rpx;
   font-size: $fs-micro;
   color: $amber;
-}
-
-/* ---------- 错误提示：字段下方就近显示 ---------- */
-.error-row {
-  display: flex;
-  align-items: flex-start;
-  margin-top: $sp-3;
-  padding: 16rpx 18rpx;
-  border: 1rpx solid rgba(179, 55, 42, 0.28);
-  border-radius: $r-control;
-  background: $shell;
-}
-
-.error-mark {
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 50%;
-  background: $signal;
-  color: $shell;
-  font-size: 26rpx;
-  line-height: 32rpx;
-  text-align: center;
-  margin-right: 12rpx;
-  flex-shrink: 0;
-}
-
-.error-text {
-  flex: 1;
-  font-size: $fs-meta;
-  line-height: 1.5;
-  color: $signal;
 }
 
 /* ---------- 主按钮 + 次要操作 ---------- */

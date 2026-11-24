@@ -31,19 +31,18 @@
       </view>
     </view>
 
-    <view v-else-if="error" class="empty">
-      <view class="empty-mark mono">!</view>
-      <text class="empty-title">订单没打开</text>
-      <text class="empty-sub">{{ error }}</text>
-      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
-    </view>
+    <mx-state
+      v-else-if="error"
+      variant="error"
+      title="订单没打开"
+      :text="error"
+      action-text="重新加载"
+      @action="load"
+    />
 
-    <view v-else-if="orders.length === 0" class="empty">
-      <view class="empty-mark">0</view>
-      <text class="empty-title">还没有订单</text>
-      <text class="empty-sub">下单后可在这里查看进度。</text>
+    <mx-state v-else-if="orders.length === 0" variant="empty" title="还没有订单" text="下单后可在这里查看进度。">
       <view class="btn btn--deep empty-btn" hover-class="is-press" @tap="goMall">去商城</view>
-    </view>
+    </mx-state>
 
     <view v-else class="list">
       <view
@@ -171,6 +170,7 @@ import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import { showDangerModal } from '../../modal';
 import MxIcon from '../../components/mx-icon/mx-icon.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 
 const orders = ref<OrderDto[]>([]);
 const loading = ref(false);
@@ -400,7 +400,7 @@ onLoad((options) => {
 .sub {
   display: block;
   margin-top: 10rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $acc-6;
 }
@@ -433,14 +433,14 @@ onLoad((options) => {
 
 .tk-no {
   min-width: 0;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   word-break: break-all;
   color: $ink-3;
 }
 
 .tk-date {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
 }
 
@@ -553,7 +553,7 @@ onLoad((options) => {
   height: 88rpx;
   flex-shrink: 0;
   margin-right: 16rpx;
-  border-radius: 16rpx;
+  border-radius: $r-sm;
   background: $paper-2;
   display: flex;
   align-items: center;
@@ -579,14 +579,14 @@ onLoad((options) => {
 .item-qty {
   display: block;
   margin-top: 4rpx;
-  font-size: 24rpx;
+  font-size: $fs-xs;
   color: $ink-4;
 }
 
 .item-price {
   width: 140rpx;
   text-align: right;
-  font-size: 30rpx;
+  font-size: $fs-meta;
   color: $acc-4;
 }
 
@@ -605,13 +605,13 @@ onLoad((options) => {
 }
 
 .receiver-name {
-  font-size: 30rpx;
+  font-size: $fs-meta;
   color: $ink-2;
 }
 
 .receiver-phone {
   margin-top: 6rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
 }
 
@@ -621,14 +621,14 @@ onLoad((options) => {
 }
 
 .total-k {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-4;
   margin-right: 8rpx;
 }
 
 .total-v {
-  font-size: 34rpx;
+  font-size: $fs-body;
   font-weight: 800;
   color: $acc-4;
 }
@@ -637,7 +637,7 @@ onLoad((options) => {
   display: block;
   margin-top: $sp-2;
   padding-bottom: $sp-2;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.6;
   color: $ink-3;
 }
@@ -692,7 +692,7 @@ onLoad((options) => {
 
 .detail-row {
   margin-top: 6rpx;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.6;
   color: $ink-3;
 }
@@ -749,13 +749,13 @@ onLoad((options) => {
 }
 
 .cancel-note {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 1.5;
   color: $ink-4;
 }
 
 .lock-note {
-  font-size: 26rpx;
+  font-size: $fs-micro;
   color: $ink-4;
 }
 
@@ -780,11 +780,6 @@ onLoad((options) => {
 .tk-short {
   width: 40%;
   margin-top: 14rpx;
-}
-
-.retry {
-  margin-top: $sp-4;
-  padding: 0 40rpx;
 }
 
 .empty-btn {

@@ -30,6 +30,18 @@
   height: var(--mx-safe-top);
 }
 
+/* ---------- 页面外层容器基类 ----------
+ * 各页根节点 .page / .halo 只覆盖 padding 与局部背景；
+ * 盒模型、最小高度、横向溢出兜底在这里统一，避免每页各写一份。 */
+.page,
+.halo {
+  box-sizing: border-box;
+  min-height: 100vh;
+  max-width: 100%;
+  background: $paper;
+  overflow-x: hidden;
+}
+
 /* ---------- 二级页 App 头部（返回 + 标题 + 右侧动作）----------
  * 结构：.mx-app-head > .mx-app-head__inner > (返回槽 / 标题 / 动作槽)
  * 固定定位 + 等高占位块，页面内容不需要自己算 padding。 */
@@ -180,7 +192,7 @@
 
 .mx-state__title {
   font-family: $font-body;
-  font-size: 15px;
+  font-size: $fs-meta;
   font-weight: 600;
   line-height: 1.4;
   color: $ink-2;
@@ -189,7 +201,7 @@
 .mx-state__text {
   max-width: 520rpx;
   font-family: $font-body;
-  font-size: 13px;
+  font-size: $fs-micro;
   line-height: 1.7;
   color: $ink-3;
 }
@@ -203,15 +215,75 @@
   margin-top: $sp-1;
   padding: 0 $sp-4;
   box-sizing: border-box;
-  border: 1rpx solid $paper-3;
+  border: 1rpx solid transparent;
   border-radius: $r-control;
-  background: $shell;
+  background: $solid;
   font-family: $font-body;
-  font-size: 13px;
-  color: $ink;
+  font-size: $fs-meta;
+  color: $on-solid;
 }
 
 .mx-state--error .mx-state__title {
+  color: $signal;
+}
+
+/* 状态标记：空态/错误态前的圆形符号位，加载态由 .mx-spinner 占用 */
+.mx-state__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  border: 1rpx solid $paper-3;
+  border-radius: 50%;
+  font-family: $font-body;
+  font-size: $fs-meta;
+  color: $ink-3;
+}
+
+.mx-state--error .mx-state__mark {
+  border-color: $signal-soft;
+  background: $shell;
+  color: $signal;
+}
+
+.mx-state__action--ghost {
+  background: $shell;
+  border-color: $paper-3;
+  color: $ink;
+}
+
+/* ---------- 表单错误行：字段下方就近提示 ----------
+ * 替代 login / register / account-delete 三份逐字拷贝的 .error-row 三件套。
+ * 结构：.mx-error-row > .mx-error-mark + .mx-error-text */
+.mx-error-row {
+  display: flex;
+  align-items: flex-start;
+  margin-top: $sp-3;
+  padding: 16rpx 18rpx;
+  border: 1rpx solid $signal-soft;
+  border-radius: $r-control;
+  background: $shell;
+}
+
+.mx-error-mark {
+  flex-shrink: 0;
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 12rpx;
+  border-radius: 50%;
+  background: $signal;
+  color: $shell;
+  font-size: $fs-micro;
+  line-height: 32rpx;
+  text-align: center;
+}
+
+.mx-error-text {
+  flex: 1;
+  min-width: 0;
+  font-size: $fs-meta;
+  line-height: 1.5;
   color: $signal;
 }
 

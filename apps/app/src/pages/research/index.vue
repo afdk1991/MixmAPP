@@ -75,18 +75,22 @@
           </view>
         </view>
 
-        <view v-else-if="error" class="empty">
-          <view class="empty-mark mono">!</view>
-          <text class="empty-title">研究记录没打开</text>
-          <text class="empty-sub">{{ error }}</text>
-          <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="loadHistory">重新加载</view>
-        </view>
+        <mx-state
+          v-else-if="error"
+          variant="error"
+          title="研究记录没打开"
+          :text="error"
+          action-text="重新加载"
+          @action="loadHistory"
+        />
 
-        <view v-else-if="history.length === 0" class="empty">
-          <view class="empty-mark">∅</view>
-          <text class="empty-title">还没有研究记录</text>
-          <text class="empty-sub">在上方输入一个问题，开始你的第一次深度研究。</text>
-        </view>
+        <mx-state
+          v-else-if="history.length === 0"
+          variant="empty"
+          mark="∅"
+          title="还没有研究记录"
+          text="在上方输入一个问题，开始你的第一次深度研究。"
+        />
 
         <view v-else class="index-list">
           <view
@@ -127,6 +131,7 @@ import { ref } from 'vue';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxBar from '../../components/mx-bar/mx-bar.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 import { researchApi, researchRelativeTime, type ResearchTask } from '../../api/research';
 
 const samples = [
@@ -250,7 +255,7 @@ onPullDownRefresh(() => {
 .rs-demo-badge {
   margin-right: $sp-2;
   padding: 2rpx 12rpx;
-  border-radius: 999rpx;
+  border-radius: $r-pill;
   background: $brand-soft;
   color: $brand-deep;
   font-size: $fs-micro;
@@ -378,7 +383,7 @@ onPullDownRefresh(() => {
   padding: $sp-3;
   margin-bottom: $sp-3;
   background: $shell;
-  border-radius: 24rpx;
+  border-radius: $r-card;
   box-shadow: $shadow-card;
 }
 
@@ -429,7 +434,7 @@ onPullDownRefresh(() => {
   flex-shrink: 0;
   padding: 2rpx 12rpx;
   border-radius: $r-control;
-  background: rgba(164, 118, 28, 0.12);
+  background: $amber-soft;
   font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $amber;
@@ -451,7 +456,7 @@ onPullDownRefresh(() => {
   padding: $sp-3;
   margin-bottom: $sp-3;
   background: $shell;
-  border-radius: 24rpx;
+  border-radius: $r-card;
   box-shadow: $shadow-card;
 }
 
@@ -471,7 +476,7 @@ onPullDownRefresh(() => {
   height: 26rpx;
   width: 70%;
   margin-top: 12rpx;
-  border-radius: 8rpx;
+  border-radius: $r-xs;
 }
 
 .rs-skel-line--short {
@@ -497,11 +502,6 @@ onPullDownRefresh(() => {
   font-size: $fs-micro;
   letter-spacing: 2rpx;
   color: $ink-4;
-}
-
-.retry {
-  margin-top: $sp-4;
-  padding: 0 40rpx;
 }
 
 @media (min-width: 768px) {

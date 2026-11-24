@@ -165,9 +165,9 @@
         />
       </view>
 
-      <view v-if="error" class="error-row">
-        <text class="error-mark mono">!</text>
-        <text class="error-text">{{ error }}</text>
+      <view v-if="error" class="mx-error-row">
+        <text class="mx-error-mark">!</text>
+        <text class="mx-error-text">{{ error }}</text>
       </view>
 
       <!-- 隐私同意：注册提交前必须勾选；未勾选点提交会被拦下并高亮 -->
@@ -575,37 +575,6 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   color: $amber;
 }
 
-/* ---------- 错误提示：字段下方就近显示 ---------- */
-.error-row {
-  display: flex;
-  align-items: flex-start;
-  margin-top: $sp-3;
-  padding: 16rpx 18rpx;
-  border: 1rpx solid rgba(179, 55, 42, 0.28);
-  border-radius: $r-control;
-  background: $shell;
-}
-
-.error-mark {
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 50%;
-  background: $signal;
-  color: $shell;
-  font-size: 26rpx;
-  line-height: 32rpx;
-  text-align: center;
-  margin-right: 12rpx;
-  flex-shrink: 0;
-}
-
-.error-text {
-  flex: 1;
-  font-size: $fs-meta;
-  line-height: 1.5;
-  color: $signal;
-}
-
 /* ---------- 隐私同意（注册前置条件） ---------- */
 .consent {
   display: flex;
@@ -614,7 +583,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   margin-top: $sp-4;
   padding: $sp-3;
   border: 1rpx solid $paper-3;
-  border-radius: 16rpx;
+  border-radius: $r-sm;
   background: $paper-2;
 }
 
@@ -631,7 +600,7 @@ async function oauthLogin(provider: 'wechat' | 'qq' | 'github' | 'apple'): Promi
   height: 34rpx;
   margin-top: 2rpx;
   border: 2rpx solid $ink-4;
-  border-radius: 8rpx;
+  border-radius: $r-xs;
   background: $shell;
 }
 

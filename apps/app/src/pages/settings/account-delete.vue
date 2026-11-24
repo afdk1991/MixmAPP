@@ -142,9 +142,9 @@
           />
         </view>
 
-        <view v-if="error" class="error-row">
-          <text class="error-mark mono">!</text>
-          <text class="error-text">{{ error }}</text>
+        <view v-if="error" class="mx-error-row">
+          <text class="mx-error-mark">!</text>
+          <text class="mx-error-text">{{ error }}</text>
         </view>
 
         <view
@@ -466,7 +466,7 @@ function mapError(e: unknown): string {
   border-radius: 50%;
   background: $signal;
   color: $shell;
-  font-size: 26rpx;
+  font-size: $fs-micro;
   line-height: 32rpx;
   text-align: center;
 }
@@ -658,37 +658,6 @@ function mapError(e: unknown): string {
   font-size: $fs-micro;
   line-height: 1.6;
   color: $ink-3;
-}
-
-/* ---------- 错误提示 ---------- */
-.error-row {
-  display: flex;
-  align-items: flex-start;
-  margin-top: $sp-3;
-  padding: 16rpx 18rpx;
-  border: 1rpx solid rgba(179, 55, 42, 0.28);
-  border-radius: $r-control;
-  background: $shell;
-}
-
-.error-mark {
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 50%;
-  background: $signal;
-  color: $shell;
-  font-size: 26rpx;
-  line-height: 32rpx;
-  text-align: center;
-  margin-right: 12rpx;
-  flex-shrink: 0;
-}
-
-.error-text {
-  flex: 1;
-  font-size: $fs-meta;
-  line-height: 1.5;
-  color: $signal;
 }
 
 /* ---------- 提交 ---------- */

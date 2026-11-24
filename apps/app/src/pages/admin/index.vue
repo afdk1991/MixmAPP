@@ -553,7 +553,7 @@ onLoad(() => {
   overflow-x: hidden;
   min-height: 100vh;
   background: $paper;
-  padding: 0 $sp-3 calc($sp-8 + env(safe-area-inset-bottom));
+  padding: 0 $sp-3 calc($sp-8 + var(--mx-safe-bottom));
 }
 
 /* ---------- 深场页头：用深场令牌，不在页面里写裸色值 ---------- */
@@ -561,7 +561,7 @@ onLoad(() => {
   box-sizing: border-box;
   padding: $sp-5 $sp-4 $sp-4;
   background:
-    radial-gradient(120% 90% at 88% -14%, rgba(15, 157, 143, 0.26), rgba(15, 157, 143, 0) 58%),
+    radial-gradient(120% 90% at 88% -14%, $brand-wash-strong, rgba(15, 157, 143, 0) 58%),
     linear-gradient(158deg, $deep 0%, $deep-2 62%, $deep-3 120%);
   border-bottom: 1rpx solid $on-deep-line;
 }
@@ -613,7 +613,7 @@ onLoad(() => {
   padding: 8rpx 18rpx;
   border: 1rpx solid $on-deep-line;
   border-radius: $r-pill;
-  background: rgba(244, 244, 241, 0.08);
+  background: $on-deep-soft;
 }
 
 .head-chip--off .head-chip-text {
