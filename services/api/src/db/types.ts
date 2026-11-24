@@ -99,8 +99,29 @@ export type UserDeviceRecord = {
   updatedAt: Date;
 };
 
-/** 后台会话摘要（/admin/console/users/:id/sessions）：令牌只返哈希前缀，不返原文。 */
-export type AdminUserSessionSummary = {
+/** 注销设备挑战票据：一次性、绑定 (userId, deviceId)，5 分钟过期。 */
+export type DeletionChallengeRecord = {
+  challenge: string;
+  userId: string;
+  deviceId: string;
+  expiresAt: Date;
+  consumedAt: Date | null;
+};
+
+/** 注销级联删除 / 脱敏的结果计数（接口响应与对账用）。 */
+export type DeletionCascadeCounts = {
+  binds: number;
+  devices: number;
+  addresses: number;
+  favorites: number;
+  carts: number;
+  pushTokens: number;
+  ordersAnonymized: number;
+  paymentsAnonymized: number;
+  revokedSessions: number;
+};
+
+/** 后台会话摘要（/admin/console/users/:id/sessions）：令牌只返哈希前缀，不返原文。 */export type AdminUserSessionSummary = {
   /** 刷新令牌哈希前 8 位，仅用于区分会话 */
   id: string;
   createdAt: Date;
@@ -119,7 +140,7 @@ export type AdminUserSessionSummary = {
 export type SmsCodeRecord = {
   id: string;
   phone: string;
-  purpose: 'register' | 'login' | 'bind';
+  purpose: 'register' | 'login' | 'bind' | 'delete';
   codeHash: string;
   attempts: number;
   consumedAt: Date | null;
@@ -130,7 +151,8 @@ export type SmsCodeRecord = {
 export type PaymentRecord = {
   id: string;
   outTradeNo: string;
-  userId: string;
+  /** 注销 / 留存脱敏后置空，留行对账但不回连个人身份 */
+  userId: string | null;
   channel: 'wechat' | 'alipay';
   amountFen: number;
   subject: string;
@@ -317,7 +339,8 @@ export type ManjianTierRecord = {
 export type OrderRecord = {
   id: string;
   orderNo: string;
-  userId: string;
+  /** 注销 / 留存脱敏后置空，留行对账但不回连个人身份 */
+  userId: string | null;
   /** 六态订单状态（0018）：pending/paid/picking/shipped/completed/cancelled */
   status: 'pending' | 'paid' | 'picking' | 'shipped' | 'completed' | 'cancelled';
   totalFen: number;
@@ -431,6 +454,18 @@ export type Store = {
     /** 合并完成后删除次账号；调用前必须已迁移全部外键数据 */
     delete(id: string): Promise<void>;
   };
+  /** 注销设备挑战票据：一次性消费，过期即失效。 */
+  accountChallenges: {
+    insert(record: DeletionChallengeRecord): Promise<void>;
+    /** 原子消费：未使用且未过期才返回并标记 consumed_at，重复调用返回 null。 */
+    consume(challenge: string): Promise<DeletionChallengeRecord | null>;
+    /** 留存清理：已消费或已过期且早于 before 的票据物理删除，返回条数。 */
+    purgeStale(before: Date): Promise<number>;
+  };
+  /** 账号注销级联：物理清除个人数据 + 订单/支付留行脱敏。PG 走单事务函数，内存库顺序执行。 */
+  accountDeletion: {
+    erase(userId: string): Promise<DeletionCascadeCounts>;
+  };
   bindings: {
     insert(binding: BindingRecord): Promise<BindingRecord>;
     findByProvider(provider: BindingRecord['provider'], openId: string): Promise<BindingRecord | null>;
@@ -440,12 +475,16 @@ export type Store = {
     remove(userId: string, provider: BindingRecord['provider']): Promise<void>;
     /** 按 id 批量改归属（合并迁移与回滚都用它，重复执行是幂等的） */
     move(ids: string[], userId: string): Promise<number>;
+    /** 注销级联：物理删除该用户全部绑定，返回删除条数。 */
+    deleteByUser(userId: string): Promise<number>;
   };
   oauthStates: {
     insert(record: OAuthStateRecord): Promise<void>;
     /** 原子消费：未使用且未过期才返回并标记 consumed_at，重复调用返回 null。 */
     claim(state: string): Promise<OAuthStateRecord | null>;
     purgeExpired(before: Date): Promise<void>;
+    /** 留存清理：已消费或已过期且早于 before 的票据物理删除，返回条数。 */
+    purgeStale(before: Date): Promise<number>;
   };
   refreshTokens: {
     insert(token: RefreshTokenRecord): Promise<void>;
@@ -457,6 +496,10 @@ export type Store = {
     listByUser(userId: string, limit: number): Promise<RefreshTokenRecord[]>;
     /** 合并时吊销次账号全部会话；返回实际吊销条数 */
     revokeByUser(userId: string): Promise<number>;
+    /** 注销级联：物理删除该用户全部刷新令牌，返回删除条数。 */
+    deleteByUser(userId: string): Promise<number>;
+    /** 留存清理：已过期或已撤销且早于 before 的令牌物理删除，返回条数。 */
+    purgeExpired(before: Date): Promise<number>;
   };
   /** 用户设备最近快照（0021）：upsert 与按设备/最近读取，双驱动同口径 */
   userDevices: {
@@ -465,11 +508,17 @@ export type Store = {
     /** 该用户最近一次快照（按 updated_at 倒序首条）；无记录返回 null */
     latest(userId: string): Promise<UserDeviceRecord | null>;
     listByUser(userId: string): Promise<UserDeviceRecord[]>;
+    /** 注销级联：物理删除该用户全部设备快照，返回删除条数。 */
+    deleteByUser(userId: string): Promise<number>;
+    /** 留存清理：updated_at 早于 before 且无活跃会话的快照，返回删除条数。 */
+    purgeStale(before: Date): Promise<number>;
   };
   smsCodes: {
     insert(code: SmsCodeRecord): Promise<void>;
     latest(phone: string, purpose: SmsCodeRecord['purpose']): Promise<SmsCodeRecord | null>;
     update(id: string, patch: Partial<SmsCodeRecord>): Promise<void>;
+    /** 留存清理：已消费或已过期且早于 before 的验证码物理删除，返回条数。 */
+    purgeStale(before: Date): Promise<number>;
   };
   payments: {
     insert(payment: PaymentRecord): Promise<PaymentRecord>;
@@ -477,12 +526,16 @@ export type Store = {
     listByUser(userId: string): Promise<PaymentRecord[]>;
     update(id: string, patch: Partial<PaymentRecord>): Promise<PaymentRecord | null>;
     move(ids: string[], userId: string): Promise<number>;
+    /** 注销级联：支付留行对账，user_id 置空，返回脱敏条数。 */
+    anonymizeByUser(userId: string): Promise<number>;
   };
   pushTokens: {
     upsert(record: PushTokenRecord): Promise<void>;
     listByUser(userId: string): Promise<PushTokenRecord[]>;
     move(ids: string[], userId: string): Promise<number>;
     remove(ids: string[]): Promise<void>;
+    /** 注销级联：物理删除该用户全部推送令牌，返回删除条数。 */
+    deleteByUser(userId: string): Promise<number>;
   };
   mall: {
     products: {
@@ -557,6 +610,10 @@ export type Store = {
       clear(userId: string): Promise<void>;
       /** 用给定行整体替换某用户购物车（合并回滚按快照还原时使用） */
       replaceAll(userId: string, items: CartItemRecord[]): Promise<void>;
+      /** 注销级联：物理清空该用户购物车，返回删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
+      /** 留存清理：updated_at 早于 before 的购物车行，返回删除条数。 */
+      purgeStale(before: Date): Promise<number>;
     };
     /** 地址簿（0014）：下单必填项，结算页选择地址后取快照写入订单 */
     addresses: {
@@ -570,6 +627,8 @@ export type Store = {
        * 规避网关无事务时的两条语句竞态；id 不属于该用户时返回 null。
        */
       setDefault(userId: string, id: string): Promise<AddressRecord | null>;
+      /** 注销级联：物理删除该用户全部地址，返回删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
     };
     /** 满减梯度档位（0017）：`min~max → percent%`，购物车三层优惠汇总使用 */
     manjianTiers: {
@@ -604,6 +663,10 @@ export type Store = {
         to: OrderRecord['status'],
         at: Date,
       ): Promise<boolean>;
+      /** 注销级联：订单留行脱敏，user_id 置空并清空可识别字段，返回脱敏条数。 */
+      anonymizeByUser(userId: string): Promise<number>;
+      /** 留存清理：已完结（completed/cancelled）且完结时间早于 before 的订单脱敏，返回条数。 */
+      anonymizeStaleCompleted(before: Date): Promise<number>;
     };
     /** 下单幂等表：claim 占位 → attach 回写 order_no，并发重试不会重复扣库存 */
     orderRequests: {
@@ -614,6 +677,8 @@ export type Store = {
       release(userId: string, key: string): Promise<void>;
       /** 账号合并：次账号的幂等占位整体丢弃（合并后旧键不再有意义） */
       dropByUser(userId: string): Promise<void>;
+      /** 注销级联：物理删除该用户全部下单幂等占位，返回删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
     };
     /** 收藏夹（0019）：多收藏夹 + 条目，条目只存商品引用 */
     favorites: {
@@ -638,6 +703,8 @@ export type Store = {
       clearItems(folderId: string): Promise<number>;
       /** 条目数统计（收藏夹列表用） */
       countItems(folderId: string): Promise<number>;
+      /** 注销级联：物理删除该用户全部收藏夹与条目，返回条目删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
     };
   };
   /** 账号合并审计与快照；同一 mergeKey 只允许一条记录 */

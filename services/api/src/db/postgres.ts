@@ -20,6 +20,8 @@ import type {
   CartItemRecord,
   CatalogSyncRunRecord,
   AddressRecord,
+  DeletionChallengeRecord,
+  DeletionCascadeCounts,
   FavoriteFolderRecord,
   FavoriteItemRecord,
   ManjianTierRecord,
@@ -345,6 +347,69 @@ export class PgStore implements Store {
     },
   };
 
+  accountChallenges = {
+    insert: async (record: DeletionChallengeRecord): Promise<void> => {
+      await this.pool.query(
+        `insert into deletion_challenges
+           (challenge, user_id, device_id, expires_at, consumed_at, created_at)
+         values ($1,$2,$3,$4,$5, now())`,
+        [record.challenge, record.userId, record.deviceId, record.expiresAt, record.consumedAt],
+      );
+    },
+    // 单条 UPDATE 完成「校验 + 消费」：并发回放只有一个请求能拿到行，重复调用返回 null。
+    consume: async (challenge: string): Promise<DeletionChallengeRecord | null> => {
+      const res = await this.pool.query(
+        `update deletion_challenges set consumed_at = now()
+         where challenge = $1 and consumed_at is null and expires_at > now()
+         returning *`,
+        [challenge],
+      );
+      return res.rows[0] ? mapChallenge(res.rows[0] as Row) : null;
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const res = await this.pool.query(
+        `delete from deletion_challenges
+         where coalesce(consumed_at, expires_at) <= $1`,
+        [before],
+      );
+      return res.rowCount ?? 0;
+    },
+  };
+
+  accountDeletion = {
+    /**
+     * 级联删除 + 订单/支付脱敏走 0022 的 delete_account 单函数：
+     * 函数体在 PG 内单事务提交；经 CloudBase 网关时一次 mix_exec 调用即一个事务，
+     * 规避多语句桥接下的中间态。返回各类清除/脱敏条数。
+     */
+    erase: async (userId: string): Promise<DeletionCascadeCounts> => {
+      const res = await this.pool.query('select delete_account($1) as result', [userId]);
+      const candidate = res.rows[0]?.['result'];
+      let raw: Row = {};
+      if (typeof candidate === 'string') {
+        try {
+          raw = JSON.parse(candidate) as Row;
+        } catch {
+          raw = {};
+        }
+      } else if (candidate && typeof candidate === 'object') {
+        raw = candidate as Row;
+      }
+      const num = (v: unknown): number => Number(v ?? 0);
+      return {
+        binds: num(raw['binds']),
+        devices: num(raw['devices']),
+        addresses: num(raw['addresses']),
+        favorites: num(raw['favorites']),
+        carts: num(raw['carts']),
+        pushTokens: num(raw['pushTokens']),
+        ordersAnonymized: num(raw['ordersAnonymized']),
+        paymentsAnonymized: num(raw['paymentsAnonymized']),
+        revokedSessions: num(raw['revokedSessions']),
+      };
+    },
+  };
+
   bindings = {
     insert: async (binding: BindingRecord): Promise<BindingRecord> => {
       const res = await this.pool.query(
@@ -398,6 +463,10 @@ export class PgStore implements Store {
       );
       return res.rowCount ?? 0;
     },
+    deleteByUser: async (userId: string): Promise<number> => {
+      const res = await this.pool.query('delete from bindings where user_id = $1', [userId]);
+      return res.rowCount ?? 0;
+    },
   };
 
   oauthStates = {
@@ -429,6 +498,14 @@ export class PgStore implements Store {
     },
     purgeExpired: async (before: Date): Promise<void> => {
       await this.pool.query('delete from oauth_states where expires_at <= $1', [before]);
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const res = await this.pool.query(
+        `delete from oauth_states
+         where coalesce(consumed_at, expires_at) <= $1`,
+        [before],
+      );
+      return res.rowCount ?? 0;
     },
   };
 
@@ -489,6 +566,17 @@ export class PgStore implements Store {
       );
       return res.rowCount ?? 0;
     },
+    deleteByUser: async (userId: string): Promise<number> => {
+      const res = await this.pool.query('delete from refresh_tokens where user_id = $1', [userId]);
+      return res.rowCount ?? 0;
+    },
+    purgeExpired: async (before: Date): Promise<number> => {
+      const res = await this.pool.query(
+        'delete from refresh_tokens where coalesce(revoked_at, expires_at) <= $1',
+        [before],
+      );
+      return res.rowCount ?? 0;
+    },
   };
 
   userDevices = {
@@ -538,6 +626,25 @@ export class PgStore implements Store {
         [userId],
       );
       return res.rows.map((row) => mapUserDevice(row as Row));
+    },
+    deleteByUser: async (userId: string): Promise<number> => {
+      const res = await this.pool.query('delete from user_devices where user_id = $1', [userId]);
+      return res.rowCount ?? 0;
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const res = await this.pool.query(
+        `delete from user_devices ud
+         where ud.updated_at <= $1
+           and not exists (
+             select 1 from refresh_tokens rt
+              where rt.user_id = ud.user_id
+                and rt.device_id = ud.device_id
+                and rt.revoked_at is null
+                and rt.expires_at > now()
+           )`,
+        [before],
+      );
+      return res.rowCount ?? 0;
     },
   };
 
@@ -599,6 +706,13 @@ export class PgStore implements Store {
         `update sms_codes set ${sets.join(', ')} where id = $${i}`,
         [...values, id],
       );
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const res = await this.pool.query(
+        'delete from sms_codes where coalesce(consumed_at, expires_at) <= $1',
+        [before],
+      );
+      return res.rowCount ?? 0;
     },
   };
 
@@ -673,6 +787,13 @@ export class PgStore implements Store {
       );
       return res.rowCount ?? 0;
     },
+    anonymizeByUser: async (userId: string): Promise<number> => {
+      const res = await this.pool.query(
+        'update payments set user_id = null where user_id = $1',
+        [userId],
+      );
+      return res.rowCount ?? 0;
+    },
   };
 
   pushTokens = {
@@ -710,6 +831,10 @@ export class PgStore implements Store {
     remove: async (ids: string[]): Promise<void> => {
       if (!ids.length) return;
       await this.pool.query('delete from push_tokens where id = any($1::text[])', [ids]);
+    },
+    deleteByUser: async (userId: string): Promise<number> => {
+      const res = await this.pool.query('delete from push_tokens where user_id = $1', [userId]);
+      return res.rowCount ?? 0;
     },
   };
 
@@ -1110,6 +1235,14 @@ export class PgStore implements Store {
           );
         }
       },
+      deleteByUser: async (userId: string): Promise<number> => {
+        const res = await this.pool.query('delete from carts where user_id = $1', [userId]);
+        return res.rowCount ?? 0;
+      },
+      purgeStale: async (before: Date): Promise<number> => {
+        const res = await this.pool.query('delete from carts where updated_at <= $1', [before]);
+        return res.rowCount ?? 0;
+      },
     },
     addresses: {
       listByUser: async (userId: string): Promise<AddressRecord[]> => {
@@ -1201,6 +1334,10 @@ export class PgStore implements Store {
         );
         const rows = res.rows.map((row) => mapAddress(row as Row));
         return rows.find((row) => row.id === id) ?? null;
+      },
+      deleteByUser: async (userId: string): Promise<number> => {
+        const res = await this.pool.query('delete from mall_addresses where user_id = $1', [userId]);
+        return res.rowCount ?? 0;
       },
     },
     /** 满减档位（0017）：只读启用档位，按 sort_no / min_fen 排序。 */
@@ -1406,6 +1543,29 @@ export class PgStore implements Store {
             );
         return res.rowCount === 1;
       },
+      anonymizeByUser: async (userId: string): Promise<number> => {
+        const res = await this.pool.query(
+          `update orders
+             set user_id = null, receiver_name = '', receiver_phone = '', address = '',
+                 remark = null, address_id = null
+           where user_id = $1`,
+          [userId],
+        );
+        return res.rowCount ?? 0;
+      },
+      anonymizeStaleCompleted: async (before: Date): Promise<number> => {
+        const res = await this.pool.query(
+          `update orders
+             set receiver_name = '', receiver_phone = '', address = '',
+                 remark = null, address_id = null
+           where user_id is not null
+             and status in ('completed', 'cancelled')
+             and coalesce(completed_at, cancelled_at) <= $1
+             and (receiver_name <> '' or receiver_phone <> '' or address <> '')`,
+          [before],
+        );
+        return res.rowCount ?? 0;
+      },
     },
     orderRequests: {
       claim: async (userId: string, key: string) => {
@@ -1432,6 +1592,10 @@ export class PgStore implements Store {
       },
       dropByUser: async (userId: string): Promise<void> => {
         await this.pool.query('delete from order_requests where user_id = $1', [userId]);
+      },
+      deleteByUser: async (userId: string): Promise<number> => {
+        const res = await this.pool.query('delete from order_requests where user_id = $1', [userId]);
+        return res.rowCount ?? 0;
       },
     },
     favorites: {
@@ -1569,6 +1733,14 @@ export class PgStore implements Store {
           [folderId],
         );
         return (res.rows[0]?.['n'] as number) ?? 0;
+      },
+      deleteByUser: async (userId: string): Promise<number> => {
+        const items = await this.pool.query(
+          'delete from mall_favorite_items where user_id = $1',
+          [userId],
+        );
+        await this.pool.query('delete from mall_favorite_folders where user_id = $1', [userId]);
+        return items.rowCount ?? 0;
       },
     },
   };
@@ -2097,7 +2269,7 @@ function mapOrder(row: Row): OrderRecord {
   return {
     id: row['id'] as string,
     orderNo: row['order_no'] as string,
-    userId: row['user_id'] as string,
+    userId: (row['user_id'] as string | null) ?? null,
     status: row['status'] as OrderRecord['status'],
     totalFen: Number(row['total_fen']),
     receiverName: row['receiver_name'] as string,
@@ -2202,7 +2374,7 @@ function mapPayment(row: Row): PaymentRecord {
   return {
     id: row['id'] as string,
     outTradeNo: row['out_trade_no'] as string,
-    userId: row['user_id'] as string,
+    userId: (row['user_id'] as string | null) ?? null,
     channel: row['channel'] as PaymentRecord['channel'],
     amountFen: Number(row['amount_fen']),
     subject: row['subject'] as string,
@@ -2216,4 +2388,14 @@ function mapPayment(row: Row): PaymentRecord {
 
 export function createStore(databaseUrl: string): Store {
   return new PgStore(databaseUrl);
+}
+
+function mapChallenge(row: Row): DeletionChallengeRecord {
+  return {
+    challenge: row['challenge'] as string,
+    userId: row['user_id'] as string,
+    deviceId: row['device_id'] as string,
+    expiresAt: toDate(row['expires_at']),
+    consumedAt: toDateOrNull(row['consumed_at']),
+  };
 }

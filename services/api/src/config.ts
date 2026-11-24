@@ -216,6 +216,17 @@ export type Config = {
   };
   /** 待支付订单超时分钟数：超过就取消并归还库存（0 表示关闭自动取消） */
   orderTtlMinutes: number;
+  /** 个人数据留存清理（规格 §2）：扫描周期与各实体保留天数；sweepMinutes=0 关闭任务 */
+  retention: {
+    sweepMinutes: number;
+    refreshTokenDays: number;
+    oauthStateDays: number;
+    smsCodeDays: number;
+    deviceSnapshotDays: number;
+    cartDays: number;
+    orderPiiDays: number;
+    deletionChallengeDays: number;
+  };
   /** 用户名合规词库：运营方按监管要求补充，逗号/空白分隔 */
   usernameDenylist: string[];
 };
@@ -573,6 +584,16 @@ export function loadConfig(): Config {
       })(),
     },
     orderTtlMinutes: num('ORDER_TTL_MINUTES', 30),
+    retention: {
+      sweepMinutes: num('RETENTION_SWEEP_MINUTES', 360),
+      refreshTokenDays: num('RETENTION_REFRESH_TOKEN_DAYS', 7),
+      oauthStateDays: num('RETENTION_OAUTH_STATE_DAYS', 1),
+      smsCodeDays: num('RETENTION_SMS_CODE_DAYS', 7),
+      deviceSnapshotDays: num('RETENTION_DEVICE_SNAPSHOT_DAYS', 180),
+      cartDays: num('RETENTION_CART_DAYS', 90),
+      orderPiiDays: num('RETENTION_ORDER_PII_DAYS', 180),
+      deletionChallengeDays: num('RETENTION_DELETION_CHALLENGE_DAYS', 1),
+    },
     usernameDenylist: str('USERNAME_DENYLIST')
       .split(/[,，、\s]+/)
       .map((item) => item.trim())

@@ -4,6 +4,8 @@ import cors from '@fastify/cors';
 import type { Config } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
+import { AccountDeletionService } from './modules/account-deletion.js';
+import { RetentionService } from './modules/retention.js';
 import { DeviceContextService } from './modules/device.js';
 import { AddressService } from './modules/address.js';
 import { MallService } from './modules/mall.js';
@@ -30,6 +32,7 @@ import { adminRoutes } from './routes/admin.js';
 import { adminConsoleRoutes } from './routes/admin-console.js';
 import { mediaRoutes } from './routes/media.js';
 import { meRoutes } from './routes/me.js';
+import { accountDeletionRoutes } from './routes/account-delete.js';
 import { deviceRoutes } from './routes/device.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { metaRoutes } from './routes/meta.js';
@@ -152,6 +155,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }),
   );
   app.decorate('deviceContext', new DeviceContextService(deps.store));
+  // 账号注销：分级校验 + 级联清除/脱敏；短信校验复用 AuthService 的 delete 用途验证码口径。
+  app.decorate(
+    'deletion',
+    new AccountDeletionService({
+      store: deps.store,
+      verifySms: (phone, code) => app.auth.verifySmsCode(phone, 'delete', code),
+    }),
+  );
+  // 个人数据留存清理：独立于订单超时扫描，由 index.ts 另起定时器驱动。
+  app.decorate('retention', new RetentionService(deps.store, deps.config.retention));
   app.decorate('pay', new PayService(deps.config, deps.store));
   app.decorate('address', new AddressService(deps.config, deps.store));
   app.decorate('mall', new MallService(deps.config, deps.store, catalog));
@@ -246,6 +259,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await authRoutes(scope);
       await oauthRoutes(scope);
       await meRoutes(scope);
+      await accountDeletionRoutes(scope);
       await deviceRoutes(scope);
       await mallRoutes(scope);
       await homeRoutes(scope);

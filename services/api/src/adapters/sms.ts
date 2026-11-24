@@ -1,7 +1,7 @@
 import type { Config } from '../config.js';
 import { AppError } from '../lib/errors.js';
 
-export type SmsPurpose = 'register' | 'login' | 'bind';
+export type SmsPurpose = 'register' | 'login' | 'bind' | 'delete';
 
 export type SmsProvider = {
   readonly name: string;

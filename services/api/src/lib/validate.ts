@@ -26,6 +26,8 @@ declare module 'fastify' {
     providers: import('../modules/provider-registry.js').ProviderRegistry;
     onekey: import('../adapters/onekey.js').OneKeyProvider;
     auth: import('../modules/auth.js').AuthService;
+    deletion: import('../modules/account-deletion.js').AccountDeletionService;
+    retention: import('../modules/retention.js').RetentionService;
     deviceContext: import('../modules/device.js').DeviceContextService;
     pay: import('../modules/pay.js').PayService;
     address: import('../modules/address.js').AddressService;

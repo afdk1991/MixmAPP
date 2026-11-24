@@ -201,6 +201,23 @@ export const bindEmailSchema = z.object({
   password: passwordSchema,
 });
 
+/**
+ * 注销账号（自助永久删除）：二次确认口令 + 身份校验。
+ * 校验方式由服务端按账号实际拥有的凭据判定，前端通过 GET /me/account/deletion-options 取可用方式。
+ */
+export const deleteAccountSchema = z.object({
+  /** 必须逐字输入「注销」，防误触 */
+  confirm: z.literal('注销'),
+  /** password：验密码；sms：绑定手机验证码；device：无密码无手机时按最近登录设备做设备强确认 */
+  method: z.enum(['password', 'sms', 'device']),
+  password: passwordSchema.optional(),
+  code: smsCodeSchema.optional(),
+  /** device 方式：最近登录设备号，服务端与 user_devices 最近快照比对 */
+  deviceId: z.string().min(1).max(128).optional(),
+  /** device 方式：一次性挑战票据（POST /me/account/delete-challenge 下发，单次有效） */
+  challenge: z.string().min(10).max(256).optional(),
+});
+
 export const createPaymentSchema = z.object({
   channel: z.enum(['wechat', 'alipay']),
   amountFen: z.number().int().positive().max(10_000_000),
@@ -260,6 +277,7 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 export type PresignInput = z.infer<typeof presignSchema>;
 export type AiChatInput = z.infer<typeof aiChatSchema>;
+export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;
 
 export type UserDto = {
   /** 主键（形态取决于 ID 策略） */

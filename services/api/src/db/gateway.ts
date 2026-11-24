@@ -32,6 +32,11 @@ const TABLES = [
   'order_items',
   'order_requests',
   'user_devices',
+  'deletion_challenges',
+  'oauth_states',
+  'mall_addresses',
+  'mall_favorite_folders',
+  'mall_favorite_items',
 ] as const;
 
 /** 网关会话默认 search_path=public，必须给自有表补 schema 前缀。 */
@@ -41,6 +46,7 @@ export function qualifySql(sql: string, schema = 'mixmapp'): string {
     .replace(new RegExp(`\\b(from|into|update|join)\\s+(${names})\\b`, 'gi'), `$1 ${schema}.$2`)
     .replace(new RegExp(`\\bdelete\\s+from\\s+(${names})\\b`, 'gi'), `delete from ${schema}.$1`);
   out = out.replace(/\bselect\s+place_order\s*\(/gi, `select ${schema}.place_order(`);
+  out = out.replace(/\bselect\s+delete_account\s*\(/gi, `select ${schema}.delete_account(`);
   return out;
 }
 

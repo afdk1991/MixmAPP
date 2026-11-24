@@ -12,6 +12,8 @@ import type {
   AdminUserSummary,
   BindingRecord,
   CartItemRecord,
+  DeletionChallengeRecord,
+  DeletionCascadeCounts,
   FavoriteFolderRecord,
   FavoriteItemRecord,
   ManjianTierRecord,
@@ -67,6 +69,8 @@ export class MemoryStore implements Store {
   private auditList: AdminAuditRecord[] = [];
   /** 用户设备最近快照（0021）：主键 (user_id, device_id)，进程生命周期内有效 */
   private deviceList: UserDeviceRecord[] = [];
+  /** 注销设备挑战票据：一次性、5 分钟过期 */
+  private challengeList: DeletionChallengeRecord[] = [];
 
   async ping(): Promise<boolean> {
     return true;
@@ -96,6 +100,7 @@ export class MemoryStore implements Store {
     this.mergeList = [];
     this.auditList = [];
     this.deviceList = [];
+    this.challengeList = [];
   }
 
   users = {
@@ -139,6 +144,58 @@ export class MemoryStore implements Store {
     },
   };
 
+  accountChallenges = {
+    insert: async (record: DeletionChallengeRecord): Promise<void> => {
+      this.challengeList.push(clone(record));
+    },
+    consume: async (challenge: string): Promise<DeletionChallengeRecord | null> => {
+      const found = this.challengeList.find((item) => item.challenge === challenge);
+      if (!found || found.consumedAt) return null;
+      if (found.expiresAt.getTime() <= Date.now()) return null;
+      found.consumedAt = new Date();
+      return clone(found);
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const beforeMs = before.getTime();
+      const stale = this.challengeList.filter(
+        (c) => (c.consumedAt ?? c.expiresAt).getTime() <= beforeMs,
+      );
+      this.challengeList = this.challengeList.filter(
+        (c) => !((c.consumedAt ?? c.expiresAt).getTime() <= beforeMs),
+      );
+      return stale.length;
+    },
+  };
+
+  accountDeletion = {
+    erase: async (userId: string): Promise<DeletionCascadeCounts> => {
+      // 内存库无事务：顺序执行，口径与 PG 单事务函数一致。
+      const ordersAnonymized = await this.mall.orders.anonymizeByUser(userId);
+      const paymentsAnonymized = await this.payments.anonymizeByUser(userId);
+      const binds = await this.bindings.deleteByUser(userId);
+      const revokedSessions = await this.refreshTokens.deleteByUser(userId);
+      const devices = await this.userDevices.deleteByUser(userId);
+      const addresses = await this.mall.addresses.deleteByUser(userId);
+      const favorites = await this.mall.favorites.deleteByUser(userId);
+      const carts = await this.mall.carts.deleteByUser(userId);
+      const pushTokens = await this.pushTokens.deleteByUser(userId);
+      await this.mall.orderRequests.deleteByUser(userId);
+      this.challengeList = this.challengeList.filter((c) => c.userId !== userId);
+      await this.users.delete(userId);
+      return {
+        binds,
+        devices,
+        addresses,
+        favorites,
+        carts,
+        pushTokens,
+        ordersAnonymized,
+        paymentsAnonymized,
+        revokedSessions,
+      };
+    },
+  };
+
   bindings = {
     insert: async (binding: BindingRecord): Promise<BindingRecord> => {
       const duplicate = this.bindingList.find(
@@ -179,6 +236,11 @@ export class MemoryStore implements Store {
       }
       return moved;
     },
+    deleteByUser: async (userId: string): Promise<number> => {
+      const before = this.bindingList.length;
+      this.bindingList = this.bindingList.filter((b) => b.userId !== userId);
+      return before - this.bindingList.length;
+    },
   };
 
   oauthStates = {
@@ -197,6 +259,16 @@ export class MemoryStore implements Store {
       this.oauthStateList = this.oauthStateList.filter(
         (item) => item.expiresAt.getTime() > before.getTime(),
       );
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const beforeMs = before.getTime();
+      const stale = this.oauthStateList.filter(
+        (item) => (item.consumedAt ?? item.expiresAt).getTime() <= beforeMs,
+      );
+      this.oauthStateList = this.oauthStateList.filter(
+        (item) => (item.consumedAt ?? item.expiresAt).getTime() > beforeMs,
+      );
+      return stale.length;
     },
   };
 
@@ -232,6 +304,21 @@ export class MemoryStore implements Store {
       }
       return count;
     },
+    deleteByUser: async (userId: string): Promise<number> => {
+      const before = this.tokenList.length;
+      this.tokenList = this.tokenList.filter((t) => t.userId !== userId);
+      return before - this.tokenList.length;
+    },
+    purgeExpired: async (before: Date): Promise<number> => {
+      const beforeMs = before.getTime();
+      const stale = this.tokenList.filter(
+        (t) => (t.revokedAt ?? t.expiresAt).getTime() <= beforeMs,
+      );
+      this.tokenList = this.tokenList.filter(
+        (t) => !((t.revokedAt ?? t.expiresAt).getTime() <= beforeMs),
+      );
+      return stale.length;
+    },
   };
 
   userDevices = {
@@ -254,6 +341,28 @@ export class MemoryStore implements Store {
     },
     listByUser: async (userId: string): Promise<UserDeviceRecord[]> =>
       this.deviceList.filter((d) => d.userId === userId).map(clone),
+    deleteByUser: async (userId: string): Promise<number> => {
+      const before = this.deviceList.length;
+      this.deviceList = this.deviceList.filter((d) => d.userId !== userId);
+      return before - this.deviceList.length;
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const beforeMs = before.getTime();
+      const now = Date.now();
+      const activeDevices = new Map<string, Set<string>>();
+      for (const token of this.tokenList) {
+        if (token.revokedAt || token.expiresAt.getTime() <= now || !token.deviceId) continue;
+        const set = activeDevices.get(token.userId) ?? new Set<string>();
+        set.add(token.deviceId);
+        activeDevices.set(token.userId, set);
+      }
+      const stale = this.deviceList.filter((d) => {
+        if (d.updatedAt.getTime() >= beforeMs) return false;
+        return !activeDevices.get(d.userId)?.has(d.deviceId);
+      });
+      this.deviceList = this.deviceList.filter((d) => !stale.includes(d));
+      return stale.length;
+    },
   };
 
   smsCodes = {
@@ -272,6 +381,16 @@ export class MemoryStore implements Store {
     update: async (id: string, patch: Partial<SmsCodeRecord>): Promise<void> => {
       const idx = this.smsList.findIndex((c) => c.id === id);
       if (idx >= 0) this.smsList[idx] = { ...this.smsList[idx], ...patch } as SmsCodeRecord;
+    },
+    purgeStale: async (before: Date): Promise<number> => {
+      const beforeMs = before.getTime();
+      const stale = this.smsList.filter(
+        (c) => (c.consumedAt ?? c.expiresAt).getTime() <= beforeMs,
+      );
+      this.smsList = this.smsList.filter(
+        (c) => !((c.consumedAt ?? c.expiresAt).getTime() <= beforeMs),
+      );
+      return stale.length;
     },
   };
 
@@ -302,6 +421,15 @@ export class MemoryStore implements Store {
       }
       return moved;
     },
+    anonymizeByUser: async (userId: string): Promise<number> => {
+      let count = 0;
+      for (const payment of this.paymentList) {
+        if (payment.userId !== userId) continue;
+        payment.userId = null;
+        count += 1;
+      }
+      return count;
+    },
   };
 
   pushTokens = {
@@ -327,6 +455,11 @@ export class MemoryStore implements Store {
     remove: async (ids: string[]): Promise<void> => {
       const wanted = new Set(ids);
       this.pushList = this.pushList.filter((token) => !wanted.has(token.id));
+    },
+    deleteByUser: async (userId: string): Promise<number> => {
+      const before = this.pushList.length;
+      this.pushList = this.pushList.filter((p) => p.userId !== userId);
+      return before - this.pushList.length;
     },
   };
 
@@ -516,6 +649,17 @@ export class MemoryStore implements Store {
         this.cartList = this.cartList.filter((c) => c.userId !== userId);
         for (const item of items) this.cartList.push(clone({ ...item, userId }));
       },
+      deleteByUser: async (userId: string): Promise<number> => {
+        const before = this.cartList.length;
+        this.cartList = this.cartList.filter((c) => c.userId !== userId);
+        return before - this.cartList.length;
+      },
+      purgeStale: async (before: Date): Promise<number> => {
+        const beforeMs = before.getTime();
+        const stale = this.cartList.filter((c) => c.updatedAt.getTime() <= beforeMs);
+        this.cartList = this.cartList.filter((c) => c.updatedAt.getTime() > beforeMs);
+        return stale.length;
+      },
     },
     addresses: {
       listByUser: async (userId: string): Promise<AddressRecord[]> =>
@@ -563,6 +707,11 @@ export class MemoryStore implements Store {
           if (row.userId === userId) row.isDefault = row.id === id;
         }
         return clone(found);
+      },
+      deleteByUser: async (userId: string): Promise<number> => {
+        const before = this.addressList.length;
+        this.addressList = this.addressList.filter((a) => a.userId !== userId);
+        return before - this.addressList.length;
       },
     },
     /**
@@ -643,6 +792,40 @@ export class MemoryStore implements Store {
         if (to === 'completed') found.completedAt = at;
         return true;
       },
+      anonymizeByUser: async (userId: string): Promise<number> => {
+        let count = 0;
+        for (const order of this.orderList) {
+          if (order.userId !== userId) continue;
+          order.userId = null;
+          order.receiverName = '';
+          order.receiverPhone = '';
+          order.address = '';
+          order.remark = null;
+          order.addressId = null;
+          count += 1;
+        }
+        return count;
+      },
+      anonymizeStaleCompleted: async (before: Date): Promise<number> => {
+        const beforeMs = before.getTime();
+        let count = 0;
+        for (const order of this.orderList) {
+          if (order.userId == null) continue;
+          if (order.status !== 'completed' && order.status !== 'cancelled') continue;
+          const doneAt = order.completedAt ?? order.cancelledAt;
+          if (!doneAt || doneAt.getTime() >= beforeMs) continue;
+          // 已脱敏的订单不再重复处理，保证任务幂等、第二次影响行数为 0。
+          if (!order.receiverName && !order.receiverPhone && !order.address) continue;
+          // 留存脱敏只清收货可识别字段；user_id 保留，用户仍可在「我的订单」看到历史履约记录。
+          order.receiverName = '';
+          order.receiverPhone = '';
+          order.address = '';
+          order.remark = null;
+          order.addressId = null;
+          count += 1;
+        }
+        return count;
+      },
     },
     orderRequests: {
       claim: async (userId: string, key: string) => {
@@ -662,6 +845,17 @@ export class MemoryStore implements Store {
         for (const key of [...this.orderRequestMap.keys()]) {
           if (key.startsWith(prefix)) this.orderRequestMap.delete(key);
         }
+      },
+      deleteByUser: async (userId: string): Promise<number> => {
+        const prefix = `${userId}:`;
+        let count = 0;
+        for (const key of [...this.orderRequestMap.keys()]) {
+          if (key.startsWith(prefix)) {
+            this.orderRequestMap.delete(key);
+            count += 1;
+          }
+        }
+        return count;
       },
     },
     favorites: {
@@ -735,6 +929,13 @@ export class MemoryStore implements Store {
       },
       countItems: async (folderId: string): Promise<number> =>
         this.favoriteItemList.filter((i) => i.folderId === folderId).length,
+      deleteByUser: async (userId: string): Promise<number> => {
+        const before = this.favoriteItemList.length;
+        this.favoriteItemList = this.favoriteItemList.filter((i) => i.userId !== userId);
+        const itemsRemoved = before - this.favoriteItemList.length;
+        this.favoriteFolderList = this.favoriteFolderList.filter((f) => f.userId !== userId);
+        return itemsRemoved;
+      },
     },
   };
 

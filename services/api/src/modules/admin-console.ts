@@ -302,7 +302,7 @@ export class AdminConsoleService {
     if (!order) throw AppError.notFound('订单不存在');
     const [items, user] = await Promise.all([
       this.store.mall.orders.itemsByOrder(orderId),
-      this.store.users.findById(order.userId),
+      order.userId ? this.store.users.findById(order.userId) : Promise.resolve(null),
     ]);
     return {
       order,

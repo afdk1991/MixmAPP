@@ -83,6 +83,16 @@ async function main(): Promise<void> {
     }, 60_000);
     timer.unref();
   }
+
+  // 个人数据留存清理：独立定时器，不与订单超时扫描共用；RETENTION_SWEEP_MINUTES=0 关闭
+  if (app.retention.enabled) {
+    const timer = setInterval(() => {
+      void app.retention
+        .sweep()
+        .catch((error) => app.log.error({ err: error }, '留存清理任务失败'));
+    }, config.retention.sweepMinutes * 60_000);
+    timer.unref();
+  }
 }
 
 main().catch((error) => {

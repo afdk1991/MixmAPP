@@ -17,7 +17,7 @@ import { clientIpOf } from '../lib/device-context.js';
 
 const codeRequestSchema = z.object({
   phone: z.string().regex(/^1[3-9]\d{9}$/),
-  purpose: z.enum(['register', 'login', 'bind']),
+  purpose: z.enum(['register', 'login', 'bind', 'delete']),
 });
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {

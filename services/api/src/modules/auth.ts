@@ -120,6 +120,11 @@ export class AuthService {
     await this.store.smsCodes.update(record.id, { consumedAt: new Date() });
   }
 
+  /** 注销流程校验短信验证码（purpose=delete）；失败口径与登录验证码一致。 */
+  async verifySmsCode(phone: string, purpose: SmsPurpose, code: string): Promise<void> {
+    await this.consumeSmsCode(phone, purpose, code);
+  }
+
   private async createUser(input: {
     phone?: string | null;
     email?: string | null;
