@@ -25,9 +25,9 @@
 
     <view v-if="loading" class="loading">
       <view v-for="i in 2" :key="i" class="sheet ticket-sk">
-        <view class="sk tk-head" />
-        <view class="sk tk-line" />
-        <view class="sk tk-line tk-short" />
+        <view class="mx-skeleton tk-head" />
+        <view class="mx-skeleton tk-line" />
+        <view class="mx-skeleton tk-line tk-short" />
       </view>
     </view>
 
@@ -415,7 +415,7 @@ onLoad((options) => {
 
 .ticket--active {
   box-shadow:
-    0 0 0 2rpx rgba(15, 157, 143, 0.35),
+    0 0 0 2rpx $brand-wash-strong,
     $shadow-card;
 }
 
@@ -651,6 +651,7 @@ onLoad((options) => {
 
 .status-tab {
   margin-right: $sp-2;
+  min-height: 44px;
   padding: 8rpx 22rpx;
   background: $shell;
   border: 1rpx solid $paper-3;
@@ -783,8 +784,8 @@ onLoad((options) => {
 }
 
 .empty-btn {
-  margin-top: $sp-5;
-  width: 300rpx;
+  margin-top: $sp-1;
+  min-width: 240rpx;
 }
 
 .foot {

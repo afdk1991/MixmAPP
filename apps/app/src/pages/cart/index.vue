@@ -14,28 +14,32 @@
 
     <view v-if="loading" class="loading">
       <view v-for="i in 2" :key="i" class="line-sk">
-        <view class="sk thumb-sk" />
+        <view class="mx-skeleton thumb-sk" />
         <view class="sk-col">
-          <view class="sk line-w" />
-          <view class="sk line-n" />
-          <view class="sk line-s" />
+          <view class="mx-skeleton line-w" />
+          <view class="mx-skeleton line-n" />
+          <view class="mx-skeleton line-s" />
         </view>
       </view>
     </view>
 
-    <view v-else-if="error" class="empty">
-      <view class="empty-mark mono">!</view>
-      <text class="empty-title">购物车没打开</text>
-      <text class="empty-sub">{{ error }}</text>
-      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
-    </view>
+    <mx-state
+      v-else-if="error"
+      variant="error"
+      title="购物车没打开"
+      :text="error"
+      action-text="重新加载"
+      @action="load"
+    />
 
-    <view v-else-if="cart.items.length === 0" class="empty">
-      <view class="empty-mark">空</view>
-      <text class="empty-title">购物车还是空的</text>
-      <text class="empty-sub">去商城挑点喜欢的东西吧。</text>
+    <mx-state
+      v-else-if="cart.items.length === 0"
+      variant="empty"
+      title="购物车还是空的"
+      text="去商城挑点喜欢的东西吧。"
+    >
       <view class="btn btn--deep empty-btn" hover-class="is-press" @tap="goMall">去逛逛</view>
-    </view>
+    </mx-state>
 
     <block v-else>
       <view class="list">
@@ -405,6 +409,7 @@ import { addressApi } from '../../api/address';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxIcon from '../../components/mx-icon/mx-icon.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 
 /** 图片加载失败的封面：记住 URL，避免同一张坏图反复重试。 */
 const brokenCovers = ref<Set<string>>(new Set());
@@ -1124,6 +1129,8 @@ onShow(() => {
 
 .head-clear {
   display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   margin-top: 12rpx;
   padding: 6rpx 20rpx;
   border: 1rpx solid $paper-3;
@@ -1174,8 +1181,14 @@ onShow(() => {
   border-color: $brand-deep;
 }
 
+/* 不可勾选行：退中性面，不用半透明 */
 .tick-box--off {
-  opacity: 0.35;
+  background: $paper-3;
+  border-color: $paper-3;
+}
+
+.tick-box--off .tick-mark {
+  color: $ink-4;
 }
 
 .tick-mark {
@@ -1184,10 +1197,13 @@ onShow(() => {
   color: $on-solid;
 }
 
-/* 失效行整体降饱和，避免与可结算行混淆 */
-.line--invalid .cover,
+/* 失效行：文字降中性、封面去饱和，避免与可结算行混淆；不用整行半透明 */
 .line--invalid .name {
-  opacity: 0.55;
+  color: $ink-3;
+}
+
+.line--invalid .cover-img {
+  filter: grayscale(0.6) brightness(0.85);
 }
 
 /* 四态徽章：R 需求 / L 缺货 / A 到货 / X 下架 */
@@ -1209,12 +1225,12 @@ onShow(() => {
 
 .state-badge--r {
   color: $brand-deep;
-  background: rgba(13, 25, 23, 0.06);
+  background: $paper-2;
 }
 
 .state-badge--l {
   color: $amber;
-  background: rgba(198, 138, 24, 0.12);
+  background: $amber-soft;
 }
 
 .state-badge--x {
@@ -1273,6 +1289,7 @@ onShow(() => {
   flex: 1;
   min-width: 0;
   padding-right: $sp-2;
+  overflow-wrap: anywhere;
   font-family: $font-display;
   font-size: $fs-meta;
   font-weight: 700;
@@ -1638,6 +1655,7 @@ onShow(() => {
   margin-bottom: $sp-2;
   padding: 0 24rpx;
   height: 68rpx;
+  min-height: 44px;
   border: 1rpx solid $paper-3;
   border-radius: $r-pill;
   background: $paper-2;
@@ -1789,14 +1807,9 @@ onShow(() => {
   margin-top: 22rpx;
 }
 
-.retry {
-  margin-top: $sp-4;
-  padding: 0 40rpx;
-}
-
 .empty-btn {
-  margin-top: $sp-5;
-  width: 300rpx;
+  margin-top: $sp-1;
+  min-width: 240rpx;
 }
 
 /* ---------- 平板 / 折叠屏展开态：清单双栏，结算条跟随版心 ---------- */

@@ -60,27 +60,31 @@
 
     <view v-if="loading" class="loading">
       <view v-for="i in 2" :key="i" class="sheet fav-sk">
-        <view class="sk sk-cover" />
+        <view class="mx-skeleton sk-cover" />
         <view class="sk-body">
-          <view class="sk sk-line" />
-          <view class="sk sk-line sk-short" />
+          <view class="mx-skeleton sk-line" />
+          <view class="mx-skeleton sk-line sk-short" />
         </view>
       </view>
     </view>
 
-    <view v-else-if="error" class="empty">
-      <view class="empty-mark mono">!</view>
-      <text class="empty-title">收藏没打开</text>
-      <text class="empty-sub">{{ error }}</text>
-      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="loadAll">重新加载</view>
-    </view>
+    <mx-state
+      v-else-if="error"
+      variant="error"
+      title="收藏没打开"
+      :text="error"
+      action-text="重新加载"
+      @action="loadAll"
+    />
 
-    <view v-else-if="items.length === 0" class="empty">
-      <view class="empty-mark">0</view>
-      <text class="empty-title">这个收藏夹还是空的</text>
-      <text class="empty-sub">去商品详情页点「收藏商品」就会出现在这里。</text>
+    <mx-state
+      v-else-if="items.length === 0"
+      variant="empty"
+      title="这个收藏夹还是空的"
+      text="去商品详情页点「收藏商品」就会出现在这里。"
+    >
       <view class="btn btn--deep empty-btn" hover-class="is-press" @tap="goMall">去商城</view>
-    </view>
+    </mx-state>
 
     <view v-else class="list">
       <view v-for="item in items" :key="item.id" class="sheet fav">
@@ -130,6 +134,7 @@ import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import { showDangerModal } from '../../modal';
 import MxIcon from '../../components/mx-icon/mx-icon.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 
 const folders = ref<FavoriteFolderDto[]>([]);
 const items = ref<FavoriteItemDto[]>([]);
@@ -620,6 +625,7 @@ onShow(() => {
   font-size: $fs-meta;
   font-weight: 600;
   line-height: 1.35;
+  overflow-wrap: anywhere;
   color: $ink;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -660,6 +666,9 @@ onShow(() => {
 }
 
 .fav-remove {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: 2rpx 0 2rpx 20rpx;
   background: transparent;
 }
@@ -699,14 +708,9 @@ onShow(() => {
   margin-top: 20rpx;
 }
 
-.retry {
-  margin-top: $sp-4;
-  padding: 0 40rpx;
-}
-
 .empty-btn {
-  margin-top: $sp-5;
-  width: 300rpx;
+  margin-top: $sp-1;
+  min-width: 240rpx;
 }
 
 .foot {

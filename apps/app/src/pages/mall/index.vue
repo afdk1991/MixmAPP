@@ -99,29 +99,30 @@
 
     <view v-if="loading && products.length === 0" class="grid wrap">
       <view v-for="i in 4" :key="i" class="card">
-        <view class="sk cover-sk" />
+        <view class="mx-skeleton cover-sk" />
         <view class="p-info">
-          <view class="sk sk-line" />
-          <view class="sk sk-line sk-line--short" />
-          <view class="sk sk-price" />
+          <view class="mx-skeleton sk-line" />
+          <view class="mx-skeleton sk-line sk-line--short" />
+          <view class="mx-skeleton sk-price" />
         </view>
       </view>
     </view>
 
-    <view v-else-if="error" class="empty">
-      <view class="empty-mark mono">!</view>
-      <text class="empty-title">没能取到商品</text>
-      <text class="empty-sub">{{ error }}</text>
-      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="refresh">重新加载</view>
-    </view>
+    <mx-state
+      v-else-if="error"
+      variant="error"
+      title="没能取到商品"
+      :text="error"
+      action-text="重新加载"
+      @action="refresh"
+    />
 
-    <view v-else-if="products.length === 0" class="empty">
-      <view class="empty-mark">空</view>
-      <text class="empty-title">{{ keyword.trim() ? '没有找到相关商品' : '这个分类还没有商品' }}</text>
-      <text class="empty-sub">
-        {{ keyword.trim() ? '换个关键词，或浏览其他分类看看。' : '换个分类看看，或稍后再来。' }}
-      </text>
-    </view>
+    <mx-state
+      v-else-if="products.length === 0"
+      variant="empty"
+      :title="keyword.trim() ? '没有找到相关商品' : '这个分类还没有商品'"
+      :text="keyword.trim() ? '换个关键词，或浏览其他分类看看。' : '换个分类看看，或稍后再来。'"
+    />
 
     <view v-else>
       <view class="list-head">
@@ -337,9 +338,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { onLoad, onPageScroll, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll, onReachBottom, onShow } from '@dcloudio/uni-app';
 import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue';
 import MxIcon from '../../components/mx-icon/mx-icon.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 import type { MallCategoryNodeDto, MallProductDto, MallSpecOptionsDto } from '../../api/mall';
 import {
   breadcrumbLabel,
@@ -972,14 +974,6 @@ onReachBottom(() => {
   loadMore();
 });
 
-/** 原生下拉刷新：分类与第一页商品同时重取，两者都落定后收起指示器 */
-onPullDownRefresh(() => {
-  console.info('[mixmapp] onPullDownRefresh 已触发（uni 原生钩子）');
-  void Promise.allSettled([loadLevelOne(), fetchPage(true)]).then(() =>
-    uni.stopPullDownRefresh(),
-  );
-});
-
 /** 页面滚动距离：交给壳层下拉刷新判断是否在顶部（跨端不取 document） */
 const pageScrollTop = ref(0);
 onPageScroll(({ scrollTop }) => {
@@ -1168,6 +1162,7 @@ function onShellRefresh(): void {
   display: inline-flex;
   align-items: center;
   height: 64rpx;
+  min-height: 44px;
   padding: 0 24rpx;
   margin-right: 16rpx;
   border: 1rpx solid $paper-3;
@@ -1871,10 +1866,5 @@ function onShellRefresh(): void {
   font-size: $fs-micro;
   letter-spacing: 1rpx;
   color: $ink-4;
-}
-
-.retry {
-  margin-top: $sp-4;
-  padding: 0 40rpx;
 }
 </style>

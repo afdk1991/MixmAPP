@@ -2,20 +2,22 @@
   <view class="page page--wide">
     <mx-bar title="商品详情" />
     <view v-if="loading" class="loading">
-      <view class="sk hero-sk" />
+      <view class="mx-skeleton hero-sk" />
       <view class="loading-body">
-        <view class="sk line-xl" />
-        <view class="sk line" />
-        <view class="sk line short" />
+        <view class="mx-skeleton line-xl" />
+        <view class="mx-skeleton line" />
+        <view class="mx-skeleton line short" />
       </view>
     </view>
 
-    <view v-else-if="error" class="empty">
-      <view class="empty-mark mono">!</view>
-      <text class="empty-title">商品没打开</text>
-      <text class="empty-sub">{{ error }}</text>
-      <view class="btn btn--deep btn--sm retry" hover-class="is-press" @tap="load">重新加载</view>
-    </view>
+    <mx-state
+      v-else-if="error"
+      variant="error"
+      title="商品没打开"
+      :text="error"
+      action-text="重新加载"
+      @action="load"
+    />
 
     <block v-else-if="product">
       <view class="hero" :style="heroStyle">
@@ -299,6 +301,7 @@ import { mallApi, mediaUrl, productCover, coverTint, placeholderArt } from '../.
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxIcon from '../../components/mx-icon/mx-icon.vue';
+import MxState from '../../components/mx-state/mx-state.vue';
 
 const product = ref<MallProductDto | null>(null);
 const productId = ref('');
@@ -706,14 +709,14 @@ onLoad((options) => {
   position: absolute;
   width: 400rpx;
   height: 400rpx;
-  border: 1rpx solid rgba(244, 244, 241, 0.18);
+  border: 1rpx solid $on-deep-line;
   border-radius: 50%;
 }
 
 .hero-ring--sm {
   width: 280rpx;
   height: 280rpx;
-  border-color: rgba(244, 244, 241, 0.1);
+  border-color: $on-deep-soft;
 }
 
 .hero-tag {
@@ -1375,11 +1378,6 @@ onLoad((options) => {
 
 .short {
   width: 32%;
-}
-
-.retry {
-  margin-top: $sp-4;
-  padding: 0 40rpx;
 }
 
 /* ---------- 平板 / 折叠屏展开态：左图右文双栏 ---------- */
