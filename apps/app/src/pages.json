@@ -77,6 +77,10 @@
     {
       "path": "pages/assistant/index",
       "style": { "navigationBarTitleText": "MixmAPP" }
+    },
+    {
+      "path": "pages/error/not-found",
+      "style": { "navigationBarTitleText": "页面不存在" }
     }
   ],
   "globalStyle": {

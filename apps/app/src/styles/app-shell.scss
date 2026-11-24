@@ -212,6 +212,7 @@
   justify-content: center;
   min-width: 160rpx;
   height: 72rpx;
+  min-height: 44px;
   margin-top: $sp-1;
   padding: 0 $sp-4;
   box-sizing: border-box;
@@ -285,6 +286,53 @@
   font-size: $fs-meta;
   line-height: 1.5;
   color: $signal;
+}
+
+/* 字段下方就近的单行错误提示（输入校验 / 上传失败等），不画整行描边框 */
+.mx-field-error {
+  display: block;
+  margin-top: $sp-2;
+  font-size: $fs-meta;
+  line-height: 1.5;
+  color: $signal;
+  overflow-wrap: anywhere;
+}
+
+/* 深场卡片内的可重试错误提示：与壳层 .mx-error-row 同构，前景/底全部读深场令牌 */
+.mx-deep-error {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $sp-3;
+  padding: 12rpx 16rpx;
+  border: 1rpx solid $on-deep-line;
+  border-radius: $r-control;
+  background: $on-deep-soft;
+}
+
+.mx-deep-error__text {
+  flex: 1;
+  min-width: 0;
+  font-size: $fs-micro;
+  line-height: 1.4;
+  color: $amber-on-deep;
+  overflow-wrap: anywhere;
+}
+
+.mx-deep-error__action {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  padding: 4rpx 14rpx;
+  border: 1rpx solid $amber-on-deep;
+  border-radius: $r-pill;
+}
+
+.mx-deep-error__action-text {
+  font-size: $fs-micro;
+  letter-spacing: 1rpx;
+  color: $amber-on-deep;
 }
 
 /* 加载指示：细环旋转，不用满屏遮罩，避免页面像卡死 */

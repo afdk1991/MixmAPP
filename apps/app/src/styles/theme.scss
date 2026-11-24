@@ -21,7 +21,8 @@
   --mx-ink: #111413;
   --mx-ink-2: #333a37;
   --mx-ink-3: #6b736e;
-  --mx-ink-4: #9aa39d;
+  /* 最弱一档：占位 / 标签末级；浅档实测对 paper / paper-2 / shell 均 ≥3.0:1（2026-11-25 对比度收口） */
+  --mx-ink-4: #7d8681;
 
   /* 主视觉深场 */
   --mx-deep: #0b0f0e;
@@ -30,7 +31,8 @@
 
   /* 强调色 */
   --mx-brand: #0f9d8f;
-  --mx-brand-deep: #0a7a70;
+  /* 深青前景：对 paper / paper-2 / shell 实测 5.41 / 5.02 / 5.97，正文 AA ≥4.5（2026-11-25 对比度收口）。 */
+  --mx-brand-deep: #087066;
   --mx-brand-soft: #e2f1ee;
   --mx-signal: #b3372a;
   /* 危险操作确认主按钮（删除 / 取消 / 清空等不可逆动作）：复用 signal 的两套可读值，
@@ -76,7 +78,8 @@
   --mx-brand-wash-strong: rgba(15, 157, 143, 0.26);
   --mx-scrim: rgba(0, 0, 0, 0.55);
   --mx-scrim-shadow: rgba(0, 0, 0, 0.35);
-  --mx-fav: #e11d48;
+  /* 收藏激活红：浅档加深后对 paper / paper-2 / shell 均 ≥4.5:1 */
+  --mx-fav: #cf1742;
 
   /* 动效时长 */
   --mx-dur-fast: 0.12s;
@@ -461,6 +464,7 @@ html body textarea::placeholder {
 
   &--sm {
     height: 72rpx;
+    min-height: 44px;
     padding: 0 $sp-3;
     font-size: $fs-meta;
     letter-spacing: 0;
@@ -559,64 +563,8 @@ html body textarea::placeholder {
   transform: rotate(-4deg);
 }
 
-/* ---------- 空态 / 骨架 ---------- */
-.empty {
-  padding: 132rpx 48rpx 120rpx;
-  text-align: center;
-}
-
-.empty-mark {
-  width: 112rpx;
-  height: 112rpx;
-  margin: 0 auto 26rpx;
-  border: 1rpx solid $paper-3;
-  border-radius: $r-control;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: $font-display;
-  font-size: 40rpx;
-  font-weight: 800;
-  color: $ink-3;
-}
-
-.empty-title {
-  display: block;
-  font-family: $font-display;
-  font-size: $fs-h3;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  color: $ink;
-}
-
-.empty-sub {
-  display: block;
-  margin-top: 12rpx;
-  font-size: $fs-meta;
-  line-height: $lh-body;
-  color: $ink-3;
-}
-
-.empty .btn {
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.sk {
-  background: linear-gradient(100deg, var(--mx-sk-base) 18%, var(--mx-sk-sheen) 38%, var(--mx-sk-base) 58%);
-  background-size: 300% 100%;
-  border-radius: 10rpx;
-  animation: sk-sweep 1.5s ease-in-out infinite;
-}
-
-@keyframes sk-sweep {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
-  }
-}
+/* 空态 / 错误 / 加载 / 骨架统一在 app-shell.scss 的 .mx-state / .mx-skeleton，
+ * 页面不再保留旧 .empty 族与 .sk 基类。 */
 
 /* ---------- 底部操作坞 ---------- */
 .dock {
@@ -683,7 +631,6 @@ html body textarea::placeholder {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sk,
   .animated,
   .foil {
     animation: none !important;

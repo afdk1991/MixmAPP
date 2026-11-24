@@ -25,4 +25,5 @@ export const ROUTES = {
   research: '/pages/research/index',
   researchDetail: '/pages/research/detail',
   assistant: '/pages/assistant/index',
+  notFound: '/pages/error/not-found',
 } as const;

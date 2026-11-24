@@ -4,9 +4,9 @@ import { restore } from './stores/session';
 import { PRIVACY_GATE_MODE, resolvePrivacyConsent } from './privacy';
 import { ROUTES } from './routes';
 
-// 未注册 / 不存在的页面路径统一回首页，避免停在白屏；管理面已纳入正式包，数据由后端令牌守卫。
+// 未注册 / 不存在的页面路径落到独立兜底页，避免停在白屏；兜底页再提供回首页动作。
 onPageNotFound(() => {
-  uni.reLaunch({ url: ROUTES.home });
+  uni.reLaunch({ url: ROUTES.notFound });
 });
 
 onLaunch(async () => {
