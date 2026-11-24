@@ -156,11 +156,11 @@ python apps/mobile/branding/generate-icons.py
 
 | 类别 | 文件 | 规格 |
 |---|---|---|
-| 传统图标 | `mipmap-{mdpi..xxxhdpi}/ic_launcher.png` | 48/72/96/144/192，深底圆角方块 |
+| 传统图标 | `mipmap-{mdpi..xxxhdpi}/ic_launcher.png` | 48/72/96/144/192，浅纸底圆角方块 |
 | 圆形图标 | 同上目录 `ic_launcher_round.png` | 同尺寸，圆形裁切 |
 | 自适应前景 | 同上目录 `ic_launcher_foreground.png` | 108/162/216/324/432，透明层，内容收在 66% 安全区 |
-| 启动图 | `drawable`/`drawable-port-*`/`drawable-land-*/splash.png` | 11 张，深底 + MX 方框 + MixmAPP 字标 + MULTI-END IDENTITY |
-| 底色 | `values/ic_launcher_background.xml` | `#0B0F0E` |
+| 启动图 | `drawable`/`drawable-port-*`/`drawable-land-*/splash.png` | 11 张，浅纸底 + MixmAPP 整词 + 品牌青横线 + MIXMAPP ACCOUNT |
+| 底色 | `values/ic_launcher_background.xml` | `#F4F4F1` |
 
 ---
 
