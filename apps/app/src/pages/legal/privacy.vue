@@ -135,19 +135,19 @@
       <text class="sec-name">八、保存期限与安全</text>
       <view class="prow">
         <text class="prow-k mono">登录凭证</text>
-        <text class="prow-v">刷新凭证自签发起 30 天到期，退出登录即在本机清除；服务端只保存凭证的哈希，不保存原文。应用已关闭系统自动备份，避免凭据随设备迁移被带出。</text>
+        <text class="prow-v">过期或已撤销的登录凭证在服务端留存 7 天后自动删除（默认值，可由部署配置调整）；退出登录即在本机清除，服务端只保存凭证哈希，不保存原文。应用已关闭系统自动备份，避免凭据随设备迁移被带出。</text>
       </view>
       <view class="prow">
         <text class="prow-k mono">设备与网络快照</text>
-        <text class="prow-v">每账号每设备仅保留最近一次，新快照覆盖旧快照；当前没有自动清除任务，账号注销时随账号数据一并删除。</text>
+        <text class="prow-v">每账号每设备仅保留最近一次，新快照覆盖旧快照；超过 180 天未使用的快照自动删除；账号注销时立即删除。</text>
       </view>
       <view class="prow">
         <text class="prow-k mono">同意记录</text>
-        <text class="prow-v">本机记录与账号记录同步保存，用于证明同意发生在何时、哪个版本；随账号存续保留。</text>
+        <text class="prow-v">本机记录与账号记录同步保存，用于证明同意发生在何时、哪个版本；随账号存续保留，账号注销即删除。</text>
       </view>
       <view class="prow">
         <text class="prow-k mono">订单与收货信息</text>
-        <text class="prow-v">为履约、售后与对账长期保留，当前没有自动清理任务。</text>
+        <text class="prow-v">为履约、售后与对账保留；订单完结满 180 天后，收货人姓名、电话、地址、备注等信息自动不可逆脱敏；账号注销时立即脱敏。</text>
       </view>
       <view class="prow">
         <text class="prow-k mono">运行日志</text>
@@ -173,11 +173,13 @@
       </view>
       <view class="prow">
         <text class="prow-k mono">删除</text>
-        <text class="prow-v">收藏、购物车条目与收货地址可在对应页面直接删除；本地缓存可在系统设置中清除应用数据。</text>
+        <text class="prow-v">收藏、购物车条目与收货地址可在对应页面直接删除；本机保存的搜索、浏览记录、草稿及其它本机数据，可在「本机数据」自助面板中分类清理。</text>
+        <text class="prow-link" hover-class="is-press" @tap="goLocalData">打开「本机数据」面板</text>
       </view>
       <view class="prow">
         <text class="prow-k mono">注销账号</text>
-        <text class="prow-v">应用内目前没有自助注销入口。如需删除账号及其数据，请通过下方联系方式提出，我们在核实身份后处理；处理范围包括账号资料、订单与收货信息、设备快照与登录凭证。</text>
+        <text class="prow-v">应用内「注销账号」页可自助永久删除账号及其服务端个人数据；需二次确认与身份校验；注销后订单仅保留交易凭证必需字段（订单号、金额、商品、时间、状态），收货人姓名、电话、地址、备注等不可识别化删除，全部登录会话立即失效。</text>
+        <text class="prow-link" hover-class="is-press" @tap="goAccountDelete">进入「注销账号」页</text>
       </view>
       <view class="prow">
         <text class="prow-k mono">撤回同意</text>
@@ -375,6 +377,14 @@ function exitApp(): void {
   }
   uni.showToast({ title: '可直接关闭当前页面', icon: 'none' });
 }
+/** 隐私政策第九节的两条自助入口（本机数据面板 / 注销账号页）。 */
+function goLocalData(): void {
+  uni.navigateTo({ url: ROUTES.localData });
+}
+
+function goAccountDelete(): void {
+  uni.navigateTo({ url: ROUTES.accountDelete });
+}
 </script>
 
 <style scoped lang="scss">
@@ -510,6 +520,14 @@ function exitApp(): void {
   font-size: $fs-meta;
   line-height: $lh-body;
   color: $ink-2;
+}
+
+.prow-link {
+  display: inline-block;
+  margin-top: 10rpx;
+  font-size: $fs-micro;
+  letter-spacing: 0.5rpx;
+  color: $brand-deep;
 }
 
 /* ---------- 权限块（沿用旧样式） ---------- */

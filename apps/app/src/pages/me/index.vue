@@ -371,6 +371,16 @@
           <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>
           <text class="link-arrow mono">→</text>
         </view>
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.accountDelete)">
+          <text class="link-title">注销账号</text>
+          <text class="link-desc">永久删除账号与服务端个人数据</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.localData)">
+          <text class="link-title">本机数据</text>
+          <text class="link-desc">本机存储分类 · 分类清理与一键清空</text>
+          <text class="link-arrow mono">→</text>
+        </view>
         <view class="link-row link-row--last" hover-class="is-press" @tap="go(ROUTES.about)">
           <text class="link-title">关于与能力</text>
           <text class="link-desc">能力矩阵与版本</text>
