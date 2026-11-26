@@ -80,6 +80,8 @@ export function loadConfig(argv = process.argv) {
     maxRuntimeMin: number('--max-runtime-min', Number(env.CATALOG_MAX_RUNTIME_MIN) || 0, { min: 0 }),
     // 已有商品不下架：为 true 时本轮跳过 delistMissing（只 upsert，不把未抓到的标停售）
     noDelist: has('--no-delist') || bool('', 'CATALOG_NO_DELIST', false),
+    // 只跑目录阶段（枚举全量类目/商品清单），不抓详情、不写库；用于先摸清源站总量再分批续抓
+    catalogOnly: has('--catalog-only') || bool('', 'CATALOG_ONLY', false),
     // 图片回填阈值：库里**最小边** ≤ 该值才重抓原图（默认 700；只有新图更大才写库）
     reimageMinSide: number('--reimage-min-side', Number(env.CATALOG_REIMAGE_MIN_SIDE) || 700, { min: 0 }),
     itemNo: value('--item-no', ''),
@@ -117,6 +119,7 @@ export function usage() {
     '  --no-images          不下载图片',
     '  --no-filters         不抓规格筛选项',
     '  --filters-only       只抓目录树与筛选项',
+    '  --catalog-only       只枚举目录（类目/商品清单），不抓详情、不写库',
     '  --dry-run            只对账不写库',
     '  --resume             断点续跑上一次未完成的运行（14 天内有效）',
     '  --limit <n>          只处理前 n 个三级类目',

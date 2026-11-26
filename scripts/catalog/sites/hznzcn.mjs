@@ -1325,6 +1325,14 @@ export async function runSite(cfg) {
       log(`[hznzcn] 目录完成：${catalog.items.length} 件 / ${catalog.scanned} 个叶子分类`);
     }
 
+    if (cfg.catalogOnly) {
+      // 只枚举目录，不抓详情、不写库；用于先摸清源站全量再分批手动续抓
+      state.phase = 'catalog-only';
+      writeAtomic(stateFile, state);
+      console.log(JSON.stringify({ catalogOnly: true, ...state.catalogStats }, null, 2));
+      return 0;
+    }
+
     const catalog = readJson(path.join(cfg.stateDir, 'hznzcn-catalog.json'), null);
     if (!catalog) throw new Error('缺少 hznzcn-catalog.json，无法继续（请去掉 --resume 重跑）');
 

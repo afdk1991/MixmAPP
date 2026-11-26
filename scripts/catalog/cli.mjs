@@ -114,6 +114,14 @@ async function runSync() {
       logger.close();
       return 0;
     }
+    if (cfg.catalogOnly) {
+      // 只枚举目录，不抓详情、不写库；用于先摸清源站全量再分批手动续抓
+      log(`[sync] --catalog-only：目录 ${state.catalogStats.items} 件 / ${state.catalogStats.leaves} 个类目，结束`);
+      state.phase = 'catalog-only';
+      writeAtomic(stateFile, state);
+      console.log(JSON.stringify({ catalogOnly: true, ...state.catalogStats }, null, 2));
+      return 0;
+    }
 
     const items = readJson(path.join(cfg.stateDir, 'catalog.json'), { items: [] }).items || [];
     state.phase = 'detail';

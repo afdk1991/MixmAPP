@@ -469,6 +469,15 @@ node scripts/catalog/cli.mjs sync --site hznzcn --resume \
 
 > 单轮默认 120 分钟预算，到点优雅收尾；下次继续 `--resume`（14 天内有效）从断点累积。
 > 只是想让每个分类都有商品、不追求全量时，可加 `--per-cat 40` 做有界覆盖。
+> 想先摸清全量规模（不抓详情、不写库）：
+>
+> ```bash
+> node scripts/catalog/cli.mjs sync --site hznzcn --catalog-only --no-images \
+>   --state-dir .catalog-sync/hznzcn-enum --max-runtime-min 60
+> ```
+>
+> `--catalog-only` 会把每个叶子类目的商品清单落盘（逐类 checkpoint），规模过大时可
+> `--resume` 分几次枚举完；随后去掉 `--catalog-only` 加 `--resume` 即可从已枚举目录继续抓详情。
 
 参数含义与注意事项：
 

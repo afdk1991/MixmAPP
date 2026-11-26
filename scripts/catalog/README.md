@@ -16,6 +16,7 @@ pnpm catalog:sync --max-runtime-min 90 # 单轮最多 90 分钟，到点优雅�
 pnpm catalog:sync --no-delist          # 本轮不下架任何已有商品（定时任务默认开启）
 pnpm catalog:sync --no-images          # 不下载图片
 pnpm catalog:sync --filters-only       # 只抓目录树与规格筛选项
+pnpm catalog:sync --catalog-only --site hznzcn  # 只枚举目录（摸清全量规模），不抓详情不写库
 pnpm catalog:inspect --item-no 764393  # 只读对账：单件
 pnpm catalog:inspect --brand EGM --spec M6-1.0x8 --dims 6 --lens 8
 pnpm catalog:inspect --item-no 764393 --no-db   # 不读库，只看源站映射结果
