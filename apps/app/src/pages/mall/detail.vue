@@ -24,7 +24,7 @@
         <image
           v-if="mainImage && !isBroken(mainImage)"
           class="hero-img"
-          :src="mediaUrl(mainImage)"
+          :src="thumbUrl(mainImage, 960)"
           mode="aspectFill"
           @error="markBroken(mainImage)"
         />
@@ -52,7 +52,7 @@
           <image
             v-if="!isBroken(img)"
             class="thumb-img"
-            :src="mediaUrl(img)"
+            :src="thumbUrl(img, 480)"
             mode="aspectFill"
             @error="markBroken(img)"
           />
@@ -297,7 +297,8 @@ import {
   unitPriceText,
   yuanText,
 } from '../../api/mall';
-import { mallApi, mediaUrl, productCover, coverTint, placeholderArt } from '../../api/client';
+import { mallApi, mediaUrl, productCover, coverTint, placeholderArt, thumbUrl } from '../../api/client';
+import { setProductSeo } from '../../seo';
 import { ROUTES } from '../../routes';
 import { goTo } from '../../navigation';
 import MxIcon from '../../components/mx-icon/mx-icon.vue';
@@ -340,10 +341,10 @@ const images = computed(() => {
   const item = product.value;
   if (!item) return [];
   const list = Array.isArray(item.images)
-    ? item.images.map((img) => productCover({ images: [img] })).filter(Boolean)
+    ? item.images.map((img) => productCover({ images: [img] }, 0)).filter(Boolean)
     : [];
   if (list.length) return list;
-  const cover = productCover({ cover: item.cover });
+  const cover = productCover({ cover: item.cover }, 0);
   return cover ? [cover] : [];
 });
 /** 无实物图时：矢量高清占位封面（SVG data URI），兜底底色取 cover 品牌色。 */
@@ -506,6 +507,21 @@ async function load(): Promise<void> {
         : null;
     activeImage.value = '';
     quantity.value = product.value?.minOrderQty ?? 1;
+    // 商品级 SEO：标题 / 描述 / canonical / Product 结构化数据随接口数据补齐，
+    // 列表页与分享卡片拿到的是真实商品名，而不是统一的「商品详情」。
+    setProductSeo(
+      product.value
+        ? {
+            id: product.value.id,
+            title: product.value.title,
+            subtitle: product.value.subtitle,
+            description: product.value.description,
+            brand: product.value.brand,
+            images: images.value,
+            categoryPath: product.value.categoryPath,
+          }
+        : null,
+    );
     // 默认购买方式：箱（CA）优先，其次源站 units 第一个
     selectedUnit.value = unitOptions.value[0]?.code ?? '';
     activeTab.value = 'spec';
@@ -521,6 +537,8 @@ async function load(): Promise<void> {
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '商品加载失败';
+    // 加载失败时清掉上一件商品的 SEO，避免浏览器标题与结构化数据指向错误商品。
+    setProductSeo(null);
   } finally {
     loading.value = false;
   }

@@ -44,7 +44,18 @@ export default defineConfig(({ command }) => {
           assetsInlineLimit: 4096 * 1024,
           rollupOptions: { output: { inlineDynamicImports: true, manualChunks: undefined } },
         }
-      : {},
+      : {
+          // 首屏关键路径优化：
+          // - 现代浏览器基线收到 es2019，去掉不必要的旧语法降级体积；
+          // - 小于 2KB 的资源内联，减少首屏请求数；
+          // - 不额外手工拆 vendor：实测把 node_modules 强行合成 vendor 会阻止跨 chunk
+          //   的 tree-shaking，首屏 JS 反而从 286KB 涨到 364KB（gzip +20KB）。
+          //   页面级拆包由 uni 插件负责，跨版本缓存交给带 hash 的文件名 + immutable 响应头。
+          target: 'es2019',
+          cssCodeSplit: true,
+          assetsInlineLimit: 2048,
+          chunkSizeWarningLimit: 600,
+        },
     // 仅 dev server（pnpm dev:h5）生效：把 /api 代理到本机 8080，同源免 CORS。
     // 生产构建产物里不会带这个代理；静态托管 / 壳内不能依赖它。
     server: {

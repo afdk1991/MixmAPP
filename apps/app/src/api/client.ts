@@ -145,19 +145,44 @@ function isMediaRef(src?: string | null): boolean {
   return /^(https?:|data:|blob:)/i.test(value) || value.startsWith('/');
 }
 
+/** 列表 / 详情可用的缩略图档位：与 nginx 侧预生成文件名一一对应。 */
+export type ThumbSize = 480 | 960;
+
+/**
+ * 商品图缩略地址：只对站内 `/media/` 图生效，外链 / data URI / 色值原样返回。
+ *
+ * 服务端按 `<sha1>-480.jpg` / `<sha1>-960.jpg` 预生成缩略图并长缓存；
+ * 缩略图缺失时 nginx 会回退到原图（见 infra/nginx/img.mixm.top.conf），
+ * 所以这里可以无条件改写，不会因为个别商品没生成而出现破图。
+ */
+export function thumbUrl(src: string | null | undefined, size: ThumbSize): string {
+  const value = mediaUrl(src);
+  if (!value) return '';
+  if (!/\/media\//.test(value)) return value;
+  // 已经是缩略图（例如接口直接下发了 -480）时不重复拼接。
+  if (/-(?:480|960)\.[a-z0-9]+$/i.test(value)) return value;
+  return value.replace(/\.([a-z0-9]+)(\?.*)?$/i, `-${size}.$1$2`);
+}
+
 /**
  * 商品封面地址：`images[0]` 优先，退回 `cover`。
  * 后端把无图商品的 `cover` 存成 16 进制色值，直接塞进 <image> 必然触发 @error 变成破图，
  * 所以这里过滤掉非图片值并返回空串，由调用方渲染占位块（底色取 coverTint）。
+ *
+ * size 默认 480：列表卡片按 2 倍屏最宽 300px 展示，480 足够且比 1000×1000 原图小一个量级；
+ * 详情页等大图场景显式传 960，需要原图时传 0。
  */
-export function productCover(product: {
-  images?: string[] | null;
-  cover?: string | null;
-}): string {
+export function productCover(
+  product: {
+    images?: string[] | null;
+    cover?: string | null;
+  },
+  size: ThumbSize | 0 = 480,
+): string {
   const images = Array.isArray(product.images) ? product.images : [];
   const first = images.find((item) => isMediaRef(item));
-  if (first) return mediaUrl(first);
-  return isMediaRef(product.cover) ? mediaUrl(product.cover) : '';
+  if (first) return size ? thumbUrl(first, size) : mediaUrl(first);
+  return isMediaRef(product.cover) ? (size ? thumbUrl(product.cover, size) : mediaUrl(product.cover)) : '';
 }
 
 /** 无图商品的占位底色（`#0f9d8f` 这类色值），没有则返回空串沿用默认纸色。 */
