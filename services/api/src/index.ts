@@ -4,10 +4,31 @@ import { buildApp } from './app.js';
 import { loadConfig, loadDotEnv, projectRoot } from './config.js';
 import { runMigrations } from './db/migrate.js';
 import { createStoreSwitcher } from './db/switchable.js';
+import { checkProviders, summarizeReadiness } from './lib/provider-check.js';
 
 async function main(): Promise<void> {
   loadDotEnv();
   const config = loadConfig();
+
+  // 支付 / 短信 / 地图 / 推送启动自检：
+  // - 缺凭据或生产误用 dev/console 通道时逐条打印 error，绝不静默落到假通道；
+  // - PROVIDER_SELF_CHECK=strict 时直接拒绝启动，作为「凭据齐备后」的发版门禁；
+  // - 默认 warn 只是不阻断进程，运行时这些能力仍会被门禁成 PROVIDER_DISABLED。
+  const readiness = checkProviders(config);
+  console.info(`[providers] ${summarizeReadiness(readiness)}`);
+  for (const issue of readiness.warnings) {
+    console.warn(`[providers:${issue.provider}] ${issue.message}`);
+  }
+  for (const issue of readiness.errors) {
+    console.error(`[providers:${issue.provider}] ${issue.message}`);
+  }
+  if (readiness.errors.length && readiness.strict) {
+    throw new Error(
+      `第三方服务配置不完整（PROVIDER_SELF_CHECK=strict）：${readiness.errors
+        .map((issue) => issue.message)
+        .join('；')}`,
+    );
+  }
 
   // 生产路径只认 PostgreSQL：既没有连接串、也没有 CloudBase PG 网关就拒绝启动，
   // 避免「以为在跑真库、其实在跑内存」。

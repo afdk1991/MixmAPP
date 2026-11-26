@@ -7,9 +7,10 @@ import {
   pushTokenSchema,
   updateProfileSchema,
 } from '@mixmapp/contracts';
-import { IdFactory } from '@mixmapp/ids';
+import { z } from 'zod';
 import { parse } from '../lib/validate.js';
 import { AppError } from '../lib/errors.js';
+import { PushService } from '../modules/push.js';
 
 export async function meRoutes(app: FastifyInstance): Promise<void> {
   app.get('/me', { preHandler: app.requireAuth }, async (request) => ({
@@ -71,27 +72,25 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/me/push-token', { preHandler: app.requireAuth }, async (request) => {
     const body = parse(pushTokenSchema, request.body);
-    const ids = new IdFactory({ workerId: app.cfg.ids.workerId });
-    await app.store.pushTokens.upsert({
-      id: ids.next().id,
-      userId: request.userId as string,
-      provider: body.provider,
-      platform: body.platform,
-      token: body.token,
-      createdAt: new Date(),
-    });
-    return { data: { ok: true } };
+    const push = new PushService(app.cfg, app.store, app.push);
+    return { data: await push.register(request.userId as string, body) };
+  });
+
+  // 退出登录 / 换机时注销 token：不做这一步，失效 token 会一直留到下次推送失败才被清理。
+  app.delete('/me/push-token', { preHandler: app.requireAuth }, async (request) => {
+    const body = parse(z.object({ token: z.string().min(10).max(512) }), request.body);
+    const push = new PushService(app.cfg, app.store, app.push);
+    return { data: await push.unregister(request.userId as string, body.token) };
   });
 
   app.post('/me/push-test', { preHandler: app.requireAuth }, async (request) => {
-    const tokens = await app.store.pushTokens.listByUser(request.userId as string);
-    if (!tokens.length) throw AppError.notFound('尚未注册推送 token');
-    const result = await app.push.push({
-      tokens: tokens.map((t) => t.token),
+    const push = new PushService(app.cfg, app.store, app.push);
+    const result = await push.sendToUser(request.userId as string, {
       title: 'MixmAPP',
       body: '这是一条来自 MixmAPP 的测试推送',
       data: { scene: 'push-test' },
     });
+    if (!result.total) throw AppError.notFound('尚未注册推送 token');
     return { data: result };
   });
 }

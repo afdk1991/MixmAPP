@@ -136,6 +136,13 @@ export type WechatNotifyResult = {
   transactionId: string;
   tradeState: string;
   amountFen: number;
+  /** 币种：只接受 CNY，防止跨币种串单 */
+  currency: string;
+  /** 回调中的应用 ID / 商户号：必须与本地配置一致 */
+  appId: string;
+  mchId: string;
+  /** 事件类型：只处理 TRANSACTION.SUCCESS，其余类型仅确认收到不改状态 */
+  eventType: string;
   successTime: string | null;
 };
 
@@ -157,17 +164,34 @@ export function parseWechatNotify(
   };
   if (!body.resource) throw new AppError('PAYMENT_INVALID', '回调缺少 resource');
   const plain = JSON.parse(decryptWechatResource(config.apiV3Key, body.resource)) as {
-    out_trade_no: string;
-    transaction_id: string;
-    trade_state: string;
+    appid?: string;
+    mchid?: string;
+    out_trade_no?: string;
+    transaction_id?: string;
+    trade_state?: string;
     success_time?: string;
-    amount?: { total?: number };
+    amount?: { total?: number; currency?: string };
   };
+  if (!plain.out_trade_no) throw new AppError('PAYMENT_INVALID', '回调缺少商户订单号');
   return {
     outTradeNo: plain.out_trade_no,
-    transactionId: plain.transaction_id,
-    tradeState: plain.trade_state,
+    transactionId: plain.transaction_id ?? '',
+    tradeState: plain.trade_state ?? '',
     amountFen: Number(plain.amount?.total ?? 0),
+    currency: plain.amount?.currency ?? '',
+    appId: plain.appid ?? '',
+    mchId: plain.mchid ?? '',
+    eventType: body.event_type ?? '',
     successTime: plain.success_time ?? null,
   };
+}
+
+/** 微信支付回调处理是否具备全部前置条件（下单 + 验签 + 解密）。 */
+export function isWechatNotifyReady(config: WechatPayConfig): boolean {
+  return (
+    isWechatPayEnabled(config) &&
+    Boolean(config.apiV3Key) &&
+    Boolean(config.platformPublicKey) &&
+    Boolean(config.notifyUrl)
+  );
 }

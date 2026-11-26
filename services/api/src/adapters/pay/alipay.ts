@@ -63,6 +63,8 @@ export type AlipayNotifyResult = {
   tradeNo: string;
   tradeStatus: string;
   amountFen: number;
+  /** 回调中的应用 ID：必须与本地配置一致，防止别的应用的回调串进来 */
+  appId: string;
   gmtPayment: string | null;
 };
 
@@ -75,11 +77,19 @@ export function parseAlipayNotify(
   }
   const total = Number(form['total_amount'] ?? '0');
   if (!Number.isFinite(total)) throw new AppError('PAYMENT_INVALID', '回调金额非法');
+  const outTradeNo = form['out_trade_no'] ?? '';
+  if (!outTradeNo) throw new AppError('PAYMENT_INVALID', '回调缺少商户订单号');
   return {
-    outTradeNo: form['out_trade_no'] ?? '',
+    outTradeNo,
     tradeNo: form['trade_no'] ?? '',
     tradeStatus: form['trade_status'] ?? '',
     amountFen: Math.round(total * 100),
+    appId: form['app_id'] ?? '',
     gmtPayment: form['gmt_payment'] ?? null,
   };
+}
+
+/** 支付宝回调处理是否具备全部前置条件（下单 + 验签）。 */
+export function isAlipayNotifyReady(config: AlipayConfig): boolean {
+  return isAlipayEnabled(config) && Boolean(config.alipayPublicKey) && Boolean(config.notifyUrl);
 }

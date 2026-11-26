@@ -78,10 +78,6 @@ export class AuthService {
     if (counter && counter.day === today && counter.count >= SMS_DAILY_LIMIT) {
       throw new AppError('RATE_LIMITED', '今日验证码次数已达上限');
     }
-    this.smsCounter.set(phone, {
-      day: today,
-      count: counter && counter.day === today ? counter.count + 1 : 1,
-    });
 
     const code = randomDigits(6);
     await this.store.smsCodes.insert({
@@ -95,6 +91,11 @@ export class AuthService {
       createdAt: new Date(),
     });
     await this.sms.send(phone, code, purpose);
+    // 发送成功后才计次：上游失败不占用用户当天的额度，避免一次网关抖动把额度耗光。
+    this.smsCounter.set(phone, {
+      day: today,
+      count: counter && counter.day === today ? counter.count + 1 : 1,
+    });
     return this.config.sms.echoCode
       ? { ttlSec: SMS_TTL_MS / 1000, devCode: code }
       : { ttlSec: SMS_TTL_MS / 1000 };
