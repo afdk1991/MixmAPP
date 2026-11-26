@@ -64,7 +64,9 @@
           <text class="search-notice-text">{{ searchNotice }}</text>
         </view>
 
-        <!-- 4 宫格快捷入口：商城 / 购物车 / 订单 / 通行证 -->
+        <!-- 5 宫格快捷入口：商城 / 套件 / 购物车 / 订单 / 通行证 -->
+        <!-- 套件放在商城之后：商城是交易主路径，套件是十三类行业工具的统一入口，
+             两者并列但不抢主按钮的视觉权重。 -->
         <view v-if="!searchActive" class="quick">
           <view class="quick-grid">
             <view
@@ -517,11 +519,12 @@ const primaryUrl = computed(() => ROUTES.me);
 const passNo = computed(() => session.user?.accountNo ?? '');
 const passcardTitle = computed(() => (signedIn.value ? session.user?.nickname || '我的通行证' : '登录或注册'));
 
-/** 首屏 4 宫格快捷入口：商城 / 购物车 / 订单 / 通行证，全部走 ROUTES 常量。
+/** 首屏 5 宫格快捷入口：商城 / 套件 / 购物车 / 订单 / 通行证，全部走 ROUTES 常量。
  *  图标统一走自有线性图标组件，不再混用 tab 位图与首字兜底。 */
-type QuickIconName = 'bag' | 'cart' | 'receipt' | 'user';
+type QuickIconName = 'bag' | 'grid' | 'cart' | 'receipt' | 'user';
 const quickEntries: { key: string; label: string; url: string; icon: QuickIconName }[] = [
   { key: 'mall', label: '商城', url: ROUTES.mall, icon: 'bag' },
+  { key: 'suite', label: '套件', url: ROUTES.suite, icon: 'grid' },
   { key: 'cart', label: '购物车', url: ROUTES.cart, icon: 'cart' },
   { key: 'orders', label: '订单', url: ROUTES.orders, icon: 'receipt' },
   { key: 'me', label: '通行证', url: ROUTES.me, icon: 'user' },
@@ -1184,14 +1187,16 @@ function onShellRefresh(): void {
   color: $ink-2;
 }
 
-/* ---------- 4 宫格快捷入口 ---------- */
+/* ---------- 5 宫格快捷入口 ---------- */
 .quick {
   margin-top: $sp-4;
 }
 
+/* 窄屏五列时每格约 60px，图标 36px、文字 12px 仍能单行放下；
+   标签统一 nowrap，避免「购物车」被折成两行把格子撑高。 */
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: $sp-2;
 }
 

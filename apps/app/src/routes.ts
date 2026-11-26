@@ -26,4 +26,42 @@ export const ROUTES = {
   researchDetail: '/pages/research/detail',
   assistant: '/pages/assistant/index',
   notFound: '/pages/error/not-found',
+  /* ---------- 业务套件（13 个领域） ---------- */
+  suite: '/pages/suite/index',
+  suiteOffice: '/pages/suite/office',
+  suiteProductivity: '/pages/suite/productivity',
+  suiteProduct: '/pages/suite/product',
+  suiteEngineering: '/pages/suite/engineering',
+  suiteFinance: '/pages/suite/finance',
+  suiteTaxpay: '/pages/suite/taxpay',
+  suiteGrowth: '/pages/suite/growth',
+  suiteEcommerce: '/pages/suite/ecommerce',
+  suiteContent: '/pages/suite/content',
+  suiteEdu: '/pages/suite/edu',
+  suiteHealth: '/pages/suite/health',
+  suiteLegal: '/pages/suite/legal',
+  suiteLifestyle: '/pages/suite/lifestyle',
 } as const;
+
+/**
+ * 领域 id → 领域页面路由。
+ *
+ * 内容包、后端登记表与这张表三处用同一个领域 id（office / finance / …）。
+ * 套件中心与内容包都用它来跳转，页面里不再出现 '/pages/suite/...' 字面量
+ * （repo-lint 规则 5 会拦）。
+ */
+export const SUITE_ROUTE_BY_DOMAIN: Record<string, string> = {
+  office: ROUTES.suiteOffice,
+  productivity: ROUTES.suiteProductivity,
+  product: ROUTES.suiteProduct,
+  engineering: ROUTES.suiteEngineering,
+  finance: ROUTES.suiteFinance,
+  taxpay: ROUTES.suiteTaxpay,
+  growth: ROUTES.suiteGrowth,
+  ecommerce: ROUTES.suiteEcommerce,
+  content: ROUTES.suiteContent,
+  edu: ROUTES.suiteEdu,
+  health: ROUTES.suiteHealth,
+  legal: ROUTES.suiteLegal,
+  lifestyle: ROUTES.suiteLifestyle,
+};

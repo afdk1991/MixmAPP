@@ -109,3 +109,13 @@ if (mediaBase) console.info(`[h5] 已注入媒体源：${mediaBase}`);
 if (/^https?:\/\//.test(apiBase)) {
   console.info('[h5] 提示：跨域端要求服务端 CORS 白名单包含当前页面 origin（壳 https://localhost、各托管域名等），否则浏览器层直接拒收。');
 }
+
+// 业务套件静态页预渲染（SEO + 首屏速度）：
+// 内容包在构建期内联进 SPA，这里再额外产出一份独立静态 HTML（/suite/<domain>/），
+// 让搜索引擎抓到完整正文、让 CDN 与静态托管直接命中，不用等 JS 执行完。
+// 失败不阻断构建：静态页是增强项，SPA 路由本身照样可用。
+try {
+  execSync('node scripts/prerender-suite.mjs', { cwd: root, stdio: 'inherit' });
+} catch (error) {
+  console.warn(`[h5] 提示：业务套件静态页预渲染未完成（SPA 路由不受影响）：${error instanceof Error ? error.message : String(error)}`);
+}

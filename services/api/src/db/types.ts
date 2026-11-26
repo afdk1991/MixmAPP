@@ -434,6 +434,87 @@ export type MergeCandidate = {
   bindingIds: string[];
 };
 
+/* ===== 业务套件（Suite）通用台账（0025） ===== */
+
+/** 交互类型：评论 / 点赞 / 收藏 / 评分，四种共用一张表。 */
+export type SuiteInteractionKind = 'comment' | 'like' | 'save' | 'rating';
+
+/** 一条交互。user_id 可空（匿名系统行为），为空时不参与唯一索引。 */
+export type SuiteInteractionRecord = {
+  id: string;
+  domainId: string;
+  entryId: string;
+  userId: string | null;
+  kind: SuiteInteractionKind;
+  body: string;
+  rating: number | null;
+  /** 回复的父评论 id；一级评论为 null */
+  parentId: string | null;
+  status: 'visible' | 'hidden';
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** 进度状态机：todo → doing → done，可归档。 */
+export type SuiteProgressStatus = 'todo' | 'doing' | 'done' | 'archived';
+
+/** 进度行：一个用户对一条目只保留一行。 */
+export type SuiteProgressRecord = {
+  id: string;
+  userId: string;
+  domainId: string;
+  entryId: string;
+  status: SuiteProgressStatus;
+  /** 0..100 的完成度 */
+  value: number;
+  notes: string;
+  dueAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** 看板优先级。 */
+export type SuitePriority = 'low' | 'normal' | 'high' | 'urgent';
+
+/** 看板条目：任务 / 工单 / 账单行 / 稿件 …… stage 由领域自解释。 */
+export type SuiteBoardRecord = {
+  id: string;
+  domainId: string;
+  userId: string;
+  title: string;
+  stage: string;
+  priority: SuitePriority;
+  /** 金额类条目的金额（分）；非金额条目为 0 */
+  amountFen: number;
+  payload: Record<string, unknown>;
+  dueAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** 台账事件状态。 */
+export type SuiteEventStatus = 'pending' | 'paid' | 'done' | 'failed' | 'cancelled';
+
+/** 台账事件：账单 / 预约 / 订单 / 发票 …… 统一事件台账。 */
+export type SuiteEventRecord = {
+  id: string;
+  domainId: string;
+  userId: string;
+  kind: string;
+  subject: string;
+  amountFen: number;
+  status: SuiteEventStatus;
+  /** 关联的支付商户订单号；非支付类为 null */
+  outTradeNo: string | null;
+  payload: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** 交互计数的四类分项。 */
+export type SuiteInteractionCounts = Record<SuiteInteractionKind, number>;
+
 /** 商品列表 / 计数共用的过滤条件（分页参数由调用方另算）。 */
 export type ProductListFilter = {
   category?: string;
@@ -724,6 +805,84 @@ export type Store = {
       /** 当前用户全部收藏夹条目总数（我的页磁贴角标用，含已下架残留行，与夹内计数同口径）。 */
       countAllByUser(userId: string): Promise<number>;
       /** 注销级联：物理删除该用户全部收藏夹与条目，返回条目删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
+    };
+  };
+  /**
+   * 业务套件（Suite）通用台账（0025）。
+   * 13 个领域共用这四张表，领域差异全部落在应用层的领域模块里，不另开业务表。
+   * 用户自有行在账号注销时随 users 行级联删除（user_id 外键 on delete cascade）。
+   */
+  suite: {
+    interactions: {
+      insert(record: SuiteInteractionRecord): Promise<SuiteInteractionRecord>;
+      /** 按领域 + 条目取可见交互，按时间倒序；kind 可只取某一类。 */
+      list(
+        domainId: string,
+        entryId: string,
+        opts?: { kind?: SuiteInteractionKind; limit?: number; offset?: number },
+      ): Promise<SuiteInteractionRecord[]>;
+      /** 四类交互的分项计数，一次给全，避免前端多次往返。 */
+      countByKind(domainId: string, entryId: string): Promise<SuiteInteractionCounts>;
+      /** 按主键取一条交互（编辑 / 删除时先定位归属）。 */
+      findById(id: string): Promise<SuiteInteractionRecord | null>;
+      /** 更新交互正文与评分（评分改分、评论编辑）。不存在返回 null。 */
+      update(
+        id: string,
+        patch: { body?: string; rating?: number | null; updatedAt?: Date },
+      ): Promise<SuiteInteractionRecord | null>;
+      /** 某用户的交互条数；domainId 省略则统计全部领域。 */
+      countByUser(userId: string, domainId?: string): Promise<number>;
+      /** 某用户对某条目某类交互的现有行（点赞/收藏幂等判定用）。 */
+      findByUser(
+        userId: string,
+        domainId: string,
+        entryId: string,
+        kind: SuiteInteractionKind,
+      ): Promise<SuiteInteractionRecord | null>;
+      /** 删除一条交互；非本人或不存在返回 false。 */
+      remove(id: string, userId: string): Promise<boolean>;
+      /** 账号注销级联：物理删除该用户的全部交互，返回删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
+    };
+    progress: {
+      /** 同一 (user, domain, entry) 只保留一行：不存在则插入，存在则整体覆盖。 */
+      upsert(record: SuiteProgressRecord): Promise<SuiteProgressRecord>;
+      find(userId: string, domainId: string, entryId: string): Promise<SuiteProgressRecord | null>;
+      listByUser(
+        userId: string,
+        opts?: { domainId?: string; status?: SuiteProgressStatus; limit?: number },
+      ): Promise<SuiteProgressRecord[]>;
+      countByUser(userId: string, opts?: { domainId?: string }): Promise<number>;
+      /** 账号注销级联：物理删除该用户的全部进度，返回删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
+    };
+    boards: {
+      insert(record: SuiteBoardRecord): Promise<SuiteBoardRecord>;
+      /** 归属校验在应用层：find 只按 id 取，列表只按 user_id 取。 */
+      find(id: string): Promise<SuiteBoardRecord | null>;
+      listByUser(
+        userId: string,
+        opts?: { domainId?: string; stage?: string; limit?: number },
+      ): Promise<SuiteBoardRecord[]>;
+      update(
+        id: string,
+        patch: Partial<Pick<SuiteBoardRecord, 'title' | 'stage' | 'priority' | 'amountFen' | 'payload' | 'dueAt'>>,
+      ): Promise<SuiteBoardRecord | null>;
+      remove(id: string, userId: string): Promise<boolean>;
+      countByUser(userId: string, opts?: { domainId?: string }): Promise<number>;
+      /** 账号注销级联：物理删除该用户的全部看板条目，返回删除条数。 */
+      deleteByUser(userId: string): Promise<number>;
+    };
+    events: {
+      insert(record: SuiteEventRecord): Promise<SuiteEventRecord>;
+      listByUser(
+        userId: string,
+        opts?: { domainId?: string; kind?: string; status?: SuiteEventStatus; limit?: number },
+      ): Promise<SuiteEventRecord[]>;
+      updateStatus(id: string, status: SuiteEventStatus): Promise<SuiteEventRecord | null>;
+      countByUser(userId: string, opts?: { domainId?: string }): Promise<number>;
+      /** 账号注销级联：物理删除该用户的全部台账事件，返回删除条数。 */
       deleteByUser(userId: string): Promise<number>;
     };
   };

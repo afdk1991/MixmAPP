@@ -382,6 +382,11 @@
           <text class="link-desc">渠道注册 · 合并审计 · 目录导入</text>
           <text class="link-arrow mono">→</text>
         </view>
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.suite)">
+          <text class="link-title">业务套件</text>
+          <text class="link-desc">办公 · 财税 · 医疗等十三类行业工具</text>
+          <text class="link-arrow mono">→</text>
+        </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.legalPrivacy)">
           <text class="link-title">隐私政策与权限说明</text>
           <text class="link-desc">收集范围 · 权限用途 · 你的权利</text>
@@ -423,6 +428,11 @@
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.mall)">
           <text class="link-title">去商城</text>
           <text class="link-desc">商品 · 结算 · 订单</text>
+          <text class="link-arrow mono">→</text>
+        </view>
+        <view class="link-row" hover-class="is-press" @tap="go(ROUTES.suite)">
+          <text class="link-title">业务套件</text>
+          <text class="link-desc">办公 · 财税 · 医疗等十三类行业工具</text>
           <text class="link-arrow mono">→</text>
         </view>
         <view class="link-row" hover-class="is-press" @tap="go(ROUTES.login)">
