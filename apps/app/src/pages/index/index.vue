@@ -231,8 +231,26 @@
               <text class="catalog-meta mono">{{ catalogMeta }}</text>
             </view>
 
+            <!-- 排序：与商城页同一组选项（源站列表支持综合 / 价格升降序），
+                 切换后从第一页重新取数，分类、搜索条件保持不变。 -->
+            <view class="sort-row">
+              <text class="sort-row-k mono">排序</text>
+              <view class="sort-chips">
+                <view
+                  v-for="opt in SORT_OPTIONS"
+                  :key="opt.value"
+                  class="sort-chip"
+                  :class="{ 'sort-chip--on': sort === opt.value }"
+                  hover-class="is-press"
+                  @tap="selectSort(opt.value)"
+                >
+                  <text class="sort-chip-text mono">{{ opt.label }}</text>
+                </view>
+              </view>
+            </view>
+
             <view v-if="mallLoading" class="pick-grid">
-              <view v-for="i in PAGE_SIZE" :key="i" class="pick-card">
+              <view v-for="i in SKELETON_COUNT" :key="i" class="pick-card">
                 <view class="mx-skeleton pick-sk-cover" />
                 <view class="pick-info">
                   <view class="mx-skeleton pick-sk-line" />
@@ -320,7 +338,7 @@
                       />
                     </view>
                   </view>
-                  <!-- 序号让「精选 6 件」有可数的节奏，也替商品网格建立统一的阅读起点 -->
+                  <!-- 序号替商品网格建立统一的阅读起点 -->
                   <text class="pick-no mono">{{ String(index + 1).padStart(2, '0') }}</text>
                   <text v-if="product.brand" class="pick-cover-tag mono">{{ product.brand }}</text>
                   <view
@@ -360,9 +378,16 @@
               </view>
             </view>
 
-            <!-- 结果过多：不无限展开，给一条收窄建议 -->
+            <!-- 列表尾：与商城页同口径的加载状态，翻到底显示「没有更多商品了」 -->
+            <view v-if="!mallLoading && !mallError && products.length" class="pick-foot">
+              <text class="pick-foot-text mono">
+                {{ loadingMore ? '加载中…' : noMore ? '没有更多商品了' : '上拉加载更多' }}
+              </text>
+            </view>
+
+            <!-- 结果过多：列表可触底翻完，这里只给一条收窄建议 -->
             <view v-if="searchActive && !mallLoading && !mallError && searchTooMany" class="catalog-note">
-              <text class="catalog-note-text">结果有点多，先看前 {{ PAGE_SIZE }} 件；加上规格或项目号能更快找到。</text>
+              <text class="catalog-note-text">结果有点多，上拉可以继续看；加上规格或项目号能更快找到。</text>
             </view>
 
             <!-- 统一出口：搜索带 keyword、分类带 category 进商城，条件原样落到列表筛选 -->
@@ -428,7 +453,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { onLoad, onPageScroll, onShow } from '@dcloudio/uni-app';
+import { onLoad, onPageScroll, onReachBottom, onShow } from '@dcloudio/uni-app';
 import { metaApi, mallApi, homeApi, productCover, coverTint, ApiError, applyMetaFlags, applyMetaThirdParty } from '../../api/client';
 import { session } from '../../stores/session';
 import { cartBadgeText, refreshCartBadge, syncCartBadge } from '../../stores/cart-badge';
@@ -442,7 +467,12 @@ import MxPullRefresh from '../../components/mx-pull-refresh/mx-pull-refresh.vue'
 import MxState from '../../components/mx-state/mx-state.vue';
 import type { MallCategoryDto, MallProductDto } from '../../api/mall';
 import { PAGE_SIZE_OPTIONS } from '@mixmapp/contracts';
-import type { HomeAdDto, HomeAdTarget, HomeRecommendedCategoryDto } from '@mixmapp/contracts';
+import type {
+  HomeAdDto,
+  HomeAdTarget,
+  HomeRecommendedCategoryDto,
+  ProductListSummaryDto,
+} from '@mixmapp/contracts';
 import {
   breadcrumbLabel,
   INQUIRY_NOTICE,
@@ -499,20 +529,36 @@ const quickEntries: { key: string; label: string; url: string; icon: QuickIconNa
 
 /** 购物车角标文案来自全局计数模块 stores/cart-badge（0 隐藏 / 1–99 数字 / 99+）。 */
 
-/* ---------- 目录与检索：真实商城数据（mallApi 契约，不加 mock） ---------- */
-/** 首页精选只展示 6 条（前端截断的展示口径）。 */
-const PAGE_SIZE = 6;
+/* ---------- 商品与搜索：真实商城数据（mallApi 契约，不加 mock） ---------- */
 /**
+ * 首页商品不再截断：与商城页同一套分页口径，触底继续加载直到全部展示。
  * 请求口径必须落在契约白名单（20/50/100）内：此前传 PAGE_SIZE + 1 = 7 会被 422，
- * 首页精选区直接落到错误态。这里取白名单最小档，取回后再截断到 PAGE_SIZE。
+ * 这里取白名单最小档作为每页条数。
  */
-const REQUEST_PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
+const PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
+/** 首屏骨架卡片数：只占位首屏，不代表条数上限。 */
+const SKELETON_COUNT = 6;
+
+/** 排序口径与商城页 / 源站列表一致：综合（默认上新）、价格升、价格降。 */
+type MallSort = 'createdDesc' | 'priceAsc' | 'priceDesc';
+const SORT_OPTIONS: Array<{ value: MallSort; label: string }> = [
+  { value: 'createdDesc', label: '综合' },
+  { value: 'priceAsc', label: '价格升' },
+  { value: 'priceDesc', label: '价格降' },
+];
+const sort = ref<MallSort>('createdDesc');
 
 const categories = ref<MallCategoryDto[]>([]);
 const activeCategory = ref('');
 const products = ref<MallProductDto[]>([]);
 const mallLoading = ref(false);
 const mallError = ref('');
+/** 下一页页码：重置从 1 起，每次取回后只要还有下一页就前移。 */
+const page = ref(1);
+const loadingMore = ref(false);
+const noMore = ref(false);
+/** 当前筛选口径下的命中总数（与分页无关）；摘要没取到时为 null。 */
+const matchedTotal = ref<number | null>(null);
 
 /* ---------- 首页运营位：广告位（home/ggs）与推荐分类（home/rcs） ----------
  * 两块内容都由服务端下发：广告位是服务端内置运营位（源站没有该接口），推荐分类复用
@@ -520,8 +566,6 @@ const mallError = ref('');
  */
 const ads = ref<HomeAdDto[]>([]);
 const recommended = ref<HomeRecommendedCategoryDto[]>([]);
-/** 一次多取 1 条判断后端是否还有，用于「结果过多」引导而不是无限展开。 */
-const hasMore = ref(false);
 /** 图片 404 兜底：记录加载失败的 productId，命中后改用文字占位，避免破图。 */
 const brokenImages = reactive(new Set<string>());
 
@@ -540,22 +584,25 @@ const totalCount = computed(() => tabCategories.value.reduce((sum, item) => sum 
 const totalCountText = computed(() => (totalCount.value > 0 ? totalCount.value.toLocaleString('en-US') : '—'));
 
 /**
- * 目录出口文案：带上一级分类合计件数，说明首页只展示了精选，完整目录规模多大。
+ * 目录出口文案：带上一级分类合计件数，说明完整目录规模有多大。
  * 合计为 0（分类还没加载 / 接口失败）时回落到不带数字的文案，避免出现「查看全部 0 件」。
  */
 const catalogAllLabel = computed(() =>
   totalCount.value > 0 ? `去商城看全部 ${totalCountText.value} 件商品` : '去商城浏览全部商品',
 );
 
-/* ---------- 搜索：输入即检（320ms 防抖），提交/点按立即检索 ----------
- * 检索口径不在前端造：多词空格 AND 且顺序无关、项目号 12 位全码与 6 位段码、
+/* ---------- 搜索：输入即检（320ms 防抖），提交/点按立即搜索 ----------
+ * 搜索口径不在前端造：多词空格 AND 且顺序无关、项目号 12 位全码与 6 位段码、
  * 规格等价（M6-1.0x8 ≡ M6x8 ≡ 6x8 ≡ M6×8）、大小写与全半角归一，全部由
  * `/mall/products?keyword=` 在服务端实现；首页只把原始输入原样送出并呈现结果。
  */
 const searchKeyword = ref('');
 const searchNotice = ref('');
 const searchActive = computed(() => searchKeyword.value.trim().length > 0);
-const searchTooMany = computed(() => searchActive.value && hasMore.value);
+/** 搜索命中超过一页：给一条收窄建议，列表本身仍可触底继续加载。 */
+const searchTooMany = computed(
+  () => searchActive.value && (matchedTotal.value ?? products.value.length) > PAGE_SIZE,
+);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 /** 请求序号：连续输入时丢弃过期响应，避免旧结果盖掉新结果。 */
 let searchSeq = 0;
@@ -567,22 +614,23 @@ const activeCategoryName = computed(
 /** 目录区标题：搜索 > 分类预览 > 精选，三者共用一个网格，不另起一套版式。 */
 const catalogTitle = computed(() => {
   if (searchActive.value) return '搜索结果';
-  return activeCategoryName.value ? `${activeCategoryName.value} · 推荐` : '首页精选';
+  return activeCategoryName.value || '全部商品';
 });
+
+/** 命中件数文案：有服务端总数用总数，否则退回已加载条数。 */
+const matchedCountText = computed(() => String(matchedTotal.value ?? products.value.length));
 
 const catalogMeta = computed(() => {
   if (mallLoading.value) return searchActive.value ? '正在搜索…' : '正在加载…';
   if (mallError.value) return '没加载出来';
-  if (searchActive.value) {
-    return hasMore.value ? `先看前 ${PAGE_SIZE} 件` : `找到 ${products.value.length} 件`;
-  }
-  return `推荐 ${products.value.length} 件`;
+  if (searchActive.value) return `找到 ${matchedCountText.value} 件`;
+  return `共 ${matchedCountText.value} 件`;
 });
 
 /** 标题右侧的一行小字：浏览态给类目数，搜索态给结果条数；请求失败时不能显示「找到 0 件」。 */
 const shelfMeta = computed(() => {
   if (mallError.value) return '没加载出来';
-  if (searchActive.value) return mallLoading.value ? '正在搜索…' : `找到 ${products.value.length} 件`;
+  if (searchActive.value) return mallLoading.value ? '正在搜索…' : `找到 ${matchedCountText.value} 件`;
   return `共 ${tabCategories.value.length} 类`;
 });
 
@@ -618,30 +666,71 @@ async function loadCategories(): Promise<void> {
   }
 }
 
-async function loadProducts(): Promise<void> {
+/**
+ * 商品列表：reset=true 重新取第一页（进页 / 切分类 / 搜索 / 下拉刷新），
+ * reset=false 触底追加下一页。总数与「还有没有下一页」优先用摘要接口的服务端判定。
+ */
+async function loadProducts(reset = true): Promise<void> {
+  if (!reset && (loadingMore.value || mallLoading.value || noMore.value)) return;
   const keyword = searchKeyword.value.trim();
   const seq = ++searchSeq;
-  mallLoading.value = true;
-  mallError.value = '';
+  if (reset) {
+    // 在途的「加载更多」会被下面的序号判定丢弃，这里先复位它的标记，避免列表尾部卡在加载中
+    loadingMore.value = false;
+    page.value = 1;
+    noMore.value = false;
+    mallLoading.value = true;
+    mallError.value = '';
+  } else {
+    loadingMore.value = true;
+  }
+  const query = {
+    keyword: keyword || undefined,
+    cat: keyword ? undefined : activeCategory.value || undefined,
+    sort: sort.value,
+    page: page.value,
+    pageSize: PAGE_SIZE,
+  };
   try {
-    const list = await mallApi.listProducts({
-      keyword: keyword || undefined,
-      cat: keyword ? undefined : activeCategory.value || undefined,
-      page: 1,
-      pageSize: REQUEST_PAGE_SIZE,
-    });
+    const list = await mallApi.listProducts(query);
     if (seq !== searchSeq) return;
-    const items = Array.isArray(list) ? list : [];
-    hasMore.value = items.length > PAGE_SIZE;
-    products.value = items.slice(0, PAGE_SIZE);
+    const rows = Array.isArray(list) ? list : [];
+    products.value = reset ? rows : [...products.value, ...rows];
+    if (reset) {
+      let summary: ProductListSummaryDto | null = null;
+      try {
+        summary = await mallApi.listProductsSummary(query);
+      } catch {
+        summary = null;
+      }
+      if (seq !== searchSeq) return;
+      matchedTotal.value = typeof summary?.total === 'number' ? summary.total : null;
+      noMore.value = summary ? !summary.hasMore : rows.length < PAGE_SIZE;
+    } else if (rows.length < PAGE_SIZE) {
+      noMore.value = true;
+    }
+    if (!noMore.value) page.value += 1;
   } catch (e) {
     if (seq !== searchSeq) return;
-    mallError.value = e instanceof Error ? e.message : '商品加载失败';
-    products.value = [];
-    hasMore.value = false;
+    if (reset) {
+      mallError.value = e instanceof Error ? e.message : '商品加载失败';
+      products.value = [];
+      matchedTotal.value = null;
+      noMore.value = false;
+    } else {
+      uni.showToast({ title: '下一页加载失败，请重试', icon: 'none' });
+    }
   } finally {
-    if (seq === searchSeq) mallLoading.value = false;
+    if (seq === searchSeq) {
+      mallLoading.value = false;
+      loadingMore.value = false;
+    }
   }
+}
+
+/** 触底加载：与商城页一致，没有更多时不再发请求。 */
+function loadMore(): void {
+  void loadProducts(false);
 }
 
 /**
@@ -721,6 +810,13 @@ function clearSearch(): void {
   clearSearchTimer();
   searchKeyword.value = '';
   searchNotice.value = '';
+  void loadProducts();
+}
+
+/** 切换排序：条件不变，仅重置分页并重新拉取第一页。 */
+function selectSort(next: MallSort): void {
+  if (sort.value === next) return;
+  sort.value = next;
   void loadProducts();
 }
 
@@ -855,6 +951,11 @@ onShow(() => {
 const pageScrollTop = ref(0);
 onPageScroll(({ scrollTop }) => {
   pageScrollTop.value = scrollTop;
+});
+
+/** 触底继续加载：首页商品不截断，翻到底才出现「没有更多商品了」。 */
+onReachBottom(() => {
+  loadMore();
 });
 
 /** 壳层下拉刷新状态：组件回调后真实重跑同一套加载，全部落定后复位收起指示环 */
@@ -1403,7 +1504,7 @@ function onShellRefresh(): void {
   color: $ink-4;
 }
 
-/* 区块标题与「首页精选」同级：纯色墨黑、不带渐变彩字，避免落地页营销感。
+/* 区块标题与目录标题同级：纯色墨黑、不带渐变彩字，避免落地页营销感。
  * 全局 theme.scss 的 .sec-title 带渐变文字，这里在首页作用域内显式中和，不影响其他页面。 */
 .sec-title {
   display: block;
@@ -1612,6 +1713,53 @@ function onShellRefresh(): void {
   flex: 0 0 auto;
   font-size: 22rpx;
   color: $ink-4;
+}
+
+/* 排序条：与商城页同款胶囊，横向可滑，窄屏不换行挤压商品网格 */
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: $sp-2;
+  margin-top: $sp-2;
+}
+
+.sort-row-k {
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  letter-spacing: $ls-label;
+  color: $ink-4;
+}
+
+.sort-chips {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.sort-chip {
+  flex: 0 0 auto;
+  padding: 10rpx 20rpx;
+  background: $shell;
+  border: 1rpx solid $paper-3;
+  border-radius: $r-pill;
+}
+
+.sort-chip--on {
+  background: $brand-soft;
+  border-color: transparent;
+}
+
+.sort-chip-text {
+  font-size: 22rpx;
+  letter-spacing: 1rpx;
+  color: $ink-3;
+}
+
+.sort-chip--on .sort-chip-text {
+  color: $brand-deep;
+  font-weight: 600;
 }
 
 /* 商品网格：移动 2 列、桌面 3 列；卡片等高，价格始终贴底对齐 */
@@ -1893,6 +2041,18 @@ function onShellRefresh(): void {
   margin-top: $sp-1;
 }
 
+/* 列表尾：加载状态行，字号与间距同 catalog-note */
+.pick-foot {
+  padding: $sp-2 0 0;
+  text-align: center;
+}
+
+.pick-foot-text {
+  font-size: $fs-micro;
+  letter-spacing: $ls-label;
+  color: $ink-4;
+}
+
 .catalog-note {
   margin-top: $sp-2;
   padding: $sp-2 $sp-3;
@@ -2120,6 +2280,12 @@ function onShellRefresh(): void {
 }
 
 @media (min-width: 1000px) {
+  /* 桌面端顶部已由 mx-bar 承担品牌 + 一级导航，隐藏移动端的 home-head，
+   * 否则同一个页面会出现两条顶栏（logo 重复、购物车入口重复）。 */
+  .home-head {
+    display: none;
+  }
+
   .home {
     --shell-w: 1000px;
     max-width: 1000px;

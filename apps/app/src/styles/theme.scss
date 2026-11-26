@@ -17,12 +17,13 @@
   --mx-shell: #ffffff;
   --mx-shell-fade: rgba(255, 255, 255, 0);
 
-  /* 文字 */
-  --mx-ink: #111413;
-  --mx-ink-2: #333a37;
-  --mx-ink-3: #6b736e;
-  /* 最弱一档：占位 / 标签末级；浅档实测对 paper / paper-2 / shell 均 ≥3.0:1（2026-11-25 对比度收口） */
-  --mx-ink-4: #7d8681;
+  /* 文字：全站彩色正文（靛蓝体系，取自强调色 --mx-acc-2 的同色阶）。
+   * 四级都保留足够的明度差，浅底对比度实测：ink 15.6:1 / ink-2 11.4:1 / ink-3 6.8:1 /
+   * ink-4 4.87:1（对 paper-2 仍 ≥4.5:1），正文与说明均达到 WCAG AA，不再使用近黑或灰色正文。 */
+  --mx-ink: #17233d;
+  --mx-ink-2: #263a5c;
+  --mx-ink-3: #465c7d;
+  --mx-ink-4: #566c8d;
 
   /* 主视觉深场 */
   --mx-deep: #0b0f0e;
@@ -105,10 +106,11 @@
   --mx-shell: #171d1b;
   --mx-shell-fade: rgba(23, 29, 27, 0);
 
-  --mx-ink: #eceee9;
-  --mx-ink-2: #c9cfca;
-  --mx-ink-3: #a2aaa5;
-  --mx-ink-4: #868e89;
+  /* 深色底同样保持彩色正文：浅靛蓝四级，对 #121716 / #171d1b / #1b211f 均 ≥5.4:1。 */
+  --mx-ink: #e6ebff;
+  --mx-ink-2: #cdd6f2;
+  --mx-ink-3: #a9b6d6;
+  --mx-ink-4: #8e9cbb;
 
   --mx-deep: #080b0a;
   --mx-deep-2: #0e1413;
@@ -176,6 +178,14 @@ uni-app,
 uni-page,
 uni-page-wrapper {
   background-color: var(--mx-paper);
+  color: var(--mx-ink);
+}
+
+/* 页面内容默认继承彩色正文：uni.css 会给 uni-page-body 预设深灰字色，
+ * 这里用 (0,1,2) 权重覆盖一次，保证没有单独写 color 的文字也跟随 --mx-ink，
+ * 不再出现漏改的深色正文。 */
+html body uni-page-body {
+  color: var(--mx-ink);
 }
 
 /* 收起 uni-app 内置变量，避免其后代组件（loading / modal 等）在深色下取到白底黑字 */

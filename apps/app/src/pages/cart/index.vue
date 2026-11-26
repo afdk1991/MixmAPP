@@ -1,9 +1,8 @@
 <template>
   <view class="page page--wide mx-ime-pad">
-    <mx-bar />
+    <mx-bar title="购物车" />
     <view class="head">
       <text class="eyebrow">BAG</text>
-      <text class="title">购物车</text>
       <text class="sub mono">
         {{ cart.items.length ? `${availableQuantity} 件可结算 · ${cart.items.length} 个商品` : 'EMPTY' }}
       </text>
@@ -403,7 +402,7 @@ import {
   STOCK_UNCONFIRMED_NOTICE,
   unitPriceText,
 } from '../../api/mall';
-import { mallApi, mediaUrl, productCover, coverTint, isDemoOrderMode, integrationsApi } from '../../api/client';
+import { mallApi, mediaUrl, productCover, coverTint, integrationsApi } from '../../api/client';
 import { clearCartBadge, syncCartBadge } from '../../stores/cart-badge';
 import { addressApi } from '../../api/address';
 import { ROUTES } from '../../routes';
@@ -1017,74 +1016,15 @@ async function submitOrder(): Promise<void> {
     uni.showToast({ title: '请填写详细地址', icon: 'none' });
     return;
   }
-  if (submitting.value) return;
-
-  // 防误提交：无论演示还是真实链路，提交前都二次确认。
-  // 演示模式明确告知「不产生真实订单 / 不扣库存 / 不支付」；真实链路提示库存将扣减。
-  const demo = isDemoOrderMode();
-  const confirmed = await new Promise<boolean>((resolve) => {
-    uni.showModal({
-      title: demo ? '演示环境 · 预览订单' : '确认提交订单',
-      content: demo
-        ? '当前为演示模式：仅走下单流程预览，不会生成真实订单、不扣减库存、不发起支付。'
-        : '提交后将扣减库存并生成真实订单，确认继续？',
-      confirmText: demo ? '生成预览单' : '确认提交',
-      cancelText: '再看看',
-      success: (res) => resolve(Boolean(res.confirm)),
-      fail: () => resolve(false),
-    });
+  // 最终提交入口硬拦截：任何情况下都不调用下单接口，从代码层杜绝误生成真实订单。
+  // 加购、改量、地址、配送方式与时段、确认信息等前置流程保持完整可用。
+  uni.showModal({
+    title: '已拦截 · 不会提交真实订单',
+    content:
+      '当前站点仅用于流程演示：加购、改量、收货地址、配送方式与时间段、订单确认都可以正常操作，但点击提交不会生成订单、不扣减库存、不发起支付。',
+    showCancel: false,
+    confirmText: '我知道了',
   });
-  if (!confirmed) return;
-
-  submitting.value = true;
-  try {
-    const order = await mallApi.createOrder({
-      receiverName: receiverName.trim(),
-      receiverPhone: receiverPhone.trim(),
-      address: address.trim(),
-      ...(form.value.remark.trim() ? { remark: form.value.remark.trim() } : {}),
-      // 地址簿选择 + 配送方式/时间段：后端据此落快照并再次校验
-      ...(selectedAddressId.value ? { addressId: selectedAddressId.value } : {}),
-      ...(deliveryMethod.value ? { deliveryMethod: deliveryMethod.value } : {}),
-      ...(deliverySlot.value ? { deliverySlot: deliverySlot.value } : {}),
-      // 显式声明「从购物车结算」：下单成功后由后端扣减已结算行；
-      // 不能靠「有没有 items」反推（勾选结算同样会传 items）
-      fromCart: true,
-      // 只把勾选的 A 到货行交给后端；失效行/未勾选行不会进单
-      items: selectedLines.value.map((line) => ({
-        productId: line.productId,
-        quantity: line.quantity,
-        ...(line.packUnit ? { packUnit: line.packUnit } : {}),
-        ...(line.packQty != null ? { packQty: line.packQty } : {}),
-      })),
-    });
-    // 演示沙箱订单：后端未落库、未扣库存、未清购物车，只回显预览单号，不跳「我的订单」。
-    if (order.demo) {
-      uni.showModal({
-        title: '演示订单已生成',
-        content: `单号 ${order.orderNo}\n仅作流程预览，未写入真实订单。`,
-        showCancel: false,
-        confirmText: '知道了',
-      });
-      return;
-    }
-    checkoutVisible.value = false;
-    // 失效行留在购物车：清空勾选，返回本页时由 onShow 重新拉取
-    selectedIds.value = new Set();
-    selectionTouched.value = false;
-    const skipped = order.skippedLines?.length ?? 0;
-    uni.showToast({
-      title: skipped ? `下单成功，${skipped} 件失效商品未进单` : '下单成功',
-      icon: 'success',
-    });
-    setTimeout(() => {
-      uni.navigateTo({ url: `${ROUTES.orders}?orderNo=${encodeURIComponent(order.orderNo)}` });
-    }, 600);
-  } catch (e) {
-    uni.showToast({ title: e instanceof Error ? e.message : '下单失败', icon: 'none' });
-  } finally {
-    submitting.value = false;
-  }
 }
 
 function goMall(): void {
@@ -1104,27 +1044,17 @@ onShow(() => {
   padding: 0 $sp-3 calc(240rpx + var(--mx-tabbar-h) + var(--mx-safe-bottom) + var(--mx-ime-bottom));
 }
 
+/* ---------- 页头：eyebrow + 等宽计数（页面名在 mx-bar，这里不重复） ---------- */
 .head {
-  padding: $sp-5 4rpx $sp-4;
-}
-
-.title {
-  display: block;
-  margin-top: 16rpx;
-  font-family: $font-display;
-  font-size: $fs-h1;
-  font-weight: 800;
-  letter-spacing: $ls-tight;
-  line-height: $lh-tight;
-  color: $ink;
+  padding: $sp-4 4rpx $sp-4;
 }
 
 .sub {
   display: block;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   font-size: $fs-micro;
   letter-spacing: 2rpx;
-  color: $acc-6;
+  color: $ink-3;
 }
 
 .head-clear {
