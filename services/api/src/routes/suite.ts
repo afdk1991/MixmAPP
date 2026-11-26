@@ -138,8 +138,7 @@ export async function suiteRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // 进度写入用 POST（与前端共享请求层的方法白名单保持一致，不引入 PUT）。
-  app.post('/suite/progress', { preHandler: app.requireAuth }, async (request) => {
+  app.put('/suite/progress', { preHandler: app.requireAuth }, async (request) => {
     const body = parse(suiteProgressInputSchema, request.body);
     return { data: await app.suite.upsertProgress(body, request.userId as string) };
   });
