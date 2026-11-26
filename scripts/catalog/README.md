@@ -8,10 +8,12 @@
 
 ```bash
 pnpm catalog:sync                      # 全量抓取 → 比对 → 入库（egluosi）
-pnpm catalog:sync --site hznzcn --per-cat 40   # 只跑 hznzcn（有界全分类覆盖）
+pnpm catalog:sync --site hznzcn        # 只跑 hznzcn：全部分页（pages=0）+ 全部叶子类目（per-cat=0）
 pnpm catalog:sync --dry-run            # 只对账不写库（不碰 products / 流水 / runs 表）
-pnpm catalog:sync --resume             # 断点续跑上一次未完成的运行
+pnpm catalog:sync --resume             # 断点续跑上一次未完成的运行（14 天内有效）
 pnpm catalog:sync --limit 3            # 只处理前 3 个三级类目（调试）
+pnpm catalog:sync --max-runtime-min 90 # 单轮最多 90 分钟，到点优雅收尾，下一轮续跑
+pnpm catalog:sync --no-delist          # 本轮不下架任何已有商品（定时任务默认开启）
 pnpm catalog:sync --no-images          # 不下载图片
 pnpm catalog:sync --filters-only       # 只抓目录树与规格筛选项
 pnpm catalog:inspect --item-no 764393  # 只读对账：单件
@@ -25,21 +27,45 @@ pnpm catalog:inspect --show-mapping    # 附打印字段映射表
 
 ## 定时与手动
 
-- **定时只跑 egluosi**：生产 `run.sh` 的 `SITES` 默认值就是 `egluosi`，**每日 02:30（Asia/Shanghai）** 无人值守续抓，默认全量全分类覆盖，按 `source_key` 幂等累积。
+- **定时只跑 egluosi**：生产 `run.sh` 的 `SITES` 默认值就是 `egluosi`，**每日 02:30（Asia/Shanghai）**
+  无人值守续抓，默认全量全分类覆盖，按 `source_key` 幂等累积。单轮默认上限
+  `CATALOG_MAX_RUNTIME_MIN=150` 分钟，到点优雅收尾，次日 `--resume` 接着跑，**逐日累积到全量**。
+- **已有商品不下架**：定时任务默认带 `--no-delist`（`CATALOG_NO_DELIST=0` 可关闭），只 upsert，
+  不会把源站暂时没抓到的商品标停售。
 - **hznzcn 不做定时，只按需手动**：它是独立适配器（`--site hznzcn`），状态文件
   `hznzcn-state.json`、快照 `hznzcn-*.json` 与 egluosi 完全分开；`source_key` 前缀 `hzn:`，
-  id 前缀 `hzn-`，不会覆盖或撞号 egluosi 的既有商品。
+  id 前缀 `hzn-`，不会覆盖或撞号 egluosi 的既有商品。`--site hznzcn` 默认 `pages=0`（抓完为止）、
+  `per-cat=0`（不限件数），即全部分页 × 全部叶子类目。
 - 生产机 IP 被源站 WAF 封，手动同步必须**本地采集 + SSH 隧道写库 + 图片推送**，
   完整可粘贴命令见 [`deploy/CATALOG-DEPLOY.md`](../../deploy/CATALOG-DEPLOY.md)「11. hznzcn 手动同步」。
 - 手动有界运行（带 `--per-cat` / `--max-items` / `--limit` / `--pages`）时 `delistSafe=false`，
   **永远不会下架任何商品**；新增走 `on conflict (source_key) do nothing`，重跑不产生重复行。
 
-生产机上（库连接在 `/etc/mixmapp/api.env`）：
+生产机上（库连接在 `/etc/mixmapp/api.env`）手动触发一轮（与定时任务同参数）：
 
 ```bash
 set -a; . /etc/mixmapp/api.env; set +a
-node /opt/mixmapp/current/scripts/catalog/cli.mjs sync
+/opt/mixmapp/catalog-sync/run.sh          # 等价于下面的 cli 命令，带 flock/预算/续跑
+node /opt/mixmapp/current/scripts/catalog/cli.mjs sync --resume --max-runtime-min 150 --no-delist
 ```
+
+## 图片尺寸策略
+
+源站同一张图实测有 4 档（2026-11 抽样 9 个三级类目）：
+
+| 档位 | 尺寸 | 说明 |
+| --- | --- | --- |
+| `img1`~`img4`（无后缀） | 1000×1000 | **原图质量，文件最大 → 采集器默认取这档** |
+| `img1_l` 等 | 1000×1000 | 二次压缩，只作 404 降级 |
+| `img1_m` 等 | 800×800 | 降级档 |
+| `img1_s` 等 | 80×80 | 旧采集器用过的小图 |
+| `_xl` / `_b` / `_o` | — | 源站不存在（404） |
+
+- 同一 c3 的多张图内容是同一张时，按 SHA1 去重，详情页不再出现 4 张重复图。
+- 旧小图回填：
+  - egluosi：`node scripts/catalog/reimage.mjs`（按 344 个三级类目重拉原图，只更新 images/cover/spec_image）
+  - hznzcn：`node scripts/catalog/reimage.mjs --site hznzcn`（按商品重抓详情页原图，
+    **只有新图确实更大才写库**，默认阈值 `--reimage-min-side 800`，可 `--resume` 跨多次跑）
 
 ## 跑多久
 
@@ -60,9 +86,12 @@ node /opt/mixmapp/current/scripts/catalog/cli.mjs sync
   - `catalog.json` 列表阶段快照、`details.json` 详情快照、`gallery.json` 画廊、`filters.json` 筛选项
   - `reports/<runId>.json` 本次汇总，`reports/<runId>.log` 本次日志（保留最近 30 份）
   - `sync.log` 由 `run.sh` 追加写，超过 5MB 轮转为 `sync.log.1`
-- 失败后直接 `pnpm catalog:sync --resume`：48 小时内且未 `done` 的运行会从断点继续，
-  已抓到的详情按货号跳过，列表阶段完成过就不再重抓。
-- 生产 `run.sh` 会自动做这件事（首次失败 30s 后 `--resume` 一次），并有 flock 防重入。
+- 失败后直接 `pnpm catalog:sync --resume`：14 天内且未 `done` 的运行会从断点继续，
+  已抓到的详情按货号跳过；列表阶段每个三级类目抓完即落盘（`partial=true`），中断后从**未抓类目**继续。
+- 生产 `run.sh` 每轮都带 `--resume`：上一轮没跑完就接着跑，上一轮已完成就自然开新一轮全量。
+- 达到 `--max-runtime-min` 预算时优雅收尾（退出码 0，`catalog_sync_runs.status='paused'`），
+  下一轮继续，不会被系统超时掐断丢进度。
+- 生产 `run.sh` 还会在首次失败（非 0 退出码）30s 后自动 `--resume` 一次，并有 flock 防重入。
 - 列表阶段有类目抓取失败时，本轮不做下架判定（`delistSafe=false`），避免把"没抓到"误判为"源站下架"。
 - `--limit N` 是局部抓取（只覆盖前 N 个三级类目），本轮同样**跳过下架判定**，不会把未抓到的商品标成下架。
 

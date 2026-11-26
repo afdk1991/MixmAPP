@@ -17,15 +17,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /**
  * 图片变体 → 角色。第一张是封面，spec 是规格图。
  *
- * 一律取 `_l`（1000×1000）：详情页大图按 390 CSS 宽 ×3 倍屏要 ~1170px，
- * 旧配置里第 2-4 张取的是 `_s`（80×80），放大后必然糊。
- * fallbacks 只在该档 404 时降级，避免个别类目直接没图。
+ * 实测源站同一张图有四档（2026-11 抽样 9 个三级类目）：
+ *   - 无后缀 img1~img4：1000×1000，原图质量（文件明显更大）
+ *   - `_l`：1000×1000，但经过二次压缩
+ *   - `_m`：800×800
+ *   - `_s`：80×80（旧采集器用过，详情页放大必然糊）
+ *   - `_xl` / `_b` / `_o`：源站不存在（404）
+ * 所以最高清档位是「无后缀原图」，`_l/_m/_s` 只作 404 时的降级。
+ * spec 规格图只有无后缀一档（实测 1121×668），没有其它档位。
  */
 export const IMAGE_VARIANTS = [
-  { variant: 'img1_l', role: 'cover', fallbacks: ['img1_m', 'img1_s'] },
-  { variant: 'img2_l', role: 'gallery', fallbacks: ['img2_m', 'img2_s'] },
-  { variant: 'img3_l', role: 'gallery', fallbacks: ['img3_m', 'img3_s'] },
-  { variant: 'img4_l', role: 'gallery', fallbacks: ['img4_m', 'img4_s'] },
+  { variant: 'img1', role: 'cover', fallbacks: ['img1_l', 'img1_m', 'img1_s'] },
+  { variant: 'img2', role: 'gallery', fallbacks: ['img2_l', 'img2_m', 'img2_s'] },
+  { variant: 'img3', role: 'gallery', fallbacks: ['img3_l', 'img3_m', 'img3_s'] },
+  { variant: 'img4', role: 'gallery', fallbacks: ['img4_l', 'img4_m', 'img4_s'] },
   { variant: 'spec', role: 'spec', fallbacks: [] },
 ];
 
@@ -45,6 +50,38 @@ export function isPlaceholder(buffer) {
     return buffer.readUInt32BE(16) <= 1 && buffer.readUInt32BE(20) <= 1;
   }
   return false;
+}
+
+/**
+ * 读取本地图片像素（JPEG SOF / PNG IHDR），用于判断「存量图是不是小图」。
+ * 只需要宽高，不解码像素，开销很小。
+ */
+export function imageSize(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 8) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let i = 2;
+    while (i < buffer.length - 9) {
+      if (buffer[i] !== 0xff) {
+        i += 1;
+        continue;
+      }
+      const marker = buffer[i + 1];
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+        i += 2;
+        continue;
+      }
+      const len = buffer.readUInt16BE(i + 2);
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        return { w: buffer.readUInt16BE(i + 7), h: buffer.readUInt16BE(i + 5) };
+      }
+      i += 2 + len;
+    }
+    return null;
+  }
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return buffer.length > 24 ? { w: buffer.readUInt32BE(16), h: buffer.readUInt32BE(20) } : null;
+  }
+  return null;
 }
 
 /**
@@ -156,7 +193,7 @@ export function createClient(cfg, log) {
   }
 
   /** 下载图片，按内容 SHA1 命名落盘（同图天然去重）。不可达/占位图返回 null。 */
-  async function downloadImage(remotePath, role) {
+  async function downloadImage(remotePath, role, variantName) {
     if (!cfg.downloadImages) return null;
     for (let attempt = 0; attempt <= cfg.maxRetries; attempt += 1) {
       await paced(cfg.listDelayMs);
@@ -175,7 +212,8 @@ export function createClient(cfg, log) {
           const file = `${crypto.createHash('sha1').update(res.body).digest('hex')}.${ext}`;
           const dest = path.join(cfg.imageDir, file);
           if (!fs.existsSync(dest)) fs.writeFileSync(dest, res.body);
-          return { file, url: `/media/products/${file}`, role, remote: remotePath };
+          // variantName 记下实际命中的档位：回填脚本据此判断缓存是否需要升级到更高清档
+          return { file, url: `/media/products/${file}`, role, remote: remotePath, variant: variantName };
         }
         if (res.status === 404) return null;
         await sleep(1000 * (attempt + 1));
@@ -186,18 +224,24 @@ export function createClient(cfg, log) {
     return null;
   }
 
-  /** 类目画廊：固定变体，逐档降级，失败不影响主流程。 */
+  /**
+   * 类目画廊：固定变体，逐档降级，失败不影响主流程。
+   * 同一 c3 的多张图经常是同一张（源站用重复图占位），按内容 SHA1 去重，避免
+   * 详情页出现 4 张一模一样的图（用户要求「不要重复图」）。
+   */
   async function galleryForC3(c3) {
     if (!cfg.downloadImages) return [];
     const entries = [];
+    const seenFile = new Set();
     for (const item of IMAGE_VARIANTS) {
       // 先取高清档，404 才退到下一档，避免整类目缺图
       for (const name of [item.variant, ...(item.fallbacks || [])]) {
-        const got = await downloadImage(`${UPLOAD}/item/c3/${c3}/${name}`, item.role);
-        if (got) {
-          entries.push(got);
-          break;
-        }
+        const got = await downloadImage(`${UPLOAD}/item/c3/${c3}/${name}`, item.role, name === item.variant ? 'orig' : name.replace(/^img\d+_/, ''));
+        if (!got) continue; // 该档 404 → 继续试下一档
+        if (seenFile.has(got.file)) break; // 内容重复：不再追加，也不继续降级
+        seenFile.add(got.file);
+        entries.push(got);
+        break;
       }
     }
     return entries;

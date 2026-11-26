@@ -18,12 +18,13 @@ import crypto from 'node:crypto';
 import https from 'node:https';
 import http from 'node:http';
 
-import { magicExt, isPlaceholder } from '../site.mjs';
+import { magicExt, isPlaceholder, imageSize } from '../site.mjs';
 import { MAX_ORDER_QTY } from '../mapping.mjs';
 import { applySiteChanges } from '../ingest.mjs';
 import { markRunFinished, markRunStarted, openPool } from '../store.mjs';
 import {
   acquireLock,
+  createBudget,
   createLogger,
   newRunId,
   pruneRunLogs,
@@ -163,7 +164,12 @@ function createHttp(cfg, log) {
           return text;
         }
         lastErr = `HTTP ${res.status}`;
-        if (res.status === 404) throw new Error(lastErr);
+        // 404 是永久性缺失（旧图床 goods_new 已大面积失效）：不要退避重试，直接失败
+        if (res.status === 404) {
+          const permanent = new Error(lastErr);
+          permanent.permanent = true;
+          throw permanent;
+        }
         // 301/302 是翻到公开分页上限后的跳转（跳回首页/第 1 页），视为本类列表结束，不当失败重试。
         if ([301, 302, 303, 307, 308].includes(res.status)) return binary ? Buffer.alloc(0) : '';
         // 403 首次多为 cookie 挑战：先回首页握手拿 cookie，再退避重试。
@@ -181,6 +187,7 @@ function createHttp(cfg, log) {
         throw new Error(lastErr);
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e);
+        if (e && e.permanent) break; // 404 等永久失败不重试
         if (attempt >= retries) break;
         const backoff = Math.min(10 * 60 * 1000, 4000 * 2 ** attempt);
         log(`[hznzcn] 请求失败 ${lastErr} → ${Math.round(backoff / 1000)}s 后重试（${attempt + 1}/${retries + 1}）`);
@@ -442,8 +449,7 @@ export function parseDetail(html, id) {
   const stallInMeta = (html.match(/档口位置在([^，。<"]{1,60})/) || [])[1] || '';
   const stall = stallInMeta.trim();
 
-  // 主图：midimg 的 jqimg/src 是原图；缩略图 li 的 id= 指向 goods_new 原图；
-  // 颜色规格图取 originaladdress；crawler 缩略图仅作兜底。
+  // 主图：midimg 的 jqimg/src 是原图；颜色规格图取 originaladdress；crawler 缩略图仅作兜底。
   const images = [];
   const pushImg = (raw, opts = {}) => {
     const url = productImageUrl(raw, opts);
@@ -453,21 +459,36 @@ export function parseDetail(html, id) {
   const midTag = (html.match(/<img[^>]*id=["']midimg["'][^>]*>/i) || [])[0] || '';
   pushImg(attr(midTag, 'jqimg') || attr(midTag, 'src'));
 
-  // 遍历所有 img 标签：优先 goods_new 原图（jqimg / id / originaladdress），其次 crawler。
+  // 2026-11 起源站商品图迁到 alicdn（原图即无 `_230x230` 后缀的那张），
+  // 旧的 goods_new 图床已大面积 404。所以「alicdn 原图优先、goods_new 兜底」，
+  // 避免抓到一堆死链或 48px 缩略图。
+  const alicdnImgs = [];
+  const goodsImgs = [];
   const imgTagRe = /<img[^>]+>/gi;
   let tm;
-  while ((tm = imgTagRe.exec(html)) && images.length < 20) {
+  while ((tm = imgTagRe.exec(html))) {
     const tag = tm[0];
+    const cdn = ['src', 'jqimg', 'data-original', 'originaladdress']
+      .map((a) => attr(tag, a))
+      .find((u) => /alicdn\.com\//i.test(u || ''));
+    if (cdn) {
+      const u = productImageUrl(cdn);
+      if (u && !alicdnImgs.includes(u)) alicdnImgs.push(u);
+      continue;
+    }
     const goods = ['jqimg', 'id', 'originaladdress']
       .map((a) => attr(tag, a))
       .find((u) => /goods_new\//.test(u || ''));
     if (goods) {
-      pushImg(goods);
+      const u = productImageUrl(goods);
+      if (u && !goodsImgs.includes(u)) goodsImgs.push(u);
       continue;
     }
     const swatch = attr(tag, 'originaladdress');
     if (swatch) pushImg(swatch);
   }
+  for (const u of alicdnImgs) pushImg(u);
+  for (const u of goodsImgs) pushImg(u);
   if (images.length === 0) {
     // 兜底：crawler 缩略图按带尺寸后缀取（去后缀可能 404），仅在没有原图时使用。
     const crawlerRe = /(?:https?:)?\/\/[^"'\s]*hznzcn\.com\/images\/crawler\/[^"'\s]+\.(?:jpg|jpeg|png|webp)(?:_\d+x\d+[^"'\s]*)?/gi;
@@ -559,7 +580,7 @@ function listUrl(cat, page) {
   return `${SITE.origin}/hz/gallery-${cat.code}-${page || 1}-grid.html`;
 }
 
-async function collectCatalog({ http, cfg, log, prior }) {
+async function collectCatalog({ http, cfg, log, prior, budget }) {
   const startedAt = Date.now();
   const home = await http.get(`${SITE.origin}/`, { referer: `${SITE.origin}/` });
   const tree = parseCategoryTree(home);
@@ -568,7 +589,8 @@ async function collectCatalog({ http, cfg, log, prior }) {
   const leaves = tree.leaves;
   if (!leaves.length) throw new Error('未解析到叶子品类，停止导入（不做无依据的猜测）');
 
-  const pages = cfg.pages > 0 ? cfg.pages : 1;
+  // pages=0 表示抓完为止（源站公开分页上限 100 页 × 150 条），用于「全量」手动同步
+  const pages = cfg.pages > 0 ? cfg.pages : 100;
   const scope = cfg.limit > 0 ? leaves.slice(0, cfg.limit) : leaves;
 
   // 断点续抓：复用上次已落盘的目录，已枚举成功的叶子不再重抓；0 件/失败的叶子本次重试。
@@ -581,6 +603,7 @@ async function collectCatalog({ http, cfg, log, prior }) {
   let listFailed = 0;
   let totalReported = prior?.totalReported || null;
   let truncated = false;
+  let stopped = false;
 
   const checkpoint = () =>
     writeAtomic(path.join(cfg.stateDir, 'hznzcn-catalog.json'), {
@@ -589,6 +612,12 @@ async function collectCatalog({ http, cfg, log, prior }) {
 
   for (let i = 0; i < scope.length; i += 1) {
     const leaf = scope[i];
+    // 单轮时长预算：到点优雅收尾，已抓类目落盘，下一轮 --resume 继续
+    if (budget?.exceeded()) {
+      stopped = true;
+      log(`[hznzcn] 达到单轮时长预算（${budget.minutes} 分钟），本轮收尾，剩余类目下一轮续抓`);
+      break;
+    }
     const priorLeaf = perCatByCode.get(leaf.code);
     if (priorLeaf && priorLeaf.items > 0) {
       log(`[hznzcn] 类目 ${i + 1}/${scope.length} ${leaf.code} ${leaf.name}：断点复用 ${priorLeaf.items} 件，累计 ${items.length}`);
@@ -597,6 +626,10 @@ async function collectCatalog({ http, cfg, log, prior }) {
     let count = 0;
     if (!truncated) {
       for (let page = 1; page <= pages; page += 1) {
+        if (budget?.exceeded()) {
+          stopped = true;
+          break;
+        }
         try {
           const html = await http.get(listUrl(leaf, page), {
             referer: `${SITE.origin}/hz/`,
@@ -634,6 +667,7 @@ async function collectCatalog({ http, cfg, log, prior }) {
     else { perCatByCode.set(leaf.code, entry); perCategory.push(entry); }
     checkpoint();
     log(`[hznzcn] 类目 ${i + 1}/${scope.length} ${leaf.code} ${leaf.name}：本类 ${count} 件，累计 ${items.length}${truncated ? '（已达上限）' : ''}`);
+    if (stopped) break;
   }
 
   if (items.length === 0) throw new Error('列表解析到 0 件商品（结构改版或被拦截），停止导入');
@@ -647,6 +681,7 @@ async function collectCatalog({ http, cfg, log, prior }) {
     totalReported,
     scanned: scope.length,
     durationSec: Math.round((Date.now() - startedAt) / 1000),
+    stopped,
   };
 }
 
@@ -676,7 +711,7 @@ async function downloadImage({ http, cfg, log }, remote) {
   }
 }
 
-async function collectDetails({ http, cfg, log, items }) {
+async function collectDetails({ http, cfg, log, items, budget }) {
   const startedAt = Date.now();
   // 断点续抓：复用已落盘的部分详情，已抓过的 sourceId 不再请求源站。
   const storePath = path.join(cfg.stateDir, 'hznzcn-details.json');
@@ -686,11 +721,17 @@ async function collectDetails({ http, cfg, log, items }) {
   store.errors = store.errors || [];
   const images = { ok: 0, failed: 0, products: 0 };
   let processed = 0;
+  let stopped = false;
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
     if (done.has(item.sourceId)) {
       processed += 1;
       continue;
+    }
+    // 单轮时长预算：到点收尾，已抓详情全部落盘，下一轮 --resume 继续
+    if (budget?.exceeded()) {
+      stopped = true;
+      break;
     }
     try {
       const html = await http.get(`${SITE.origin}/product-${item.sourceId}.html`);
@@ -733,7 +774,7 @@ async function collectDetails({ http, cfg, log, items }) {
     }
   }
   writeAtomic(storePath, store);
-  return { store, stats: { ...images, errors: store.errors.length, durationSec: Math.round((Date.now() - startedAt) / 1000) } };
+  return { store, stats: { ...images, errors: store.errors.length, durationSec: Math.round((Date.now() - startedAt) / 1000) }, stopped };
 }
 
 // ------------------------------------------------------------- 字段映射
@@ -1046,6 +1087,147 @@ async function reconcile({ cfg, tree, perCategory, catalogStats, applyStats, det
   };
 }
 
+// ------------------------------------------------------------ 图片高清回填
+/** 读本地图片像素（文件不存在返回 null）。 */
+function localImageSize(cfg, url) {
+  try {
+    return imageSize(fs.readFileSync(path.join(cfg.imageDir, path.basename(String(url || '')))));
+  } catch {
+    return null;
+  }
+}
+
+function maxSide(size) {
+  return size ? Math.max(size.w, size.h) : 0;
+}
+
+/**
+ * hznzcn 商品图高清回填（手动按需执行）。
+ *
+ * 背景：早期采集把部分商品图取成了 48/225/300px 的缩略图。源站商品页的「原图」
+ * 才是最高清档，所以对「图集最小边 ≤ 阈值」的商品重新抓详情页，只有新图确实
+ * 更大时才写库——**绝不降级、绝不编造**，也绝不动 egluosi 的商品。
+ *
+ * 断点：done 列表与统计落 hznzcn-reimage.json，可 --resume 跨多次手动运行累积完成。
+ */
+export async function runReimage(cfg) {
+  fs.mkdirSync(cfg.stateDir, { recursive: true });
+  fs.mkdirSync(cfg.reportDir, { recursive: true });
+  fs.mkdirSync(cfg.imageDir, { recursive: true });
+  rotateLog(cfg.logFile, cfg.logMaxBytes);
+
+  const statePath = path.join(cfg.stateDir, 'hznzcn-reimage.json');
+  const state = readJson(statePath, { done: [], updated: 0, failed: 0, scanned: 0 });
+  state.done = Array.isArray(state.done) ? state.done : [];
+  const done = new Set(state.done);
+  const budget = createBudget(cfg.maxRuntimeMin);
+  const minSide = Number(cfg.reimageMinSide) > 0 ? Number(cfg.reimageMinSide) : 800;
+
+  const logger = createLogger(cfg.reportDir, `hznzcn-reimage-${newRunId()}`);
+  const log = logger.log;
+  const http = createHttp(cfg, log);
+  const pool = await openPool();
+  const stats = { scanned: 0, candidates: 0, fetched: 0, updated: 0, skipped: state.done.length, failed: 0, stopped: false };
+  const startedAt = Date.now();
+  try {
+    log(`===== hznzcn reimage ${cfg.dryRun ? '(dry-run) ' : ''}启动：阈值 ${minSide}px，已回填 ${done.size} 件 =====`);
+    const res = await pool.query(
+      "select id, source_id, images, cover from products where source_key like 'hzn:%' order by id"
+    );
+    const targets = [];
+    for (const row of res.rows) {
+      stats.scanned += 1;
+      const imgs = Array.isArray(row.images) ? row.images : [];
+      let oldMin = Infinity;
+      let oldMax = 0;
+      for (const u of imgs) {
+        const side = maxSide(localImageSize(cfg, u));
+        if (side > 0) {
+          oldMin = Math.min(oldMin, side);
+          oldMax = Math.max(oldMax, side);
+        }
+      }
+      if (oldMin === Infinity) oldMin = 0;
+      // 命中条件：只要图集里**任何一张**是小图就重抓（封面 48px + 内页 1440px 这种最常见）
+      if (imgs.length > 0 && oldMin > minSide) continue; // 全部够清晰，不动
+      if (!row.source_id) continue;
+      targets.push({ ...row, oldMin, oldMax });
+    }
+    stats.candidates = targets.length;
+    log(`[hznzcn-reimage] 扫描 ${stats.scanned} 件，待回填 ${targets.length} 件（已回填 ${done.size} 件跳过）`);
+
+    for (const target of targets) {
+      if (done.has(String(target.id))) continue;
+      if (cfg.limit > 0 && stats.fetched >= cfg.limit) break;
+      if (budget.exceeded()) {
+        stats.stopped = true;
+        log(`[hznzcn-reimage] 达到单轮时长预算（${budget.minutes} 分钟），本轮收尾，剩余留待下次 --resume`);
+        break;
+      }
+      try {
+        const html = await http.get(`${SITE.origin}/product-${target.source_id}.html`);
+        const parsed = parseDetail(html, target.source_id);
+        const local = [];
+        let newMin = Infinity;
+        let newMax = 0;
+        for (const remote of parsed.images.slice(0, 6)) {
+          const url = await downloadImage({ http, cfg, log }, remote);
+          if (!url || local.includes(url)) continue;
+          local.push(url);
+          const side = maxSide(localImageSize(cfg, url));
+          newMin = Math.min(newMin, side);
+          newMax = Math.max(newMax, side);
+        }
+        if (newMin === Infinity) newMin = 0;
+        stats.fetched += 1;
+        // 只有「最小边或最大边确实变大」才更新，绝不拿小图覆盖大图
+        const better = local.length > 0 && (newMax > target.oldMax || newMin > target.oldMin);
+        if (better) {
+          if (!cfg.dryRun) {
+            await pool.query('update products set images = $1::jsonb, cover = $2 where id = $3', [
+              JSON.stringify(local),
+              local[0],
+              target.id,
+            ]);
+          }
+          stats.updated += 1;
+          log(`[hznzcn-reimage] ${target.source_id} 升级最小边 ${target.oldMin}px → ${newMin}px（${local.length} 张）`);
+        }
+        done.add(String(target.id));
+        state.done = [...done];
+        state.updated = (state.updated || 0) + (better ? 1 : 0);
+        state.failed = (state.failed || 0) + 0;
+        if (stats.fetched % 20 === 0) {
+          state.scanned = stats.scanned;
+          writeAtomic(statePath, state);
+          log(`[hznzcn-reimage] 进度 抓取 ${stats.fetched} / 待回填 ${targets.length}，已升级 ${stats.updated}`);
+        }
+      } catch (e) {
+        stats.failed += 1;
+        state.failed = (state.failed || 0) + 1;
+        log(`[hznzcn-reimage] ${target.source_id} 失败：${e instanceof Error ? e.message : e}`);
+        if (http.streak >= 3) {
+          writeAtomic(statePath, state);
+          log(`[hznzcn-reimage] 连续被阻断 ${http.streak} 次 → 冷却 10 分钟后继续`);
+          await sleep(10 * 60 * 1000);
+          try { await http.handshake(); } catch { /* 冷却后再握手 */ }
+        }
+      }
+    }
+    state.scanned = stats.scanned;
+    writeAtomic(statePath, state);
+    log(
+      `[hznzcn-reimage] ${stats.stopped ? '本轮未完成' : '完成'}：扫描 ${stats.scanned}，待回填 ${stats.candidates}，` +
+        `抓取 ${stats.fetched}，升级 ${stats.updated}，失败 ${stats.failed}，耗时 ${Math.round((Date.now() - startedAt) / 1000)}s`
+    );
+    console.log(JSON.stringify({ dryRun: cfg.dryRun, ...stats }, null, 2));
+    return 0;
+  } finally {
+    logger.close();
+    await pool.end();
+  }
+}
+
 // ---------------------------------------------------------------- 主流程
 export async function runSite(cfg) {
   fs.mkdirSync(cfg.stateDir, { recursive: true });
@@ -1062,8 +1244,10 @@ export async function runSite(cfg) {
   }
 
   const stateFile = path.join(cfg.stateDir, 'hznzcn-state.json');
+  const budget = createBudget(cfg.maxRuntimeMin);
   let state = cfg.resume ? readJson(stateFile, null) : null;
-  const resumable = state && state.phase !== 'done' && Date.now() - Date.parse(state.startedAt) < 48 * 3600 * 1000;
+  // hznzcn 是手动按需同步，可能隔几天才手动跑一次，断点窗口放到 14 天
+  const resumable = state && state.phase !== 'done' && Date.now() - Date.parse(state.startedAt) < 14 * 24 * 3600 * 1000;
   if (!resumable) {
     for (const f of ['hznzcn-state.json', 'hznzcn-catalog.json', 'hznzcn-details.json']) {
       const p = path.join(cfg.stateDir, f);
@@ -1094,16 +1278,7 @@ export async function runSite(cfg) {
 
     if (!state.catalogDone) {
       const prior = readJson(path.join(cfg.stateDir, 'hznzcn-catalog.json'), null);
-      const catalog = await collectCatalog({ http, cfg, log, prior });
-      state.catalogDone = true;
-      // 有界采集（--per-cat / --pages / --limit / --max-items）只覆盖站点一部分商品，
-      // 不能据此判定「没抓到 = 已下架」，必须显式要求全量参数才允许下架。
-      state.delistSafe =
-        catalog.listFailed === 0 &&
-        cfg.limit === 0 &&
-        cfg.maxItems === 0 &&
-        cfg.perCat === 0 &&
-        cfg.pages === 0;
+      const catalog = await collectCatalog({ http, cfg, log, prior, budget });
       state.catalogStats = {
         leaves: catalog.tree.leaves.length,
         scanned: catalog.scanned,
@@ -1114,6 +1289,32 @@ export async function runSite(cfg) {
         durationSec: catalog.durationSec,
       };
       state.catalogErrors = catalog.errors;
+      writeAtomic(stateFile, state);
+      if (catalog.stopped) {
+        // 目录阶段被预算截断：保持 catalogDone=false，已抓类目已落盘（checkpoint），下一轮续跑
+        state.phase = 'catalog';
+        writeAtomic(stateFile, state);
+        if (!cfg.dryRun) {
+          try {
+            await markRunFinished(state.runId, 'paused', { paused: true, reason: 'catalog-budget', ...state.catalogStats }, null, `目录阶段达到单轮时长预算 ${budget.minutes} 分钟`);
+          } catch {
+            /* 记账失败不影响收尾 */
+          }
+        }
+        log('[hznzcn] 目录阶段达预算收尾，下一轮 --resume 从未抓类目继续');
+        return 0;
+      }
+      state.catalogDone = true;
+      // 有界采集（--per-cat / --pages / --limit / --max-items）只覆盖站点一部分商品，
+      // 不能据此判定「没抓到 = 已下架」，必须显式要求全量参数才允许下架；
+      // --no-delist 是「已有商品不下架」总开关。
+      state.delistSafe =
+        !cfg.noDelist &&
+        catalog.listFailed === 0 &&
+        cfg.limit === 0 &&
+        cfg.maxItems === 0 &&
+        cfg.perCat === 0 &&
+        cfg.pages === 0;
       writeAtomic(path.join(cfg.stateDir, 'hznzcn-catalog.json'), {
         items: catalog.items,
         tree: catalog.tree,
@@ -1129,11 +1330,26 @@ export async function runSite(cfg) {
 
     let details;
     if (!state.detailDone) {
-      const result = await collectDetails({ http, cfg, log, items: catalog.items });
+      const result = await collectDetails({ http, cfg, log, items: catalog.items, budget });
       details = result.store;
-      state.detailDone = true;
       state.detailStats = result.stats;
       writeAtomic(path.join(cfg.stateDir, 'hznzcn-details.json'), details);
+      writeAtomic(stateFile, state);
+      if (result.stopped) {
+        // 详情阶段被预算截断：保持 detailDone=false，已抓详情已落盘，下一轮续跑
+        state.phase = 'detail';
+        writeAtomic(stateFile, state);
+        if (!cfg.dryRun) {
+          try {
+            await markRunFinished(state.runId, 'paused', { paused: true, reason: 'detail-budget', ...state.detailStats }, null, `详情阶段达到单轮时长预算 ${budget.minutes} 分钟`);
+          } catch {
+            /* 记账失败不影响收尾 */
+          }
+        }
+        log('[hznzcn] 详情阶段达预算收尾，下一轮 --resume 从已有货号之后继续');
+        return 0;
+      }
+      state.detailDone = true;
       writeAtomic(stateFile, state);
     } else {
       details = readJson(path.join(cfg.stateDir, 'hznzcn-details.json'), { items: {}, errors: [] });

@@ -20,6 +20,8 @@ import path from 'node:path';
 import { loadConfig } from './config.mjs';
 import { createClient } from './site.mjs';
 import { connectionString, openPool } from './store.mjs';
+import { createBudget } from './util.mjs';
+import { runReimage as runHznReimage } from './sites/hznzcn.mjs';
 
 const argv = process.argv.slice(2);
 const has = (name) => argv.includes(name);
@@ -33,13 +35,17 @@ const opt = (name, fallback = '') => {
 if (has('--help') || has('-h')) {
   console.log(
     [
-      '图片回填（只更新 images / cover / spec_image）',
+      '图片高清回填（只更新 images / cover / spec_image）',
       '',
-      '  node scripts/catalog/reimage.mjs [选项]',
+      '  node scripts/catalog/reimage.mjs [--site egluosi|hznzcn] [选项]',
       '',
+      '  --site egluosi     按三级类目重拉画廊原图（默认，1000×1000 无后缀原图）',
+      '  --site hznzcn      按商品重抓详情页原图，只有新图更大才写库（手动按需）',
       '  --dry-run          只统计将变更的行，不写库',
-      '  --c3 001,003      只处理指定三级类目（逗号分隔）',
-      '  --limit <n>       最多处理 n 个类目',
+      '  --c3 001,003       仅 egluosi：只处理指定三级类目（逗号分隔）',
+      '  --limit <n>        最多处理 n 个类目 / n 件商品',
+      '  --max-runtime-min <n> 单轮最长运行分钟数（0=不限）',
+      '  --reimage-min-side <n> 仅 hznzcn：最大边 ≤ n 像素才回填（默认 800）',
       '  --storage-dir <dir>  图片落盘根目录（同采集器，默认读 STORAGE_DIR）',
     ].join('\n')
   );
@@ -47,6 +53,9 @@ if (has('--help') || has('-h')) {
 }
 
 const cfg = loadConfig(process.argv);
+
+/** egluosi：按三级类目重拉画廊原图并回写 images/cover/spec_image。 */
+function mainEgluosi() {
 const dryRun = has('--dry-run') || cfg.dryRun;
 /** 库里 c3_id 形如 `c3:007`，源站路径用的是叶子值 `007`。 */
 const leafOf = (c3Id) => String(c3Id).replace(/^c3:/, '');
@@ -57,6 +66,7 @@ const onlyC3 = new Set(
     .filter(Boolean)
 );
 const limit = Number(opt('--limit', '0')) || 0;
+const budget = createBudget(cfg.maxRuntimeMin);
 
 if (!cfg.downloadImages) {
   console.error('图片回填必须允许下载：不要传 --no-images / CATALOG_DOWNLOAD_IMAGES=0');
@@ -88,7 +98,7 @@ function desiredFields(entries) {
   return { images, cover: images[0] || null, specImage: spec ? spec.url : null };
 }
 
-async function main() {
+async function runEgluosi() {
   const pool = await openPool();
   const client = createClient(cfg, log);
   const stats = { categories: 0, skipped: 0, scanned: 0, changed: 0, unchanged: 0, newFiles: 0, newBytes: 0, failed: [] };
@@ -108,6 +118,10 @@ async function main() {
     log(`[reimage] ${dryRun ? 'dry-run ' : ''}待处理 c3 ${targets.length} 个`);
 
     for (const target of targets) {
+      if (budget.exceeded()) {
+        log(`[reimage] 达到单轮时长预算（${budget.minutes} 分钟），本轮收尾，剩余类目下次续跑`);
+        break;
+      }
       const { c3Id, leaf } = target;
       const before = snapshotDir(cfg.imageDir);
       let entries = [];
@@ -193,7 +207,24 @@ async function main() {
   }
 }
 
-main().catch((e) => {
+runEgluosi().catch((e) => {
   console.error('[reimage] 未捕获异常：', e && e.stack ? e.stack : e);
   process.exit(1);
 });
+}
+
+// 入口分发：hznzcn 按商品回填（WAF 限速 ≥2.5s/请求），egluosi 按类目回填
+if (cfg.site === 'hznzcn') {
+  if (!connectionString()) {
+    console.error('未找到 DATABASE_URL_LOCAL / DATABASE_URL，无法读取商品');
+    process.exit(64);
+  }
+  runHznReimage(cfg)
+    .then((code) => process.exit(code))
+    .catch((e) => {
+      console.error('[reimage] hznzcn 未捕获异常：', e && e.stack ? e.stack : e);
+      process.exit(1);
+    });
+} else {
+  mainEgluosi();
+}

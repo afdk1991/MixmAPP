@@ -23,7 +23,7 @@ import {
   normalizeBrand,
 } from './mapping.mjs';
 import { applyChanges, markRunFinished, markRunStarted, readProductByKey } from './store.mjs';
-import { acquireLock, createLogger, newRunId, pruneRunLogs, readJson, rotateLog, writeAtomic } from './util.mjs';
+import { acquireLock, createBudget, createLogger, newRunId, pruneRunLogs, readJson, rotateLog, writeAtomic } from './util.mjs';
 import { runSite as runHznzcnSync } from './sites/hznzcn.mjs';
 
 const cfg = loadConfig(process.argv);
@@ -39,11 +39,15 @@ rotateLog(cfg.logFile, cfg.logMaxBytes);
 const stateFile = path.join(cfg.stateDir, 'state.json');
 
 // ------------------------------------------------------------------ sync
+/** 断点续跑有效期：定时任务逐日累积，隔几天没跑也应能接着续，不能一超时就清零重抓 */
+const RESUME_WINDOW_MS = 14 * 24 * 3600 * 1000;
+
 async function runSync() {
   const release = acquireLock(cfg.stateDir);
+  const budget = createBudget(cfg.maxRuntimeMin);
   let state = cfg.resume ? readJson(stateFile, null) : null;
   const resumable =
-    state && state.phase !== 'done' && Date.now() - Date.parse(state.startedAt) < 48 * 3600 * 1000;
+    state && state.phase !== 'done' && Date.now() - Date.parse(state.startedAt) < RESUME_WINDOW_MS;
 
   if (!resumable) {
     for (const f of ['state.json', 'catalog.json', 'gallery.json', 'details.json']) {
@@ -59,6 +63,7 @@ async function runSync() {
   pruneRunLogs(cfg.reportDir);
   log(`===== catalog sync ${cfg.dryRun ? '(dry-run)' : ''} run=${state.runId} =====`);
   if (resumable) log(`[sync] 断点续跑 ${state.runId}（phase=${state.phase}）`);
+  if (budget.limited) log(`[sync] 单轮时长预算 ${budget.minutes} 分钟`);
 
   const client = createClient(cfg, log);
   let exitCode = 0;
@@ -68,12 +73,7 @@ async function runSync() {
     const t0 = Date.now();
 
     if (!state.catalogDone) {
-      const catalog = await collectCatalog(client, cfg, log);
-      state.catalogDone = true;
-      // 局部抓取（--limit）只覆盖前 n 个类目，未抓到的商品不代表源站消失，禁止下架判定
-      state.delistSafe = catalog.listFailed === 0 && cfg.limit === 0;
-      if (cfg.limit > 0) log('[catalog] --limit 局部抓取：本次跳过下架判定');
-      state.catalogErrors = catalog.errors;
+      const catalog = await collectCatalog(client, cfg, log, budget);
       state.catalogStats = {
         leaves: catalog.perCategory.length,
         siteCount: catalog.scanned,
@@ -82,6 +82,29 @@ async function runSync() {
         filters: Object.keys(catalog.filters || {}).length,
         durationSec: catalog.durationSec || 0,
       };
+      state.catalogErrors = catalog.errors;
+      if (catalog.stopped) {
+        // 目录阶段被预算截断：保持 catalogDone=false，快照 partial=true，下一轮从未抓类目继续
+        state.phase = 'catalog';
+        writeAtomic(stateFile, state);
+        const paused = { runId: state.runId, paused: true, reason: 'catalog-budget', ...state.catalogStats };
+        if (!cfg.dryRun) {
+          try {
+            await markRunFinished(state.runId, 'paused', paused, null, `目录阶段达到单轮时长预算 ${budget.minutes} 分钟，下一轮续抓`);
+          } catch {
+            /* 记账失败不影响收尾 */
+          }
+        }
+        log('[sync] 目录阶段达预算收尾，下一轮 --resume 从未抓类目继续');
+        console.log(JSON.stringify(paused, null, 2));
+        return 0;
+      }
+      state.catalogDone = true;
+      // 局部抓取（--limit）只覆盖前 n 个类目，未抓到的商品不代表源站消失，禁止下架判定
+      // --no-delist 为「已有商品不下架」总开关：定时任务默认带上，避免误判
+      state.delistSafe = !cfg.noDelist && catalog.listFailed === 0 && cfg.limit === 0;
+      if (cfg.limit > 0) log('[catalog] --limit 局部抓取：本次跳过下架判定');
+      if (cfg.noDelist) log('[catalog] --no-delist：本次不做下架判定，已有商品全部保留在售');
       writeAtomic(stateFile, state);
     }
     if (cfg.filtersOnly) {
@@ -98,10 +121,26 @@ async function runSync() {
 
     let details;
     if (!state.detailDone) {
-      const result = await collectDetails(client, cfg, items, log);
+      const result = await collectDetails(client, cfg, items, log, undefined, budget);
       details = result.store;
-      state.detailDone = true;
       state.detailStats = result.stats;
+      if (result.stopped) {
+        // 详情阶段被预算截断：保持 detailDone=false，details.json 已逐批落盘，下一轮续抓
+        state.phase = 'detail';
+        writeAtomic(stateFile, state);
+        const paused = { runId: state.runId, paused: true, reason: 'detail-budget', ...state.detailStats };
+        if (!cfg.dryRun) {
+          try {
+            await markRunFinished(state.runId, 'paused', paused, null, `详情阶段达到单轮时长预算 ${budget.minutes} 分钟，下一轮续抓`);
+          } catch {
+            /* 记账失败不影响收尾 */
+          }
+        }
+        log('[sync] 详情阶段达预算收尾，下一轮 --resume 从已有货号之后继续');
+        console.log(JSON.stringify(paused, null, 2));
+        return 0;
+      }
+      state.detailDone = true;
       writeAtomic(stateFile, state);
     } else {
       details = readJson(path.join(cfg.stateDir, 'details.json'), { items: {}, errors: [] });
@@ -365,14 +404,8 @@ async function runInspect() {
 // ------------------------------------------------------------------ main
 const command = cfg.command;
 
-// 项目规则：hznzcn 源站已停用，禁止再读取 https://www.hznzcn.com（含 www/m 镜像）。
-// 已入库的 hzn 商品保留不动；如需恢复，先解除本守卫并确认源站许可。
-if (cfg.site === 'hznzcn') {
-  console.error('[catalog] hznzcn 源站已按项目规则停用：不再读取 https://www.hznzcn.com。已入库的 hzn 商品保留不动。');
-  process.exit(65);
-}
-
-// 站点适配层：egluosi 走既有 sync；hznzcn 走自己的采集/映射，共用 ingest 入库
+// 站点适配层：egluosi 走既有 sync；hznzcn 走自己的采集/映射，共用 ingest 入库。
+// hznzcn 只做「手动按需同步」——生产机 IP 被源站 WAF 封，定时必然失败，因此不进 crontab。
 const runSyncForSite = cfg.site === 'hznzcn' ? () => runHznzcnSync(cfg) : runSync;
 const runner = command === 'inspect' ? runInspect : command === 'sync' ? runSyncForSite : null;
 

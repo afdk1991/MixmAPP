@@ -413,18 +413,18 @@ LOCAL_ONLY=1 CATALOG_FILE=/opt/mixmapp/prod-catalog/catalog.json \
 
 ---
 
-## 11. hznzcn 源站（已停用，禁止再读取/抓取）
+## 11. hznzcn 源站（手动按需同步，不进定时）
 
-> **项目规则（2026-11-24）：不再读取 `https://www.hznzcn.com`（含 www/m 镜像与图床）。**
-> CLI 入口已加守卫：`--site hznzcn` 直接退出码 65，`catalog:sync:hznzcn` npm 脚本已移除。
-> 已入库的 `hzn:*` 商品保留不动；下文历史命令仅作背景留档，**不要执行**。
+> **策略（2026-11-26 起）**：`https://www.hznzcn.com` 恢复为**手动按需同步**，覆盖全部分页 × 全部叶子类目。
+> **不挂 crontab**：生产机 IP 被源站 WAF 封，定时必然失败并浪费一天一次的重试。
+> `run.sh` 的 `SITES` 默认仍只有 `egluosi`；hznzcn 只能人工显式触发。
 
 ### 11.1 策略
 
 | 源 | 触发方式 | 说明 |
 |---|---|---|
 | `egluosi` | 定时，每日 02:30（Asia/Shanghai） | 唯一进 crontab 的源，`/opt/mixmapp/catalog-sync/run.sh`，默认全量全分类幂等累积 |
-| `hznzcn` | **已停用** | 不再抓取；本地 CLI 守卫拦截，生产 cron 默认 `SITES=egluosi`，不会触发 |
+| `hznzcn` | **手动按需**（见 §11.3） | 不进 crontab；本地采集 + SSH 隧道写库 + 图片推送，可 `--resume` 跨多次累积到全量 |
 
 服务器实际生效值（不是仓库文件）：
 
@@ -459,21 +459,26 @@ export DATABASE_URL_LOCAL="$(ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 \
   'grep -m1 ^DATABASE_URL_LOCAL= /etc/mixmapp/api.env' | cut -d= -f2- \
   | sed -E 's#@([^/:@]+):[0-9]+/#@127.0.0.1:15433/#')"
 
-# ③ 采集 + 幂等写库（这一条就是手动入口；等价于 pnpm catalog:sync:hznzcn）
-node scripts/catalog/cli.mjs sync --site hznzcn --resume --per-cat 40 --delay-ms 2500 --storage-dir storage
+# ③ 采集 + 幂等写库（手动入口；默认全部分页 × 全部叶子类目）
+#    --pages 0   = 每个叶子抓到源站没有下一页为止
+#    per-cat 不传 = 不限制每类件数（全量）
+node scripts/catalog/cli.mjs sync --site hznzcn --resume \
+  --delay-ms 2500 --list-delay-ms 2500 --max-runtime-min 120 \
+  --storage-dir storage
 ```
 
-> `package.json` 里的 `pnpm catalog:sync:hznzcn` 已内置 `--site hznzcn --resume --per-cat 40 --delay-ms 2500`，
-> 配好 `DATABASE_URL_LOCAL` 后直接 `pnpm catalog:sync:hznzcn` 即可，不会再跑 egluosi。
+> 单轮默认 120 分钟预算，到点优雅收尾；下次继续 `--resume`（14 天内有效）从断点累积。
+> 只是想让每个分类都有商品、不追求全量时，可加 `--per-cat 40` 做有界覆盖。
 
 参数含义与注意事项：
 
 | 参数 | 作用 | 注意 |
 |---|---|---|
 | `--site hznzcn` | 走 `sites/hznzcn.mjs` 独立适配器 | **不会执行 egluosi 的采集/入库**，两源彻底解耦 |
-| `--resume` | 48h 内未完成的运行从断点继续 | 没有可续跑的 state 时会自动清 state 重跑，可安全常带 |
-| `--per-cat 40` | 每个二级叶子最多 40 件（全分类有界覆盖） | 有界运行 ⇒ `delistSafe=false`，**永不下架任何商品** |
+| `--resume` | 14 天内未完成的运行从断点继续 | 没有可续跑的 state 时会自动清 state 重跑，可安全常带 |
+| `--per-cat 40` | 可选取值：每个叶子最多 40 件（有界覆盖） | 有界运行 ⇒ `delistSafe=false`，**永不下架任何商品** |
 | `--delay-ms 2500` | 请求间隔；适配器本身也强制 ≥2500ms | 不要再调小，WAF 会封 |
+| `--max-runtime-min 120` | 单轮上限，到点收尾，下次续跑 | 不改也能跑，但长跑容易被系统/网络中断 |
 | `--storage-dir storage` | 图片落到仓库 `storage/products/` | 下一步统一推送生产 |
 | `--no-images` | 只写字段不下载图片（可选，调试用） | 正式同步不要带 |
 
@@ -516,7 +521,88 @@ dry-run 报告里应看到 `"dryRun": true`、`"delistSafe": false`，且 `stats
 
 | 场景 | 回退方式 |
 |---|---|
-| 想把 hznzcn 临时加回定时 | `CATALOG_SITES="egluosi hznzcn" /opt/mixmapp/catalog-sync/run.sh`（一次性），或改回 `run.sh.bak.<时间戳>` |
+| 想把 hznzcn 临时加回定时 | `CATALOG_SITES="egluosi hznzcn" /opt/mixmapp/catalog-sync/run.sh`（一次性），或改回 `run.sh.bak.<时间戳>`（不建议，WAF 下必然失败） |
 | 定时脚本改坏 | `cd /opt/mixmapp/catalog-sync && cp -p run.sh.bak.<时间戳> run.sh && bash -n run.sh` |
 | 手动同步写错数据 | 采集只 upsert 不删除；按 `source_key like 'hzn:%'` 精确回删本次 run 新增行，或从 §3 的 DB 备份恢复（高危，需授权） |
-| 图片推错/多推 | 图片只增不覆盖（`--skip-old-files`），按 sha1 文件名精确删除多余文件即可，不影响 egluosi 的 872 张 |
+| 图片推错/多推 | 图片只增不覆盖（`--skip-old-files`），按 sha1 文件名精确删除多余文件即可，不影响 egluosi 的既有图片 |
+
+---
+
+## 12. 每日无人值守续抓 + 图片高清回填（2026-11-26）
+
+### 12.1 定时任务（只加 egluosi）
+
+生产机实际生效的 crontab（`/opt/mixmapp/catalog-sync/run.sh` 是**独立副本**，不随 release 更新）：
+
+```bash
+# 安装/更新入口脚本（仓库改了 run.sh 后必须单独 scp；先备份）
+scp -i ~/.ssh/mixmapp_deploy scripts/catalog/run.sh root@115.159.159.11:/tmp/catalog-run.sh
+ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 '
+  set -e
+  D=/opt/mixmapp/catalog-sync
+  mkdir -p "$D"
+  [ -f "$D/run.sh" ] && cp -p "$D/run.sh" "$D/run.sh.bak.$(date +%Y%m%d%H%M%S)"
+  install -m 755 /tmp/catalog-run.sh "$D/run.sh"
+  bash -n "$D/run.sh"
+  ( crontab -l 2>/dev/null | grep -v "catalog-sync/run.sh"; \
+    echo "30 2 * * * $D/run.sh" ) | crontab -
+  crontab -l | grep catalog-sync
+'
+```
+
+`run.sh` 每日固定参数：`--resume --max-runtime-min 150 --no-delist`。
+
+- `--resume`：上一轮没跑完就断点续，上一轮已完成就自动开新一轮全量（state.json `phase=done` 时清空重来）。
+- `--max-runtime-min 150`：单轮最长 150 分钟，到点优雅收尾（runs 表记 `paused`），次日接着跑，**逐日累积到全量**。
+- `--no-delist`：已有商品不下架，只 upsert（`CATALOG_NO_DELIST=0` 可恢复下架判定）。
+
+手动触发一轮（与定时同参数，前台看日志）：
+
+```bash
+ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 \
+  '/opt/mixmapp/catalog-sync/run.sh; tail -20 /var/lib/mixmapp/catalog-sync/sync.log'
+```
+
+查断点状态：
+
+```bash
+ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 \
+  "cat /var/lib/mixmapp/catalog-sync/state.json; tail -5 /var/lib/mixmapp/catalog-sync/sync.log"
+```
+
+### 12.2 图片高清策略与回填
+
+- 采集器默认取源站**无后缀原图** `img1~img4`（1000×1000 原图质量，文件最大）与 `spec`（1121×668），
+  `_l/_m/_s` 仅在 404 时降级；同内容图按 SHA1 去重，不再出现重复图。
+- egluosi 回填（生产机直接跑，~12 分钟）：
+
+```bash
+ssh -i ~/.ssh/mixmapp_deploy root@115.159.159.11 '
+  set -a; . /etc/mixmapp/api.env; set +a
+  node /opt/mixmapp/current/scripts/catalog/reimage.mjs --storage-dir /var/lib/mixmapp/storage \
+      --max-runtime-min 60
+'
+# 先看影响面：加 --dry-run
+```
+
+- hznzcn 回填（生产机被封，必须本地跑 + 隧道；只升级、不降级）：
+
+```bash
+# 本机，保持 §11.3 的 SSH 隧道
+export DATABASE_URL_LOCAL="…同 §11.3…"
+node scripts/catalog/reimage.mjs --site hznzcn --resume \
+  --storage-dir storage --max-runtime-min 120 --reimage-min-side 800
+# 只统计不写库：--dry-run
+```
+
+规则：只对「库里最大边 ≤ 800px」的 hzn 商品重抓详情页原图，**只有新图确实更大才写库**，
+不动 egluosi、不编造字段；`--resume` 可跨多次手动运行累积完成。
+
+### 12.3 回退
+
+| 场景 | 回退方式 |
+|---|---|
+| 定时参数想恢复旧行为 | 用 `run.sh.bak.<时间戳>` 覆盖回去，`bash -n` 后无需动 crontab |
+| 想临时停掉定时 | `crontab -l \| grep -v catalog-sync/run.sh \| crontab -`（删行）；恢复用 §12.1 的安装命令 |
+| 图片回填写错 | 只改了 `images / cover / spec_image`；按 `source_key` 或 c3 从 §3 的 DB 备份恢复对应列，图片文件只增不覆盖，删多余 sha1 文件即可 |
+| 预算收尾导致未完成 | 不是故障；下一次定时/手动加 `--resume` 会接着跑，`state.json` 与 `catalog.json(partial=true)` 可查进度 |

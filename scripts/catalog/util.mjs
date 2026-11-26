@@ -34,6 +34,22 @@ export function newRunId() {
   return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 }
 
+/**
+ * 单轮时长预算：分钟数 <= 0 表示不限。
+ * 定时任务用它保证「一轮不至于跑太久被系统掐断」——到达预算后优雅收尾，
+ * 已抓到的内容全部落盘，下一轮 --resume 从断点继续（逐日累积到全量）。
+ */
+export function createBudget(minutes) {
+  const limit = Number(minutes) > 0 ? Number(minutes) : 0;
+  const deadline = limit > 0 ? Date.now() + limit * 60 * 1000 : 0;
+  return {
+    limited: limit > 0,
+    minutes: limit,
+    exceeded: () => deadline > 0 && Date.now() >= deadline,
+    remainingMs: () => (deadline > 0 ? Math.max(0, deadline - Date.now()) : Infinity),
+  };
+}
+
 /** 同时写标准输出与「本次运行日志」，run.sh 另有一份 sync.log。 */
 export function createLogger(reportDir, runId) {
   const file = `${reportDir}/${runId}.log`;

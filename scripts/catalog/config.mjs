@@ -14,6 +14,8 @@
  *   --state-dir <dir>     状态、日志、报告目录
  *   --storage-dir <dir>   图片落盘根目录
  *   --filters-only        只抓目录树与规格筛选项，不抓商品
+ *   --max-runtime-min <n> 单轮最长运行分钟数，到点优雅收尾，下一轮 --resume 续跑（0=不限）
+ *   --no-delist           本轮不做下架判定（已有商品一律保留在售）
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,6 +76,12 @@ export function loadConfig(argv = process.argv) {
     pages: number('--pages', Number(env.CATALOG_PAGES) || 0, { min: 0 }),
     maxItems: number('--max-items', Number(env.CATALOG_MAX_ITEMS) || 0, { min: 0 }),
     perCat: number('--per-cat', Number(env.CATALOG_PER_CAT) || 0, { min: 0 }),
+    // 单轮时长预算：定时任务用它避免被系统掐断；0 = 不限
+    maxRuntimeMin: number('--max-runtime-min', Number(env.CATALOG_MAX_RUNTIME_MIN) || 0, { min: 0 }),
+    // 已有商品不下架：为 true 时本轮跳过 delistMissing（只 upsert，不把未抓到的标停售）
+    noDelist: has('--no-delist') || bool('', 'CATALOG_NO_DELIST', false),
+    // 图片回填阈值：库里**最小边** ≤ 该值才重抓原图（默认 700；只有新图更大才写库）
+    reimageMinSide: number('--reimage-min-side', Number(env.CATALOG_REIMAGE_MIN_SIDE) || 700, { min: 0 }),
     itemNo: value('--item-no', ''),
     brand: value('--brand', ''),
     spec: value('--spec', ''),
@@ -91,24 +99,26 @@ export function loadConfig(argv = process.argv) {
 
 export function usage() {
   return [
-    'catalog 采集器（egluosi 货源站；hznzcn 已停用）',
+    'catalog 采集器（egluosi / hznzcn 双货源站）',
     '',
     '  pnpm catalog:sync     [选项]   全量抓取 → 比对 → 幂等入库',
     '  pnpm catalog:inspect  [选项]   只读对账：单件/按品牌规格查源站，不写库',
     '',
-    '  --site <name>        货源站：egluosi（默认）；hznzcn 已停用，CLI 守卫拒绝执行',
+    '  --site <name>        货源站：egluosi（默认，进每日定时）/ hznzcn（仅手动按需）',
     '  --base-url <url>     站点基址（默认 https://eg.egluosi.com）',
     '  --concurrency <n>    详情并发（默认 1）',
     '  --delay-ms <n>       详情请求间隔毫秒（默认 250；hznzcn 强制 ≥2500）',
     '  --list-delay-ms <n>  列表请求间隔毫秒（默认 400；hznzcn 强制 ≥2500）',
-    '  --pages <n>          每个叶子分类抓前 n 页（hznzcn 默认 1 页）',
-    '  --per-cat <n>        每个叶子分类最多取 n 件（0 = 不限；用于全分类有界覆盖）',
+    '  --pages <n>          每个叶子分类抓前 n 页（hznzcn 0 = 抓完为止）',
+    '  --per-cat <n>        每个叶子分类最多取 n 件（0 = 不限；用于全分类覆盖）',
     '  --max-items <n>      本次最多入库 n 件（0 = 不限）',
+    '  --max-runtime-min <n> 单轮最长运行分钟数（0 = 不限）；到点优雅收尾，下一轮 --resume 续跑',
+    '  --no-delist          本轮不下架任何已有商品（只 upsert）',
     '  --no-images          不下载图片',
     '  --no-filters         不抓规格筛选项',
     '  --filters-only       只抓目录树与筛选项',
     '  --dry-run            只对账不写库',
-    '  --resume             断点续跑上一次未完成的运行',
+    '  --resume             断点续跑上一次未完成的运行（14 天内有效）',
     '  --limit <n>          只处理前 n 个三级类目',
     '  --state-dir <dir>    状态/日志/报告目录（默认 <repo>/.catalog-sync）',
     '  --storage-dir <dir>  图片根目录（默认 <repo>/.catalog-storage）',

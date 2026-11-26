@@ -86,10 +86,16 @@ export async function fetchItem(client, no, delayMs) {
   }
 }
 
-/** 旧版本画廊缓存的第 2-4 张是 80×80 的 `_s`，复用会让详情页继续模糊，命中就重采。 */
+/**
+ * 旧版本画廊缓存的第 2-4 张是 80×80 的 `_s`、后来是压缩过的 `_l`，复用会让详情页继续模糊；
+ * 现在一律取无后缀原图（1000×1000 原图质量）。判定规则：
+ *   - 旧缓存没有 `variant` 字段 → 需要重采一次完成升级；
+ *   - 命中 `_m` / `_s` → 明显小图，重采；
+ *   - 只有 `_l`（原图 404 时的降级）带 variant='l' → 视为最终可用档，不再反复重采。
+ */
 function isStaleGallery(entries) {
   if (!Array.isArray(entries) || entries.length === 0) return true;
-  return entries.some((e) => String(e?.remote || '').endsWith('_s'));
+  return entries.some((e) => !e?.variant || e.variant === 'm' || e.variant === 's');
 }
 
 /** 类目画廊（按 c3 缓存到 gallery.json，跨运行复用） */
@@ -103,18 +109,36 @@ export async function collectGallery(client, cfg, c3, cache) {
 
 /**
  * 阶段一：目录 + 筛选项。
- * @returns {{items: Array, perCategory: Array, filters: Object, errors: Array, listFailed: number}}
+ *
+ * 断点续跑：每抓完一个三级类目就写一次快照（partial=true），下一轮 --resume
+ * 直接跳过已完成的类目；这样即使单轮被时长预算截断，也不会从零重抓。
+ *
+ * @returns {{items: Array, perCategory: Array, filters: Object, errors: Array,
+ *            listFailed: number, scanned: number, stopped?: boolean}}
  */
-export async function collectCatalog(client, cfg, log) {
+export async function collectCatalog(client, cfg, log, budget) {
   const startedAt = Date.now();
   const galleryCache = readJson(path.join(cfg.stateDir, 'gallery.json'), {});
   const filtersFile = path.join(cfg.stateDir, 'filters.json');
   const filters = cfg.withFilters ? readJson(filtersFile, {}) : {};
+  const catalogFile = path.join(cfg.stateDir, 'catalog.json');
 
   await client.handshake();
   const leaves = flattenLeaves(await fetchTree(client));
   const targets = cfg.limit > 0 ? leaves.slice(0, cfg.limit) : leaves;
   log(`[catalog] 三级类目 ${targets.length} 个`);
+
+  // 断点快照：只有「本轮未完成」的快照才复用，完整快照会在 cli 阶段被 catalogDone 拦下
+  const prior = cfg.resume ? readJson(catalogFile, null) : null;
+  const priorPartial = prior && prior.partial === true ? prior : null;
+  const doneLeaves = new Set((priorPartial?.perCategory || []).filter((c) => !c.failed).map((c) => String(c.c3)));
+  const itemsByC3 = {};
+  for (const [c3, arr] of Object.entries(priorPartial?.itemsByC3 || {})) itemsByC3[c3] = Array.isArray(arr) ? arr : [];
+  const items = Object.values(itemsByC3).flat();
+  const perCategory = [...(priorPartial?.perCategory || [])];
+  let scanned = perCategory.reduce((n, c) => n + (Number(c.siteCount) || 0), 0);
+  let listFailed = perCategory.filter((c) => c.failed).length;
+  if (priorPartial) log(`[catalog] 断点续跑：已完成 ${doneLeaves.size} 个类目 / 快照内商品 ${items.length} 件`);
 
   if (cfg.withFilters) {
     for (const leaf of targets) {
@@ -127,17 +151,25 @@ export async function collectCatalog(client, cfg, log) {
     writeAtomic(filtersFile, filters);
   }
   if (cfg.filtersOnly) {
-    return { items: [], perCategory: [], filters, errors: [], listFailed: 0 };
+    return { items: [], perCategory: [], filters, errors: [], listFailed: 0, scanned: 0 };
   }
 
-  const items = [];
-  const perCategory = [];
-  const errors = [];
-  let listFailed = 0;
-  let scanned = 0;
+  const errors = [...(priorPartial?.errors || [])];
+  let stopped = false;
 
   for (const leaf of targets) {
-    const c3 = leaf.leafValue;
+    const c3 = String(leaf.leafValue);
+    // 时长预算：本轮到点就收尾，未抓的类目留给下一轮（快照已落盘）
+    if (budget?.exceeded()) {
+      stopped = true;
+      log(`[catalog] 达到单轮时长预算（${budget.minutes} 分钟），本轮收尾，剩余类目下一轮续抓`);
+      break;
+    }
+    if (doneLeaves.has(c3)) {
+      log(`[catalog] 断点复用 ${leaf.path.join(' / ')}（已抓 ${(itemsByC3[c3] || []).length} 件）`);
+      continue;
+    }
+
     let rows = [];
     let siteCount = 0;
     let failed = false;
@@ -162,15 +194,26 @@ export async function collectCatalog(client, cfg, log) {
       }
     }
 
-    let added = 0;
+    const c3Items = [];
     for (const row of rows) {
       const item = buildCatalogItem(row, leaf, gallery, client.origin);
-      if (item) {
-        items.push(item);
-        added += 1;
-      }
+      if (item) c3Items.push(item);
     }
-    perCategory.push({ path: leaf.path.join('/'), c3, siteCount, crawled: rows.length, added, failed });
+    itemsByC3[c3] = c3Items;
+    items.push(...c3Items);
+    const entry = { path: leaf.path.join('/'), c3, siteCount, crawled: rows.length, added: c3Items.length, failed };
+    const idx = perCategory.findIndex((c) => String(c.c3) === c3);
+    if (idx >= 0) perCategory[idx] = entry;
+    else perCategory.push(entry);
+    if (!failed) doneLeaves.add(c3);
+
+    // 每个类目抓完立刻落盘，保证「可中断可恢复」
+    writeAtomic(catalogFile, {
+      generatedAt: new Date().toISOString(),
+      partial: true,
+      perCategory,
+      itemsByC3,
+    });
     log(`[catalog] ${leaf.path.join(' / ')}：站点 ${siteCount} / 实抓 ${rows.length}，累计 ${items.length}`);
   }
 
@@ -184,21 +227,25 @@ export async function collectCatalog(client, cfg, log) {
   }
 
   const durationSec = Math.round((Date.now() - startedAt) / 1000);
-  writeAtomic(path.join(cfg.stateDir, 'catalog.json'), {
+  // 完整快照不再保留 itemsByC3（它只用于中断后续跑，避免文件体积翻倍）
+  writeAtomic(catalogFile, {
     generatedAt: new Date().toISOString(),
+    partial: stopped,
     perCategory,
+    ...(stopped ? { itemsByC3 } : {}),
     items: unique,
   });
-  log(`[catalog] 完成：${unique.length} 条，耗时 ${durationSec}s，图片 ${Object.values(galleryCache).reduce((n, l) => n + l.length, 0)} 张`);
+  log(`[catalog] ${stopped ? '本轮未完成' : '完成'}：${unique.length} 条，耗时 ${durationSec}s，图片 ${Object.values(galleryCache).reduce((n, l) => n + l.length, 0)} 张`);
 
-  return { items: unique, perCategory, filters, errors, listFailed, scanned, durationSec };
+  return { items: unique, perCategory, filters, errors, listFailed, scanned, durationSec, stopped };
 }
 
 /**
  * 阶段二：详情（断点续跑：details.json 里已有的货号跳过）。
  * @param {Set<string>} only  只抓这些货号（inspect 用），空表示全部
+ * @param {{exceeded: () => boolean, minutes: number}} [budget] 单轮时长预算
  */
-export async function collectDetails(client, cfg, items, log, only) {
+export async function collectDetails(client, cfg, items, log, only, budget) {
   const startedAt = Date.now();
   const file = path.join(cfg.stateDir, 'details.json');
   const store = readJson(file, { items: {}, errors: [] });
@@ -215,8 +262,14 @@ export async function collectDetails(client, cfg, items, log, only) {
   let tried = 0;
   let failed = 0;
   let sinceHandshake = 0;
+  let stopped = false;
 
   await mapPool(pending, cfg.concurrency, async (no) => {
+    // 时长预算：到点后不再发起新请求，已抓到的全部落盘，下一轮续跑
+    if (budget?.exceeded()) {
+      stopped = true;
+      return;
+    }
     const r = await fetchItem(client, no, cfg.delayMs);
     tried += 1;
     sinceHandshake += 1;
@@ -248,8 +301,8 @@ export async function collectDetails(client, cfg, items, log, only) {
     errors: store.errors.length,
     durationSec: Math.round((Date.now() - startedAt) / 1000),
   };
-  log(`[detail] 完成：${stats.fetched}/${targets.length}，失败 ${stats.errors}`);
-  return { store, stats };
+  log(`[detail] ${stopped ? '本轮达预算收尾' : '完成'}：${stats.fetched}/${targets.length}，失败 ${stats.errors}`);
+  return { store, stats, stopped };
 }
 
 /** 规格筛选项落盘路径（inspect/审计复用） */
