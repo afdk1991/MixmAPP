@@ -256,7 +256,15 @@ function rawRequest(options: {
       header: { 'content-type': 'application/json', ...(options.headers ?? {}) },
       timeout: 15000,
       success: (res) => resolve({ statusCode: res.statusCode, data: res.data }),
-      fail: (err) => reject(new ApiError('NETWORK', err.errMsg || '网络异常', 0)),
+      fail: (err) => {
+        // 超时与断网分开：调用方据此决定是提示重试还是提示检查网络。
+        const raw = err.errMsg || '';
+        if (/timeout/i.test(raw)) {
+          reject(new ApiError('TIMEOUT', '网络超时，请稍后重试', 0));
+          return;
+        }
+        reject(new ApiError('NETWORK', '网络连接失败，请检查网络后重试', 0));
+      },
     });
   });
 }
@@ -299,11 +307,18 @@ export function writeTokens(tokens: { accessToken: string; refreshToken: string;
 
 export function clearTokens(): void {
   uni.removeStorageSync(TOKEN_KEY);
+  // 刷新令牌已失效时同步清掉缓存的账号资料：否则页面仍按「已登录」渲染，
+  // 但后续每个请求都会 401，表现成一直转圈 / 空页面。
+  uni.removeStorageSync('mixmapp:user');
 }
 
 let refreshing: Promise<boolean> | null = null;
 
-/** 401 时用刷新令牌换新 access token，只允许并发一次。 */
+/**
+ * 401 时用刷新令牌换新 access token，只允许并发一次。
+ * - 刷新接口返回非 200（刷新令牌失效 / 被吊销）：清空本地令牌，调用方按未登录处理；
+ * - 刷新请求本身断网 / 超时：保留令牌并上抛网络错误，恢复网络后还能继续用原令牌重试。
+ */
 async function ensureRefreshed(): Promise<boolean> {
   const tokens = readTokens();
   if (!tokens?.refreshToken) return false;
@@ -318,9 +333,13 @@ async function ensureRefreshed(): Promise<boolean> {
         clearTokens();
         return false;
       }
-      const auth = (res.data as { data: AuthResult }).data;
-      writeTokens(auth.tokens);
-      uni.setStorageSync('mixmapp:user', auth.user);
+      const body = res.data as { data?: AuthResult };
+      if (!body?.data?.tokens) {
+        clearTokens();
+        return false;
+      }
+      writeTokens(body.data.tokens);
+      uni.setStorageSync('mixmapp:user', body.data.user);
       return true;
     })().finally(() => {
       refreshing = null;
@@ -353,8 +372,12 @@ export async function apiRequest<T>(
   };
 
   let res = await execute();
-  if (res.statusCode === 401 && options.auth !== false && (await ensureRefreshed())) {
-    res = await execute();
+  if (res.statusCode === 401 && options.auth !== false) {
+    // 刷新成功再重试一次；刷新失败（令牌已失效）或重试仍 401 时清空本地令牌，
+    // 避免页面拿着已经无效的令牌反复请求、表现为「一直转圈」。
+    const refreshed = await ensureRefreshed();
+    if (refreshed) res = await execute();
+    if (res.statusCode === 401) clearTokens();
   }
   const body = res.data as { data?: T; error?: { code: string; message: string } };
   if (res.statusCode >= 200 && res.statusCode < 300) return body.data as T;
@@ -830,6 +853,13 @@ function toQueryString(query: Record<string, unknown>): string {
   return qs ? `?${qs}` : '';
 }
 
+/**
+ * 加购单飞表：商品详情页「加入购物车 / 立即购买」在弱网下容易被连点，
+ * 服务端是累加语义，两个并发请求会买成双份。这里按「商品 + 规格 + 数量」合并
+ * 在途请求，页面无需再各自加锁。
+ */
+const addToCartInflight = new Map<string, Promise<CartDto>>();
+
 export const mallApi = {
   listProducts: (query: MallProductQuery = {}) =>
     apiRequest<MallProductDto[]>(`/mall/products${toQueryString(query)}`, { auth: false }),
@@ -853,8 +883,11 @@ export const mallApi = {
   listSpecOptions: (c3: string) =>
     apiRequest<MallSpecOptionsDto>(`/mall/specs?c3=${encodeURIComponent(c3)}`, { auth: false }),
   getCart: () => apiRequest<CartDto>('/mall/cart'),
-  addToCart: (productId: string, quantity = 1, packUnit?: string, packQty?: number) =>
-    apiRequest<CartDto>('/mall/cart', {
+  addToCart: (productId: string, quantity = 1, packUnit?: string, packQty?: number) => {
+    const key = `${productId}|${packUnit ?? ''}|${packQty ?? ''}|${quantity}`;
+    const inflight = addToCartInflight.get(key);
+    if (inflight) return inflight;
+    const request = apiRequest<CartDto>('/mall/cart', {
       method: 'POST',
       data: {
         productId,
@@ -862,7 +895,10 @@ export const mallApi = {
         ...(packUnit ? { packUnit } : {}),
         ...(packQty != null ? { packQty } : {}),
       },
-    }),
+    }).finally(() => addToCartInflight.delete(key));
+    addToCartInflight.set(key, request);
+    return request;
+  },
   updateCart: (productId: string, quantity: number, packUnit?: string, packQty?: number) =>
     apiRequest<CartDto>(`/mall/cart/${encodeURIComponent(productId)}`, {
       method: 'PATCH',
@@ -875,8 +911,16 @@ export const mallApi = {
   removeCart: (productId: string) =>
     apiRequest<CartDto>(`/mall/cart/${encodeURIComponent(productId)}`, { method: 'DELETE' }),
   clearCart: () => apiRequest<CartDto>('/mall/cart', { method: 'DELETE' }),
-  createOrder: (input: OrderCreateInput) =>
-    apiRequest<OrderDto>('/mall/orders', { method: 'POST', data: input }),
+  /**
+   * 下单：可传 Idempotency-Key。结算页重试 / 网络抖动时复用同一把键，
+   * 服务端会回放首单，不会因为重复点击生成两笔订单。
+   */
+  createOrder: (input: OrderCreateInput, idempotencyKey?: string) =>
+    apiRequest<OrderDto>('/mall/orders', {
+      method: 'POST',
+      data: input,
+      ...(idempotencyKey ? { headers: { 'idempotency-key': idempotencyKey } } : {}),
+    }),
   listOrders: (query: { status?: string; page?: number; pageSize?: number } = {}) =>
     apiRequest<OrderDto[]>(`/mall/orders${toQueryString(query)}`),
   /** 订单列表总数摘要：状态口径与列表一致。 */
@@ -1055,8 +1099,12 @@ export const integrationsApi = {
   },
   pay: {
     /** 发起支付：未配置商户时服务端返回 dev 模式占位参数，不真实扣款。 */
-    createOrder: (input: CreatePaymentInput) =>
-      apiRequest<PayOrderResult>('/pay/orders', { method: 'POST', data: input }),
+    createOrder: (input: CreatePaymentInput, idempotencyKey?: string) =>
+      apiRequest<PayOrderResult>('/pay/orders', {
+        method: 'POST',
+        data: input,
+        ...(idempotencyKey ? { headers: { 'idempotency-key': idempotencyKey } } : {}),
+      }),
     /** 按商户订单号查询支付状态。 */
     getOrder: (outTradeNo: string) =>
       apiRequest<PayOrderDto>(`/pay/orders/${encodeURIComponent(outTradeNo)}`),

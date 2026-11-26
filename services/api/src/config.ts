@@ -461,18 +461,27 @@ export function loadConfig(): Config {
       strategy: parseIdStrategy(str('ID_STRATEGY'), 'snowflake'),
       workerId: num('SNOWFLAKE_WORKER_ID', 0),
     },
-    corsOrigins: [
-      ...new Set([
-        ...str('CORS_ORIGINS', '*')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-        // 壳自身来源（PUBLIC_BASE_URL 的 origin）自动入白名单：
-        // 即使 env 漏配，H5 壳同源族也能通过预检，不会整站离线。
-        publicOrigin,
-        ...BUILTIN_CORS_ORIGINS,
-      ].filter(Boolean)),
-    ],
+    corsOrigins: (() => {
+      const configured = str('CORS_ORIGINS', '*')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      // 生产环境禁止「* + credentials」组合：@fastify/cors 会把任意来源原样回显，
+      // 等于对全部站点开放带凭据的跨域读取。未显式配置时只保留内置自有域名族，
+      // 仍覆盖壳 / H5 / API 自身来源，不会因收紧导致线上离线。
+      if (env === 'production' && configured.includes('*')) {
+        return [...new Set([publicOrigin, ...BUILTIN_CORS_ORIGINS].filter(Boolean))];
+      }
+      return [
+        ...new Set([
+          ...configured,
+          // 壳自身来源（PUBLIC_BASE_URL 的 origin）自动入白名单：
+          // 即使 env 漏配，H5 壳同源族也能通过预检，不会整站离线。
+          publicOrigin,
+          ...BUILTIN_CORS_ORIGINS,
+        ].filter(Boolean)),
+      ];
+    })(),
     sms: {
       provider: str('SMS_PROVIDER', 'console') === 'aliyun' ? 'aliyun' : 'console',
       echoCode: bool('DEV_ECHO_SMS_CODE', env !== 'production'),

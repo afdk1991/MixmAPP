@@ -73,7 +73,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         }
       : false,
     genReqId: () => randomUUID(),
-    trustProxy: true,
+    // 只信任本机回环反代（线上 nginx 以 127.0.0.1 转发）：nginx 用
+    // $proxy_add_x_forwarded_for 在末尾追加真实来源，只有它追加的那一段可信。
+    // trustProxy=true 会取最左侧（客户端可自行伪造），攻击者每次换一个
+    // X-Forwarded-For 就能重置限流桶，等于限流失效。
+    trustProxy: ['127.0.0.1', '::1'],
     bodyLimit: 2 * 1024 * 1024,
   });
 
@@ -179,20 +183,37 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('x-account-no', claims.acc);
   });
 
-  // 轻量固定窗口限流：单 IP 每分钟，健康检查与只读目录放行
+  // 轻量固定窗口限流：单 IP 每分钟；只放行健康检查与「公开商品读」。
+  // 注意：不能按 /mall 前缀整体放行 —— /mall/cart、/mall/orders、/mall/favorites
+  // 是账号私有读，同样需要限流；只有商品 / 分类 / 规格 / 配送方式属于公开只读。
+  const PUBLIC_GET_PREFIXES = [
+    '/api/v1/mall/products',
+    '/api/v1/mall/categories',
+    '/api/v1/mall/specs',
+    '/api/v1/mall/delivery-options',
+    '/api/v1/home/',
+    '/media/',
+  ];
   const buckets = new Map<string, { windowStart: number; count: number }>();
+  // 桶不做清理的话，随机 IP 扫描会让 Map 无限增长；按窗口批量淘汰过期项。
+  let lastPrunedAt = Date.now();
+  const pruneBuckets = (now: number): void => {
+    if (now - lastPrunedAt < 60_000) return;
+    lastPrunedAt = now;
+    for (const [ip, entry] of buckets) {
+      if (now - entry.windowStart >= 60_000) buckets.delete(ip);
+    }
+  };
   app.addHook('preHandler', async (request, reply) => {
     const path = request.url.split('?')[0] ?? '';
     if (path === '/api/v1/healthz' || path === '/api/v1/readyz') return;
     // 商品目录是 15k 量级的分页浏览，且每张封面图都算一次请求；
     // 只读 GET 若也计入 60/分，翻两屏就会被 429 掐断，等于商城不可用。
-    if (
-      request.method === 'GET' &&
-      (path.startsWith('/api/v1/mall') || path.startsWith('/media/'))
-    ) {
+    if (request.method === 'GET' && PUBLIC_GET_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       return;
     }
     const now = Date.now();
+    pruneBuckets(now);
     const entry = buckets.get(request.ip);
     if (!entry || now - entry.windowStart >= 60_000) {
       buckets.set(request.ip, { windowStart: now, count: 1 });
@@ -218,12 +239,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }
     const status = (error as { statusCode?: number; message?: string }).statusCode;
     if (status && status >= 400 && status < 500) {
+      // 框架 / 解析器抛出的 4xx 原文可能带内部字段名、库版本或请求片段（例如 JSON 解析位置），
+      // 统一收口成固定文案；可由 AppError 表达的语义（校验、鉴权等）走上一个分支。
       return reply.status(status).send({
-        error: {
-          code: 'BAD_REQUEST',
-          message: (error as { message?: string }).message ?? '请求不合法',
-          requestId: request.id,
-        },
+        error: { code: 'BAD_REQUEST', message: '请求不合法，请检查后重试', requestId: request.id },
       });
     }
     request.log.error({ err: error }, 'unhandled error');
@@ -234,7 +253,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.setNotFoundHandler((request, reply) =>
     reply.status(404).send({
-      error: { code: 'NOT_FOUND', message: `未找到路由 ${request.method} ${request.url}`, requestId: request.id },
+      // 不回显请求方法 / URL：路径由调用方控制，原样反射会把攻击者构造的片段带进响应与日志展示。
+      error: { code: 'NOT_FOUND', message: '未找到请求的资源', requestId: request.id },
     }),
   );
 

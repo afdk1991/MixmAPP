@@ -67,12 +67,16 @@ export function normalizeDeviceContext(input: DeviceContextInput): NormalizedDev
   };
 }
 
-/** 来源 IP：XFF 首跳优先（Nginx 反代已注入），缺失回落 request.ip；取不到为空串。 */
+/**
+ * 来源 IP：取 XFF 最后一跳（Nginx 用 $proxy_add_x_forwarded_for 在末尾追加真实来源），
+ * 缺失回落 request.ip；取不到为空串。
+ * 不能取首跳：首段由客户端自行传入，可伪造（XFF 欺骗）。
+ */
 export function clientIpOf(request: FastifyRequest): string {
   const forward = request.headers['x-forwarded-for'];
-  const raw = Array.isArray(forward) ? forward[0] : forward;
-  const fromForwarded = raw?.split(',')[0]?.trim();
-  return fromForwarded || request.ip || '';
+  const raw = Array.isArray(forward) ? forward.join(',') : forward;
+  const hops = raw?.split(',').map((hop) => hop.trim()).filter(Boolean) ?? [];
+  return hops[hops.length - 1] || request.ip || '';
 }
 
 /** IPv4 保留前两段：1.2.3.4 → 1.2.*.*；IPv6 保留前两组；无法识别则整串打码。 */

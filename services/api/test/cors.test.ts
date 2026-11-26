@@ -47,6 +47,23 @@ describe('CORS 白名单', () => {
     for (const origin of BUILTIN) expect(cfg.corsOrigins).toContain(origin);
   });
 
+  it('生产环境未显式配置白名单时不返回 *，收敛为内置自有域名', () => {
+    const prevEnv = process.env.NODE_ENV;
+    delete process.env.CORS_ORIGINS;
+    process.env.NODE_ENV = 'production';
+    try {
+      const cfg = loadConfig();
+      expect(cfg.env).toBe('production');
+      // * + credentials 会让任意站点带凭据读取接口，生产环境必须收敛成显式白名单。
+      expect(cfg.corsOrigins).not.toContain('*');
+      expect(cfg.corsOrigins).toContain('https://www.mixm.top');
+      expect(cfg.corsOrigins).toContain('https://api.mixm.top');
+    } finally {
+      if (prevEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prevEnv;
+    }
+  });
+
   it('受限白名单下 https://localhost 回 ACAO，未授权源不回 ACAO', async () => {
     app = await buildApp({
       config: { ...testConfig, corsOrigins: ['https://www.mixm.top', ...BUILTIN] },

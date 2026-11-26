@@ -66,11 +66,12 @@ describe('设备快照：鉴权与上报', () => {
     expect(post.statusCode).toBe(401);
   });
 
-  it('伪造的 ip / updatedAt 被忽略，IP 取 XFF 首跳；同设备两次上报 deviceId 一致', async () => {
+  it('伪造的 ip / updatedAt 被忽略，IP 取 XFF 最后一跳（反代追加段）；同设备两次上报 deviceId 一致', async () => {
     await setup();
     const reg = await registerEmail('device-1@mixm.app', 'Passw0rd!x');
     const headers = {
       authorization: `Bearer ${reg.tokens.accessToken}`,
+      // 首段是客户端可伪造的，最后一跳才是 nginx 追加的真实来源
       'x-forwarded-for': '203.0.113.7, 10.0.0.1',
     };
     const payload = {
@@ -89,7 +90,7 @@ describe('设备快照：鉴权与上报', () => {
     expect(first.statusCode).toBe(200);
     const d1 = first.json().data;
     expect(d1.deviceId).toBe('dev-android-0001');
-    expect(d1.ip).toBe('203.0.113.7');
+    expect(d1.ip).toBe('10.0.0.1');
     expect(d1.model).toBe('Pixel 8');
     expect(d1.osName).toBe('Android');
     expect(d1.osVersion).toBe('14');
@@ -102,7 +103,7 @@ describe('设备快照：鉴权与上报', () => {
     const d2 = second.json().data;
     // 稳定性：同一设备两次调用返回同一 deviceId
     expect(d2.deviceId).toBe(d1.deviceId);
-    expect(d2.ip).toBe('203.0.113.7');
+    expect(d2.ip).toBe('10.0.0.1');
 
     const latest = await app!.inject({ method: 'GET', url: `${BASE}/device/context`, headers });
     expect(latest.statusCode).toBe(200);
@@ -113,7 +114,7 @@ describe('设备快照：鉴权与上报', () => {
       url: `${BASE}/device/context?deviceId=dev-android-0001`,
       headers,
     });
-    expect(byId.json().data.device.ip).toBe('203.0.113.7');
+    expect(byId.json().data.device.ip).toBe('10.0.0.1');
 
     const missing = await app!.inject({
       method: 'GET',
