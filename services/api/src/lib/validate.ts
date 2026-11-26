@@ -33,7 +33,6 @@ declare module 'fastify' {
     address: import('../modules/address.js').AddressService;
     mall: import('../modules/mall.js').MallService;
     adminConsole: import('../modules/admin-console.js').AdminConsoleService;
-    suite: import('../modules/suite/service.js').SuiteService;
     catalog: import('../modules/catalog-source.js').CatalogSource;
     map: import('../adapters/map.js').MapProvider;
     storage: import('../adapters/storage.js').StorageProvider;

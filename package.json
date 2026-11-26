@@ -31,7 +31,6 @@
     "deploy:verify": "node scripts/deploy-engine.mjs --verify-only",
     "ops:backup": "node scripts/backup.mjs",
     "build:h5:single": "node scripts/build-h5-single.mjs",
-    "seo:prerender": "node scripts/prerender-suite.mjs",
     "version:show": "node scripts/version.mjs show",
     "version:check": "node scripts/version.mjs check",
     "version:sync": "node scripts/version.mjs sync",

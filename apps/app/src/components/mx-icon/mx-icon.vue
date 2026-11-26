@@ -17,8 +17,8 @@ import { computed } from 'vue';
  */
 const props = withDefaults(
   defineProps<{
-    /** bag 商城 / cart 购物车 / receipt 订单 / bookmark 收藏 / box 无图商品 / user 通行证 / grid 业务套件 */
-    name: 'bag' | 'cart' | 'receipt' | 'bookmark' | 'box' | 'user' | 'grid';
+    /** bag 商城 / cart 购物车 / receipt 订单 / bookmark 收藏 / box 无图商品 / user 通行证 */
+    name: 'bag' | 'cart' | 'receipt' | 'bookmark' | 'box' | 'user';
     size?: number;
     tone?: 'ink' | 'ink2' | 'brand' | 'on' | 'ondeep';
     /** 传入占位底色时按亮度自动取墨色或深场反白，避免浅底白图标 / 深底黑图标 */
@@ -250,33 +250,5 @@ const rootStyle = computed(() => {
   border: 2rpx solid currentColor;
   border-bottom: none;
   border-radius: 999rpx 999rpx 0 0;
-}
-/* 业务套件：2×2 四宫格，代表多行业模块的统一入口 */
-.mx-icon--grid .mx-icon__p {
-  display: block;
-  width: 32%;
-  height: 32%;
-  border: 2rpx solid currentColor;
-  border-radius: 4rpx;
-}
-
-.mx-icon--grid .mx-icon__p1 {
-  left: 12%;
-  top: 12%;
-}
-
-.mx-icon--grid .mx-icon__p2 {
-  right: 12%;
-  top: 12%;
-}
-
-.mx-icon--grid .mx-icon__p3 {
-  left: 12%;
-  bottom: 12%;
-}
-
-.mx-icon--grid .mx-icon__p4 {
-  right: 12%;
-  bottom: 12%;
 }
 </style>

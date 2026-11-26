@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
-import type { SuiteDomainId } from '@mixmapp/contracts';
 import type { Config } from './config.js';
 import type { Store } from './db/types.js';
 import { AuthService } from './modules/auth.js';
@@ -16,9 +15,6 @@ import { createSmsProvider, type SmsProvider } from './adapters/sms.js';
 import { createOAuthProviders, type OAuthProvider, type OAuthProviderName } from './adapters/oauth.js';
 import { ProviderRegistry, gatedProvider } from './modules/provider-registry.js';
 import { AdminConsoleService } from './modules/admin-console.js';
-import { SuiteService } from './modules/suite/service.js';
-import type { SuiteDomainModule } from './modules/suite/domain.js';
-import { SUITE_MODULES } from './modules/domains/index.js';
 import { createOneKeyProvider, type OneKeyProvider } from './adapters/onekey.js';
 import { createMapProvider, type MapProvider } from './adapters/map.js';
 import { createStorageProvider, type StorageProvider } from './adapters/storage.js';
@@ -40,7 +36,6 @@ import { accountDeletionRoutes } from './routes/account-delete.js';
 import { deviceRoutes } from './routes/device.js';
 import { integrationRoutes } from './routes/integrations.js';
 import { metaRoutes } from './routes/meta.js';
-import { suiteRoutes } from './routes/suite.js';
 
 export type AppDeps = {
   config: Config;
@@ -175,16 +170,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate('mall', new MallService(deps.config, deps.store, catalog));
   // 后台运营台：只读复用 mall 的运营位/推荐分类，其余全部走 Store.admin。
   app.decorate('adminConsole', new AdminConsoleService(deps.config, deps.store, app.mall));
-  // 业务套件：13 个领域共用通用台账（交互 / 进度 / 看板 / 事件），
-  // 领域特有逻辑由 SUITE_MODULES 里的领域模块提供。
-  app.decorate(
-    'suite',
-    new SuiteService({
-      config: deps.config,
-      store: deps.store,
-      modules: SUITE_MODULES as Map<SuiteDomainId, SuiteDomainModule>,
-    }),
-  );
 
   app.decorate('requireAuth', async (request, reply) => {
     const header = request.headers.authorization;
@@ -281,8 +266,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await addressRoutes(scope);
       await integrationRoutes(scope);
       await adminRoutes(scope);
-      // 业务套件（13 个领域）：目录公开读，动态台账要求登录态。
-      await suiteRoutes(scope);
       // 后台运营台独立子路由：与 /admin/* 同为 404 门禁，但认证走短期会话 Cookie。
       await adminConsoleRoutes(scope);
     },

@@ -81,62 +81,6 @@
     {
       "path": "pages/error/not-found",
       "style": { "navigationBarTitleText": "页面不存在" }
-    },
-    {
-      "path": "pages/suite/index",
-      "style": { "navigationBarTitleText": "业务套件", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/office",
-      "style": { "navigationBarTitleText": "办公管理", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/productivity",
-      "style": { "navigationBarTitleText": "效率工具", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/product",
-      "style": { "navigationBarTitleText": "产品研发", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/engineering",
-      "style": { "navigationBarTitleText": "工程", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/finance",
-      "style": { "navigationBarTitleText": "金融", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/taxpay",
-      "style": { "navigationBarTitleText": "财税支付", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/growth",
-      "style": { "navigationBarTitleText": "营销增长", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/ecommerce",
-      "style": { "navigationBarTitleText": "电商", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/content",
-      "style": { "navigationBarTitleText": "内容创作", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/edu",
-      "style": { "navigationBarTitleText": "教育科研", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/health",
-      "style": { "navigationBarTitleText": "医疗医药", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/legal",
-      "style": { "navigationBarTitleText": "法律政务", "navigationStyle": "custom" }
-    },
-    {
-      "path": "pages/suite/lifestyle",
-      "style": { "navigationBarTitleText": "生活休闲", "navigationStyle": "custom" }
     }
   ],
   "globalStyle": {
