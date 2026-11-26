@@ -99,7 +99,9 @@ export const suiteApi = {
     value?: number;
     notes?: string;
     dueAt?: string;
-  }) => apiRequest<SuiteProgressDto>('/suite/progress', { method: 'PUT', data: input }),
+  // 用 POST 而不是 PUT：共享请求层当前只声明了 GET/POST/PATCH/DELETE 四种方法，
+  // 套件线不额外扩展共享契约，避免与并行开发线的请求层改动互相牵扯。
+  }) => apiRequest<SuiteProgressDto>('/suite/progress', { method: 'POST', data: input }),
 
   /* ---------------- 看板 ---------------- */
 
