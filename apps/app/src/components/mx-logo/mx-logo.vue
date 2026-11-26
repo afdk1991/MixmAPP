@@ -52,7 +52,8 @@ withDefaults(
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: #111;
+  /* 字标跟随全站彩色正文体系：用深青品牌色，避免整站只剩 logo 一处近黑文字 */
+  color: $brand-deep;
 }
 
 .mx-logo-underline {
