@@ -144,7 +144,7 @@ suite('PostgreSQL 驱动（真实库）', () => {
     expect(replay.statusCode).toBe(401);
   });
 
-  it('下单写入 payments 表，唯一约束拒绝重复商户单号', async () => {
+  it('下单写入 payments 表：同参重试幂等回放，改金额仍被唯一约束拦截', async () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login/password',
@@ -165,13 +165,25 @@ suite('PostgreSQL 驱动（真实库）', () => {
     expect(row?.amountFen).toBe(100);
     expect(row?.status).toBe('pending');
 
+    // 同一用户同渠道同金额的重试：按幂等回放原单，不新建第二行（重复点击不再报错）
     const duplicated = await app.inject({
       method: 'POST',
       url: '/api/v1/pay/orders',
       headers: { authorization: `Bearer ${token}` },
       payload: { channel: 'wechat', amountFen: 100, subject: '重复单号', outTradeNo },
     });
-    expect(duplicated.statusCode).toBeGreaterThanOrEqual(400);
+    expect(duplicated.statusCode).toBe(201);
+    expect(duplicated.json().data.replayed).toBe(true);
+    expect(duplicated.json().data.outTradeNo).toBe(outTradeNo);
+
+    // 同一单号换金额：不是幂等重试，仍必须拒绝
+    const changed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/pay/orders',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { channel: 'wechat', amountFen: 999, subject: '改金额', outTradeNo },
+    });
+    expect(changed.statusCode).toBeGreaterThanOrEqual(400);
   });
 
   it('商城四表可写：商品落库、条件扣库存、订单事务与明细', async () => {
