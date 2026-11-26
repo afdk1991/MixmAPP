@@ -543,8 +543,8 @@ const SKELETON_COUNT = 6;
 type MallSort = 'createdDesc' | 'priceAsc' | 'priceDesc';
 const SORT_OPTIONS: Array<{ value: MallSort; label: string }> = [
   { value: 'createdDesc', label: '综合' },
-  { value: 'priceAsc', label: '价格升' },
-  { value: 'priceDesc', label: '价格降' },
+  { value: 'priceAsc', label: '价格 ↑' },
+  { value: 'priceDesc', label: '价格 ↓' },
 ];
 const sort = ref<MallSort>('createdDesc');
 
