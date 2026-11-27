@@ -160,7 +160,10 @@ function headTags({ title, description, canonical, ogType = 'website', ogImage =
     tags.push(`<meta name="twitter:image" content="${esc(ogImage)}" />`);
   }
   for (const block of jsonLdBlocks) {
-    tags.push(`<script type="application/ld+json">${jsonLd(block)}</script>`);
+    // 带 id 的静态结构化数据会在运行期被同 id 的 DOM 版本替换掉，
+    // 避免同一页面出现两份 Product / Organization。
+    const idAttr = block.id ? ` id="${esc(block.id)}"` : '';
+    tags.push(`<script type="application/ld+json"${idAttr}>${jsonLd(block.data)}</script>`);
   }
   // 运行期基址：静态快照不走 root build-h5.mjs，必须自带，否则详情页会退回同源 /api/v1。
   tags.push(
@@ -346,21 +349,27 @@ const siteHead = headTags({
   ogImage: '',
   jsonLdBlocks: [
     {
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      name: SITE_NAME,
-      url: `${SITE_BASE}/`,
-      description: HOME_DESCRIPTION,
+      id: 'mx-jsonld-static-org',
+      data: {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: SITE_NAME,
+        url: `${SITE_BASE}/`,
+        description: HOME_DESCRIPTION,
+      },
     },
     {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: SITE_NAME,
-      url: `${SITE_BASE}/`,
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: `${SITE_BASE}/mall?keyword={query}`,
-        'query-input': 'required name=query',
+      id: 'mx-jsonld-static-website',
+      data: {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: SITE_NAME,
+        url: `${SITE_BASE}/`,
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: `${SITE_BASE}/mall?keyword={query}`,
+          'query-input': 'required name=query',
+        },
       },
     },
   ],
@@ -408,18 +417,21 @@ for (const product of products.slice(0, SNAPSHOT_PRODUCTS)) {
     ogImage: image,
     jsonLdBlocks: [
       {
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        name: title,
-        sku: id,
-        description,
-        ...(image ? { image: [image] } : {}),
-        ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
-        offers: {
-          '@type': 'Offer',
-          priceCurrency: 'CNY',
-          availability: 'https://schema.org/InStock',
-          url: canonical,
+        id: 'mx-jsonld-static-product',
+        data: {
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: title,
+          sku: id,
+          description,
+          ...(image ? { image: [image] } : {}),
+          ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
+          offers: {
+            '@type': 'Offer',
+            priceCurrency: 'CNY',
+            availability: 'https://schema.org/InStock',
+            url: canonical,
+          },
         },
       },
     ],
@@ -448,10 +460,13 @@ if (categories.length && !OFFLINE) {
       canonical,
       jsonLdBlocks: [
         {
-          '@context': 'https://schema.org',
-          '@type': 'CollectionPage',
-          name: `${item.name} · ${SITE_NAME}`,
-          url: canonical,
+          id: 'mx-jsonld-static-collection',
+          data: {
+            '@context': 'https://schema.org',
+            '@type': 'CollectionPage',
+            name: `${item.name} · ${SITE_NAME}`,
+            url: canonical,
+          },
         },
       ],
     });

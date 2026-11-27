@@ -172,9 +172,17 @@ function upsertJsonLd(id: string, data: Record<string, unknown> | null): void {
   if (!existing) document.head.appendChild(script);
 }
 
+/** 删除构建期写入的静态结构化数据块，避免与运行期 DOM 版本重复。 */
+function removeStaticJsonLd(...ids: string[]): void {
+  if (typeof document === 'undefined') return;
+  for (const id of ids) document.getElementById(id)?.remove();
+}
+
 /** 站点级结构化数据：Organization + WebSite（带站内搜索 Action），只保留一份。 */
 function applySiteJsonLd(): void {
   const origin = canonicalOrigin();
+  // 静态快照里预置了一份同样的数据，运行期接管后移除，页面只留一份。
+  removeStaticJsonLd('mx-jsonld-static-org', 'mx-jsonld-static-website');
   upsertJsonLd('mx-jsonld-org', {
     '@context': 'https://schema.org',
     '@type': 'Organization',
@@ -321,6 +329,8 @@ export function setProductSeo(
     | null,
 ): void {
   if (typeof document === 'undefined') return;
+  // 静态快照里的商品结构化数据交给运行期版本接管。
+  removeStaticJsonLd('mx-jsonld-static-product');
   if (!product) {
     upsertJsonLd('mx-jsonld-product', null);
     return;
