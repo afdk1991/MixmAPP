@@ -229,6 +229,29 @@ function currentPath(): string {
   return window.location.pathname || ROUTES.home;
 }
 
+/**
+ * 解析当前地址为「内部路由 + 查询参数」。
+ *
+ * 地址栏在运行期会被 restorePrettyUrl 改成对外地址（/mall、/mall/category/x、
+ * /mall/detail/x），再次触发 SEO 计算时必须能重新识别，否则会被当成未知路由而标成 noindex。
+ */
+function resolveCurrentRoute(): { path: string; search: URLSearchParams } {
+  const raw = currentPath().replace(/\/+$/, '');
+  const search = currentSearch();
+  if (raw === '/mall') return { path: ROUTES.mall, search };
+  const category = /^\/mall\/category\/([^/]+)$/.exec(raw);
+  if (category && category[1]) {
+    search.set('category', category[1]);
+    return { path: ROUTES.mall, search };
+  }
+  const detail = /^\/mall\/detail\/([^/]+)$/.exec(raw);
+  if (detail && detail[1]) {
+    search.set('id', detail[1]);
+    return { path: ROUTES.mallDetail, search };
+  }
+  return { path: raw, search };
+}
+
 /** 当前查询参数（H5 history 模式下由 uni 写在 location.search 上）。 */
 function currentSearch(): URLSearchParams {
   if (typeof window === 'undefined') return new URLSearchParams();
@@ -243,6 +266,40 @@ export function productCanonical(productId: string): string {
 /** 分类页对外 canonical：/mall/category/<code>，与 sitemap、静态快照保持同一口径。 */
 export function categoryCanonical(code: string): string {
   return `${canonicalOrigin()}/mall/category/${encodeURIComponent(code)}`;
+}
+
+/**
+ * 站内跳转后把地址栏恢复成对外漂亮地址（不新增历史记录）。
+ *
+ * 为什么需要：uni 的路由只认内部路径，若一直停留在内部地址，
+ * canonical 声明的是 /mall/detail/x、地址栏却是内部路由，分享出去也很长。
+ * replaceState 只改写当前这条历史记录，不触发 popstate，也不会让 uni 重新导航。
+ */
+function restorePrettyUrl(path: string, search: URLSearchParams): void {
+  if (typeof window === 'undefined') return;
+  let pretty = '';
+  if (path === ROUTES.home) {
+    pretty = '/';
+  } else if (path === ROUTES.mall) {
+    const category = search.get('category') ?? '';
+    if (category) {
+      // 分类页保留其余筛选参数（关键词、排序等），刷新后状态不丢。
+      const rest = new URLSearchParams(search);
+      rest.delete('category');
+      const query = rest.toString();
+      pretty = `/mall/category/${encodeURIComponent(category)}${query ? `?${query}` : ''}`;
+    } else {
+      const query = search.toString();
+      pretty = `/mall${query ? `?${query}` : ''}`;
+    }
+  } else if (path === ROUTES.mallDetail) {
+    const id = search.get('id') ?? '';
+    // 详情页只保留商品 id，其余参数不进入对外地址。
+    if (id) pretty = `/mall/detail/${encodeURIComponent(id)}`;
+  }
+  if (!pretty) return;
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (current !== pretty) window.history.replaceState(window.history.state, '', pretty);
 }
 
 /**
@@ -305,8 +362,9 @@ export function setProductSeo(
  */
 export function applyCurrentRouteSeo(): void {
   if (typeof document === 'undefined') return;
-  const path = currentPath();
-  const search = currentSearch();
+  const { path, search } = resolveCurrentRoute();
+  // 先把地址栏恢复成对外地址，再写 meta，保证 canonical 与 location 一致。
+  restorePrettyUrl(path, search);
 
   // 商品详情：标题在数据回来后由 setProductSeo 覆盖，这里先给出稳定的兜底文案与 canonical。
   if (path === ROUTES.mallDetail) {
@@ -381,12 +439,17 @@ export function normalizeSeoEntry(): void {
   }
   const category = /^\/mall\/category\/([^/]+)$/.exec(path);
   if (category && category[1]) {
-    window.history.replaceState(null, '', `${ROUTES.mall}?category=${category[1]}`);
+    // 保留关键词 / 排序等附加参数，只把 category 换成内部查询参数。
+    const params = new URLSearchParams(search);
+    params.set('category', category[1]);
+    window.history.replaceState(null, '', `${ROUTES.mall}?${params.toString()}`);
     return;
   }
   const detail = /^\/mall\/detail\/([^/]+)$/.exec(path);
   if (detail && detail[1]) {
-    window.history.replaceState(null, '', `${ROUTES.mallDetail}?id=${detail[1]}`);
+    const params = new URLSearchParams(search);
+    params.set('id', detail[1]);
+    window.history.replaceState(null, '', `${ROUTES.mallDetail}?${params.toString()}`);
   }
 }
 
